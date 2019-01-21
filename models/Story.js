@@ -1,0 +1,41 @@
+import Sequelize, {Model} from 'sequelize';
+
+class Story extends Model {
+    static tableName = 'Story';
+
+    static associate(models) {
+        Story.hasMany(models.Story, {as: {singular: 'Children', plural: 'Parent'}, foreignKey: 'fk_parent'});
+    }
+}
+
+export default (sequelize) => {
+    Story.init({
+        id: {
+            type: Sequelize.INTEGER,
+            primaryKey: true,
+            allowNull: false,
+            autoIncrement: true
+        },
+        title: {
+            type: Sequelize.STRING,
+            allowNull: false
+        },
+        number: {
+            type: Sequelize.INTEGER,
+            allowNull: false,
+        },
+        addinfo: {
+            type: Sequelize.STRING,
+            allowNull: false
+        }
+    }, {
+        indexes: [{
+            unique: true,
+            fields: ['fk_issue', 'fk_parent', 'addinfo']
+        }],
+        sequelize,
+        tableName: Story.tableName
+    });
+
+    return Story;
+};
