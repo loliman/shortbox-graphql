@@ -181,19 +181,15 @@ const resolvers = {
             if (!context.loggedIn)
                 throw new Error();
 
-            console.log("deleted publisher " + id);
-            return true;
-            /*let del = await models.Publisher.destroy({where: {id: id}});
-            return del === 1;*/
+            let del = await models.Publisher.destroy({where: {id: id}});
+            return del === 1;
         },
         deleteSeries: async (_, {id}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
-            console.log("deleted series " + id);
-            return true;
-            /*let del = await models.Series.destroy({where: {id: id}});
-            return del === 1;*/
+            let del = await models.Series.destroy({where: {id: id}, individualHooks: true});
+            return del === 1;
         },
         deleteIssues: async (_, {id}, context) => {
             if (!context.loggedIn)

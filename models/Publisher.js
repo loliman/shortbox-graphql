@@ -4,7 +4,7 @@ class Publisher extends Model {
     static tableName = 'Publisher';
 
     static associate(models) {
-        Publisher.hasMany(models.Series, {as: 'Series', foreignKey: 'fk_publisher'});
+        Publisher.hasMany(models.Series, {as: 'Series', foreignKey: 'fk_publisher', onDelete: 'cascade'});
     }
 }
 
