@@ -31,7 +31,7 @@ const typeDefs = gql`
     deleteSeries(id: Int!): Boolean,
     deleteIssues(id: Int!): Boolean,
     
-    createPublisher(name: String!, original: Boolean!): Publisher
+    editPublisher(id: Int!, name: String!): Publisher
   }
   
   type Publisher {
@@ -204,12 +204,17 @@ const resolvers = {
             /*let del = await models.Issue.destroy({where: {id: id}});
             return del === 1;*/
         },
-        createPublisher: async (_, {name, original}, context) => {
+        editPublisher: async (_, {id, name}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
-            console.log(name);
-            console.log(original);
+            let res = await models.Publisher.update(
+                {name: name},
+                {where: {id: id}}
+            );
+
+            if(res[0] !== 0)
+                return {id: id, name: name};
         }
     },
     Publisher: {
