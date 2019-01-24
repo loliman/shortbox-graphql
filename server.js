@@ -18,8 +18,8 @@ const typeDefs = gql`
 
   type Query {
     publishers(us: Boolean!): [Publisher],
-    series(publisher_id: Int!): [Series],
-    issues(series_id: Int!): [Issue],
+    series(publisher_name: String!): [Series],
+    issues(series_title: String!, series_volume: Int!, publisher_name: String!): [Issue],
     issue(id: Int!): Issue
   }
   
@@ -126,15 +126,27 @@ const resolvers = {
         },
     }),
     Query: {
-        publishers: (_, {us}) => models.Publisher.findAll({where: {original: (us ? 1 : 0)}, order: [['name', 'ASC']]}),
-        series: (_, {publisher_id}) => models.Series.findAll({
-            where: {fk_publisher: publisher_id},
-            order: [['title', 'ASC'], ['volume', 'ASC']]
+        publishers: (_, {us}) => models.Publisher.findAll({
+            where: {original: (us ? 1 : 0)},
+            order: [['name', 'ASC']]
         }),
-        issues: async (_, {series_id}) => {
+        series: (_, {publisher_name}) => models.Series.findAll({
+            where: {'$Publisher.name$': publisher_name},
+            order: [['title', 'ASC'], ['volume', 'ASC']],
+            include: [models.Publisher]
+        }),
+        issues: async (_, {series_title, series_volume, publisher_name}) => {
             let res = await models.Issue.findAll({
-                where: {fk_series: series_id, fk_variant: null},
-                order: [['number', 'ASC']]
+                where: {'$Series.title$': series_title, '$Series.volume$': series_volume, '$Series->Publisher.name$': publisher_name},
+                order: [['number', 'ASC']],
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
             });
 
             return res.sort((a, b) => {

@@ -6,6 +6,7 @@ class Series extends Model {
 
     static associate(models) {
         Series.hasMany(models.Issue, {as: 'Issue', foreignKey: 'fk_series', onDelete: 'cascade'});
+        Series.belongsTo(models.Publisher, {foreignKey: 'fk_publisher'})
     }
 }
 
