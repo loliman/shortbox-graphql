@@ -20,7 +20,7 @@ const typeDefs = gql`
     publishers(us: Boolean!): [Publisher],
     series(publisher_name: String!): [Series],
     issues(series_title: String!, series_volume: Int!, publisher_name: String!): [Issue],
-    issue(id: Int!): Issue
+    issue(issue_number: String!, series_title: String!, series_volume: Int!, publisher_name: String!): Issue
   }
   
   type Mutation {
@@ -161,7 +161,23 @@ const resolvers = {
                 }
             })
         },
-        issue: (_, {id}) => models.Issue.findById(id)
+        issue: (_, {issue_number, series_title, series_volume, publisher_name}) =>
+            models.Issue.findOne({
+                where: {
+                    number: issue_number,
+                    '$Series.title$': series_title,
+                    '$Series.volume$': series_volume,
+                    '$Series->Publisher.name$': publisher_name
+                },
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            })
     },
     Mutation: {
         login: async (_, {name, password}) => {
