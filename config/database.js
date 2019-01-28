@@ -1,6 +1,6 @@
 import Sequelize from 'sequelize';
 
-const sequelize = new Sequelize('shortbox_old', 'admin', 'admin', {
+const sequelize = new Sequelize('shortbox', 'root', 'admin', {
     host: 'localhost',
     dialect: 'mysql',
     operatorsAliases: false,

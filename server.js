@@ -4,7 +4,6 @@ import fs from 'fs';
 import https from 'https';
 import {GraphQLScalarType} from 'graphql';
 import models from './models';
-import sequelize from './config/database';
 import {createContext, EXPECTED_OPTIONS_KEY} from 'dataloader-sequelize';
 import {resolver} from 'graphql-sequelize';
 
@@ -301,16 +300,16 @@ const resolvers = {
         addinfo: (parent) => parent.addinfo,
         issue: (parent) => models.Issue.findById(parent.fk_issue),
         parent: (parent) => models.Story.findById(parent.fk_parent),
-        children: (parent) => models.Story.findAll({where: {fk_parent: parent.id}}),
-        firstapp: async (parent) => {
-            let res = await sequelize.query("SELECT i.id FROM Issue i JOIN Story s ON s.fk_issue = i.id WHERE s.fk_parent = ? ORDER BY i.releasedate ASC LIMIT 1",
-                {replacements: [parent.fk_parent], type: sequelize.QueryTypes.SELECT});
-
-            if (res.length === 0)
-                return false;
-
-            return res[0].id === parent.fk_issue;
-        }
+        children: (parent) => models.Story.findAll({
+            where: {fk_parent: parent.id},
+            include: [models.Issue],
+            order: [[models.Issue, 'releasedate', 'ASC']]
+        }),
+        firstapp: async (parent) => await models.Issue.count({
+            where: {'$Stories.fk_issue$': parent.fk_parent},
+            include: [{model: models.Story, as: 'Stories'}],
+            order: [['releasedate', 'ASC']]
+        }) === 1
     },
     IssueBase: {
         __resolveType(issue, context, info) {

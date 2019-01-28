@@ -5,6 +5,7 @@ class Story extends Model {
 
     static associate(models) {
         Story.hasMany(models.Story, {as: {singular: 'Children', plural: 'Parent'}, foreignKey: 'fk_parent'});
+        Story.belongsTo(models.Issue, {foreignKey: 'fk_issue'})
     }
 }
 
