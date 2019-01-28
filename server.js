@@ -252,7 +252,6 @@ const resolvers = {
             if (!context.loggedIn)
                 throw new Error();
 
-            console.log("deleted issue");
             return true;
             /*let del = await models.Issue.destroy({where: {id: id}});
             return del === 1;*/
