@@ -20,6 +20,8 @@ const typeDefs = gql`
     publishers(us: Boolean!): [Publisher],
     series(publisher_name: String!): [Series],
     issues(series_title: String!, series_volume: Int!, publisher_name: String!): [Issue],
+    publisher(publisher_name: String!): Publisher,
+    seriesd(series_title: String!, series_volume: Int!, publisher_name: String!): Series,
     issue(issue_number: String!, series_title: String!, series_volume: Int!, publisher_name: String!): Issue
   }
   
@@ -27,11 +29,13 @@ const typeDefs = gql`
     login(name: String!, password: String!): User,
     logout(id: Int!, sessionid: String!): Boolean,
     
-    deletePublishers(id: Int!): Boolean,
-    deleteSeries(id: Int!): Boolean,
-    deleteIssues(id: Int!): Boolean,
+    deletePublishers(publisher_name: String!): Boolean,
+    deleteSeries(series_title: String!, series_volume: Int!, publisher_name: String!): Boolean,
+    deleteIssues(issue_number: String!, series_title: String!, series_volume: Int!, publisher_name: String!): Boolean,
     
-    editPublisher(id: Int!, name: String!): Publisher
+    createPublisher(name: String!): Publisher,
+    
+    editPublisher(name_old: String!, name: String!): Publisher
   }
   
   type Publisher {
@@ -161,6 +165,17 @@ const resolvers = {
                 }
             })
         },
+        publisher: (_, {publisher_name}) =>
+            models.Publisher.findOne({
+                where: {
+                    name: publisher_name
+                }
+            }),
+        seriesd: (_, {series_title, series_volume, publisher_name}) =>
+            models.Series.findOne({
+                where: {title: series_title, volume: series_volume, '$Publisher.name$': publisher_name},
+                include: [models.Publisher]
+            }),
         issue: (_, {issue_number, series_title, series_volume, publisher_name}) =>
             models.Issue.findOne({
                 where: {
@@ -205,40 +220,66 @@ const resolvers = {
 
             return res[0] !== 0;
         },
-        deletePublishers: async (_, {id}, context) => {
+        deletePublishers: async (_, {publisher_name}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
-            let del = await models.Publisher.destroy({where: {id: id}});
+            let del = await models.Publisher.destroy({
+                where: {'$Publisher.name$': publisher_name},
+                order: [['title', 'ASC'], ['volume', 'ASC']],
+                include: [models.Publisher]});
             return del === 1;
         },
-        deleteSeries: async (_, {id}, context) => {
+        deleteSeries: async (_, {series_title, series_volume, publisher_name}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
-            let del = await models.Series.destroy({where: {id: id}, individualHooks: true});
+            let del = await models.Series.destroy({
+                where: {'$Series.title$': series_title, '$Series.volume$': series_volume, '$Series->Publisher.name$': publisher_name},
+                order: [['number', 'ASC']],
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            });
             return del === 1;
         },
-        deleteIssues: async (_, {id}, context) => {
+        deleteIssues: async (_, {issue_number, series_title, series_volume, publisher_name}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
-            console.log("deleted issue " + id);
+            console.log("deleted issue");
             return true;
             /*let del = await models.Issue.destroy({where: {id: id}});
             return del === 1;*/
         },
-        editPublisher: async (_, {id, name}, context) => {
+        createPublisher: async (_, {name}, context) => {
+            if (!context.loggedIn)
+                throw new Error();
+
+            let res = await models.Publisher.create({
+                name: name,
+                original: false
+            });
+
+            if(res)
+                return res.dataValues;
+        },
+        editPublisher: async (_, {name_old, name}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let res = await models.Publisher.update(
                 {name: name},
-                {where: {id: id}}
+                {where: {name: name_old}}
             );
 
             if(res[0] !== 0)
-                return {id: id, name: name};
+                return {id: res[0], name: name, us: false};
         }
     },
     Publisher: {
