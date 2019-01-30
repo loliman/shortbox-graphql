@@ -33,8 +33,10 @@ const typeDefs = gql`
     deleteIssues(issue_number: String!, series_title: String!, series_volume: Int!, publisher_name: String!): Boolean,
     
     createPublisher(name: String!): Publisher,
+    createSeries(title: String!, startyear: Int!, endyear: Int, volume: Int!, publisher_name: String!): Series,
     
-    editPublisher(name_old: String!, name: String!): Publisher
+    editPublisher(name_old: String!, name: String!): Publisher,
+    editSeries(title_old: String!, volume_old: Int!, publisher_old: String!, title: String!, publisher: String!, volume: Int!, startyear: Int!, endyear: Int): Series
   }
   
   type Publisher {
@@ -224,16 +226,34 @@ const resolvers = {
                 throw new Error();
 
             let del = await models.Publisher.destroy({
-                where: {'$Publisher.name$': publisher_name},
-                order: [['title', 'ASC'], ['volume', 'ASC']],
-                include: [models.Publisher]});
+                where: {name: publisher_name}
+            });
+
             return del === 1;
         },
         deleteSeries: async (_, {series_title, series_volume, publisher_name}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
+            let pub = await models.Publisher.findOne({
+                where: {
+                    name: publisher_name
+                }
+            });
+
             let del = await models.Series.destroy({
+                where: {title: series_title, volume: series_volume, fk_publisher: pub.id},
+                include: [models.Publisher]
+            });
+
+            return del === 1;
+        },
+        deleteIssues: async (_, {issue_number, series_title, series_volume, publisher_name}, context) => {
+            if (!context.loggedIn)
+                throw new Error();
+
+            return true;
+            /*            let del = await models.Series.destroy({
                 where: {'$Series.title$': series_title, '$Series.volume$': series_volume, '$Series->Publisher.name$': publisher_name},
                 order: [['number', 'ASC']],
                 include: [
@@ -245,14 +265,6 @@ const resolvers = {
                     }
                 ]
             });
-            return del === 1;
-        },
-        deleteIssues: async (_, {issue_number, series_title, series_volume, publisher_name}, context) => {
-            if (!context.loggedIn)
-                throw new Error();
-
-            return true;
-            /*let del = await models.Issue.destroy({where: {id: id}});
             return del === 1;*/
         },
         createPublisher: async (_, {name}, context) => {
@@ -262,6 +274,27 @@ const resolvers = {
             let res = await models.Publisher.create({
                 name: name,
                 original: false
+            });
+
+            if (res)
+                return res.dataValues;
+        },
+        createSeries: async (_, {title, volume, startyear, endyear, publisher_name}, context) => {
+            if (!context.loggedIn)
+                throw new Error();
+
+            let pub = await models.Publisher.findOne({
+                where: {
+                    name: publisher_name
+                }
+            });
+
+            let res = await models.Series.create({
+                title: title,
+                volume: volume,
+                startyear: startyear,
+                endyear: endyear,
+                fk_publisher: pub.id
             });
 
             if(res)
@@ -278,6 +311,30 @@ const resolvers = {
 
             if(res[0] !== 0)
                 return {id: res[0], name: name, us: false};
+        },
+        editSeries: async (_, {title_old, volume_old, publisher_old, title, publisher, volume, startyear, endyear}, context) => {
+            if (!context.loggedIn)
+                throw new Error();
+
+            let newPub = await models.Publisher.findOne({
+                where: {
+                    name: publisher
+                }
+            });
+
+            let oldPub = await models.Publisher.findOne({
+                where: {
+                    name: publisher_old
+                }
+            });
+
+            let res = await models.Series.update(
+                {name: title, volume: volume, startyear: startyear, endyear: endyear, fk_publisher: newPub.id},
+                {where: {title: title_old, volume: volume_old, fk_publisher: oldPub.id}}
+            );
+
+            if (res[0] !== 0)
+                return models.Series.findById(res[0]);
         }
     },
     Publisher: {
@@ -373,8 +430,8 @@ apollo.applyMiddleware({app});
 
 const server = https.createServer(
     {
-        key: fs.readFileSync(`/Users/Christian/example.com+5-key.pem`),
-        cert: fs.readFileSync(`/Users/Christian/example.com+5.pem`)
+        key: fs.readFileSync(`../localhost+2-key.pem`),
+        cert: fs.readFileSync(`../localhost+2.pem`)
     },
     app
 );
