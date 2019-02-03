@@ -73,7 +73,8 @@ const typeDefs = gql`
     coverurl: String,
     price: String,
     currency: String,
-    releasedate: Date
+    releasedate: Date,
+    verified: Boolean
   }
   
   type Issue implements IssueBase {
@@ -90,7 +91,8 @@ const typeDefs = gql`
     pages: Int,
     releasedate: Date,
     stories: [Story],
-    variants: [Variant]
+    variants: [Variant],
+    verified: Boolean
   }
   
   type Variant implements IssueBase {
@@ -101,7 +103,8 @@ const typeDefs = gql`
     price: String,
     currency: String,
     variant: String,
-    releasedate: Date
+    releasedate: Date,
+    verified: Boolean
   }
   
   type User {
@@ -304,13 +307,16 @@ const resolvers = {
             if (!context.loggedIn)
                 throw new Error();
 
-            let res = await models.Publisher.update(
-                {name: name},
-                {where: {name: name_old}}
-            );
+            let res = await models.Publisher.findOne({
+                where: {
+                    name: name_old
+                }
+            });
 
-            if(res[0] !== 0)
-                return {id: res[0], name: name, us: false};
+            res.name = name;
+            res = await res.save();
+
+            return res.dataValues;
         },
         editSeries: async (_, {title_old, volume_old, publisher_old, title, publisher, volume, startyear, endyear}, context) => {
             if (!context.loggedIn)
@@ -322,25 +328,25 @@ const resolvers = {
                 }
             });
 
-            let oldPub = await models.Publisher.findOne({
-                where: {
-                    name: publisher_old
-                }
+            let res = await models.Series.findOne({
+                where: {title: title_old, volume: volume_old, '$Publisher.name$': publisher_old},
+                include: [models.Publisher]
             });
 
-            let res = await models.Series.update(
-                {name: title, volume: volume, startyear: startyear, endyear: endyear, fk_publisher: newPub.id},
-                {where: {title: title_old, volume: volume_old, fk_publisher: oldPub.id}}
-            );
+            res.title = title;
+            res.volume = volume;
+            res.startyear = startyear;
+            res.endyear = endyear;
+            res.setPublisher(newPub);
+            res = await res.save();
 
-            if (res[0] !== 0)
-                return models.Series.findById(res[0]);
+            return res.dataValues;
         }
     },
     Publisher: {
         id: (parent) => parent.id,
         name: (parent) => parent.name,
-        us: (parent) => parent.original === 1
+        us: (parent) => parent.original
     },
     Series: {
         id: (parent) => parent.id,
@@ -387,7 +393,8 @@ const resolvers = {
         currency: (parent) => parent.currency,
         language: (parent) => parent.language,
         pages: (parent) => parent.pages,
-        releasedate: (parent) => parent.releasedate
+        releasedate: (parent) => parent.releasedate,
+        verified: (parent) => parent.verified
     },
     Variant: {
         id: (parent) => parent.id,
@@ -397,7 +404,7 @@ const resolvers = {
         price: (parent) => parent.price.toFixed(2).toString().replace(".", ","),
         currency: (parent) => parent.currency,
         releasedate: (parent) => parent.releasedate,
-        variant: (parent) => parent.variant
+        verified: (parent) => parent.verified
     },
     User: {
         id: (parent) => parent.id,
@@ -420,7 +427,6 @@ const apollo = new ApolloServer({
             loggedIn = true;
 
         const dataloader = createContext(models.sequelize);
-        // add the user to the context
         return {loggedIn, dataloader};
     }
 });

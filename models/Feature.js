@@ -1,38 +1,34 @@
 import Sequelize, {Model} from 'sequelize';
 
-class Publisher extends Model {
-    static tableName = 'Publisher';
+class Feature extends Model {
+    static tableName = 'Feature';
 
     static associate(models) {
-        Publisher.hasMany(models.Series, {as: 'Series', foreignKey: 'fk_publisher', onDelete: 'cascade'});
+        Feature.belongsTo(models.Issue, {foreignKey: 'fk_issue'});
+        Feature.belongsToMany(models.Individual, { as: 'Features', through: models.Feature_Individual, foreignKey: 'fk_feature' });
     }
 }
 
 export default (sequelize) => {
-    Publisher.init({
+    Feature.init({
         id: {
             type: Sequelize.INTEGER,
             primaryKey: true,
             allowNull: false,
             autoIncrement: true
         },
-        name: {
+        title: {
             type: Sequelize.STRING,
             allowNull: false
-        },
-        original: {
-            type: Sequelize.BOOLEAN,
-            allowNull: false,
-            defaultValue: false
         }
     }, {
         indexes: [{
             unique: true,
-            fields: ['name']
+            fields: ['title', 'fk_issue']
         }],
         sequelize,
-        tableName: Publisher.tableName
+        tableName: Feature.tableName
     });
 
-    return Publisher;
+    return Feature;
 };

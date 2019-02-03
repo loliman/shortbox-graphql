@@ -6,8 +6,11 @@ class Issue extends Model {
     static associate(models) {
         Issue.hasMany(models.Issue, {as: 'Variants', foreignKey: 'fk_variant', onDelete: 'cascade'});
         Issue.hasMany(models.Story, {as: {singular: 'Issue', plural: 'Stories'}, foreignKey: 'fk_issue', onDelete: 'cascade'});
+        Issue.hasOne(models.Cover, {foreignKey: 'fk_issue', onDelete: 'cascade'});
 
-        Issue.belongsTo(models.Series, {foreignKey: 'fk_series'})
+        Issue.belongsToMany(models.Cover, { as: 'Issues', through: 'Issue_Cover', foreignKey: 'fk_issue' });
+        Issue.belongsTo(models.Series, {foreignKey: 'fk_series'});
+        Issue.belongsTo(models.Individual, {foreignKey: 'fk_editor'});
     }
 }
 
@@ -62,6 +65,11 @@ export default (sequelize) => {
         coverurl: {
             type: Sequelize.STRING,
             allowNull: true
+        },
+        verified: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
         }
     }, {
         indexes: [{
