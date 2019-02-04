@@ -5,6 +5,7 @@ class Story extends Model {
 
     static associate(models) {
         Story.hasMany(models.Story, {as: {singular: 'Children', plural: 'Parent'}, foreignKey: 'fk_parent'});
+
         Story.belongsTo(models.Issue, {foreignKey: 'fk_issue'});
         Story.belongsToMany(models.Individual, { as: 'Stories', through: models.Story_Individual, foreignKey: 'fk_story' });
     }
@@ -33,7 +34,7 @@ export default (sequelize) => {
     }, {
         indexes: [{
             unique: true,
-            fields: ['fk_issue', 'fk_parent', 'addinfo']
+            fields: ['fk_issue', 'fk_parent', 'addinfo', 'number']
         }],
         sequelize,
         tableName: Story.tableName

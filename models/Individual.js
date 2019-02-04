@@ -6,9 +6,10 @@ class Individual extends Model {
     static associate(models) {
         Individual.hasMany(models.Issue, {as: 'Issues', foreignKey: 'fk_editor'});
 
-        Individual.belongsToMany(models.Cover, { as: 'Artists', through: 'Cover_Artist', foreignKey: 'fk_artist' });
+        Individual.belongsToMany(models.Cover, { as: 'Artists', through: models.Cover_Individual, foreignKey: 'fk_individual' });
         Individual.belongsToMany(models.Feature, { through: models.Feature_Individual, foreignKey: 'fk_individual' });
         Individual.belongsToMany(models.Story, { through: models.Story_Individual, foreignKey: 'fk_individual' });
+        Individual.belongsToMany(models.Story, { through: models.Issue_Individual, foreignKey: 'fk_individual' });
     }
 }
 

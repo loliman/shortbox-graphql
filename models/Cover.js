@@ -4,9 +4,10 @@ class Cover extends Model {
     static tableName = 'Cover';
 
     static associate(models) {
+        Cover.hasMany(models.Cover, {as: {singular: 'Children', plural: 'Parent'}, foreignKey: 'fk_parent'});
+
         Cover.belongsTo(models.Issue, {foreignKey: 'fk_issue'});
-        Cover.belongsToMany(models.Issue, { as: 'ContainedCovers', through: 'Issue_Cover', foreignKey: 'fk_cover' });
-        Cover.belongsToMany(models.Individual, { as: 'Covers', through: 'Cover_Artist', foreignKey: 'fk_cover' });
+        Cover.belongsToMany(models.Individual, { as: 'Covers', through: models.Cover_Individual, foreignKey: 'fk_cover' });
     }
 }
 
@@ -21,12 +22,17 @@ export default (sequelize) => {
         url: {
             type: Sequelize.STRING,
             allowNull: false
+        },
+        /*Front means 0*/
+        number: {
+            type: Sequelize.INTEGER,
+            allowNull: false,
         }
     }, {
-      /*  indexes: [{
+        indexes: [{
             unique: true,
-            fields: ['title']
-        }],*/
+            fields: ['fk_parent', 'fk_issue', 'number']
+        }],
         sequelize,
         tableName: Cover.tableName
     });

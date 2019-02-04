@@ -20,11 +20,15 @@ export default (sequelize) => {
         title: {
             type: Sequelize.STRING,
             allowNull: false
+        },
+        number: {
+            type: Sequelize.INTEGER,
+            allowNull: false,
         }
     }, {
         indexes: [{
             unique: true,
-            fields: ['title', 'fk_issue']
+            fields: ['title', 'fk_issue', 'number']
         }],
         sequelize,
         tableName: Feature.tableName
