@@ -55,6 +55,20 @@ const typeDefs = gql`
     publisher: Publisher
   }
   
+  type Individual {
+    id: ID,
+    name: String
+  }
+  
+  type Feature {
+    id: ID,
+    title: String,
+    number: Int,
+    issue: Issue,
+    writers: [Individual],
+    translators: [Individual]
+  }
+  
   type Story {
     id: ID,
     title: String,
@@ -63,14 +77,29 @@ const typeDefs = gql`
     issue: Issue,
     parent: Story,
     children: [Story],
-    firstapp: Boolean
+    firstapp: Boolean,
+    pencilers: [Individual],
+    inkers: [Individual],
+    colourists: [Individual],
+    letterers: [Individual],
+    editors: [Individual],
+    translators: [Individual]    
+  }
+  
+  type Cover {
+    id: ID,
+    url: String,
+    number: Int,
+    parent: Cover,
+    issue: Issue,
+    artists: [Individual]
   }
   
   interface IssueBase {
     id: ID,
     format: String,
     limitation: Int,
-    coverurl: String,
+    cover: Cover,
     price: String,
     currency: String,
     releasedate: Date,
@@ -81,7 +110,7 @@ const typeDefs = gql`
     id: ID,
     format: String,
     limitation: Int,
-    coverurl: String,
+    cover: Cover,
     price: String,
     currency: String,
     title: String,
@@ -90,16 +119,19 @@ const typeDefs = gql`
     language: String,
     pages: Int,
     releasedate: Date,
+    features: [Feature],
     stories: [Story],
+    covers: [Cover],
     variants: [Variant],
-    verified: Boolean
+    verified: Boolean,
+    editors: [Individual]
   }
   
   type Variant implements IssueBase {
     id: ID,
     format: String,
     limitation: Int,
-    coverurl: String,
+    cover: Cover,
     price: String,
     currency: String,
     variant: String,
@@ -356,6 +388,24 @@ const resolvers = {
         volume: (parent) => parent.volume,
         publisher: (parent) => models.Publisher.findById(parent.fk_publisher)
     },
+    Individual: {
+        id: (parent) => parent.id,
+        name: (parent) => parent.name
+    },
+    Feature: {
+        id: (parent) => parent.id,
+        title: (parent) => parent.title,
+        number: (parent) => parent.number,
+        issue: (parent) => models.Issue.findById(parent.fk_issue),
+        writers: (parent) => models.Individual.findAll({
+            where: {'Feature_Individual.fk_feature$': parent.id, 'Feature_Individual.type': 'WRITER'},
+            include: [models.Feature_Individual]
+        }),
+        translators: (parent) => models.Individual.findAll({
+            where: {'Feature_Individual.fk_feature': parent.id, 'Feature_Individual.type': 'TRANSLATOR'},
+            include: [models.Feature_Individual]
+        })
+    },
     Story: {
         id: (parent) => parent.id,
         title: (parent) => parent.title,
@@ -372,7 +422,42 @@ const resolvers = {
             where: {'$Stories.fk_issue$': parent.fk_parent},
             include: [{model: models.Story, as: 'Stories'}],
             order: [['releasedate', 'ASC']]
-        }) === 1
+        }) === 1,
+        pencilers: (parent) => models.Individual.findAll({
+            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'PENCILER'},
+            include: [models.Story_Individual]
+        }),
+        inkers: (parent) => models.Individual.findAll({
+            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'INKER'},
+            include: [models.Story_Individual]
+        }),
+        colourists: (parent) => models.Individual.findAll({
+            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'COLOURIST'},
+            include: [models.Story_Individual]
+        }),
+        letterers: (parent) => models.Individual.findAll({
+            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'LETTERER'},
+            include: [models.Story_Individual]
+        }),
+        editors: (parent) => models.Individual.findAll({
+            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'EDITOR'},
+            include: [models.Story_Individual]
+        }),
+        translators: (parent) => models.Individual.findAll({
+            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'TRANSLATOR'},
+            include: [models.Story_Individual]
+        })
+    },
+    Cover: {
+        id: (parent) => parent.id,
+        url: (parent) => parent.url,
+        number: (parent) => parent.number,
+        parent: (parent) => models.Cover.findById(parent.fk_parent),
+        issue: (parent) => models.Issue.findById(parent.fk_issue),
+        artists: (parent) => models.Individual.findAll({
+            where: {'Cover_Individual.fk_cover$': parent.id, 'Cover_Individual.type': 'ARTIST'},
+            include: [models.Cover_Individual]
+        })
     },
     IssueBase: {
         __resolveType(issue, context, info) {
@@ -386,21 +471,27 @@ const resolvers = {
         format: (parent) => parent.format,
         series: (parent) => models.Series.findById(parent.fk_series),
         variants: (parent) => models.Issue.findAll({where: {fk_variant: parent.id}}),
+        features: (parent) => models.Feature.findAll({where: {fk_issue: parent.id}}),
         stories: (parent) => models.Story.findAll({where: {fk_issue: parent.id}}),
+        covers: (parent) => models.Cover.findAll({where: {fk_issue: parent.id}}),
         limitation: (parent) => parent.limitation,
-        coverurl: (parent) => parent.coverurl,
+        cover: (parent) => models.Cover.findOne({where: {fk_issue: parent.id, number: 0}}),
         price: (parent) => parent.price.toFixed(2).toString().replace(".", ","),
         currency: (parent) => parent.currency,
         language: (parent) => parent.language,
         pages: (parent) => parent.pages,
         releasedate: (parent) => parent.releasedate,
-        verified: (parent) => parent.verified
+        verified: (parent) => parent.verified,
+        editors: (parent) => models.Individual.findAll({
+            where: {'Issue_Individual.fk_issue$': parent.id, 'Issue_Individual.type': 'EDITOR'},
+            include: [models.Issue_Individual]
+        })
     },
     Variant: {
         id: (parent) => parent.id,
         format: (parent) => parent.format,
         limitation: (parent) => parent.limitation,
-        coverurl: (parent) => parent.coverurl,
+        cover: (parent) => models.Cover.findOne({where: {fk_issue: parent.id, number: 0}}),
         price: (parent) => parent.price.toFixed(2).toString().replace(".", ","),
         currency: (parent) => parent.currency,
         releasedate: (parent) => parent.releasedate,

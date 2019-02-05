@@ -61,10 +61,6 @@ export default (sequelize) => {
             type: Sequelize.STRING,
             allowNull: false
         },
-        coverurl: {
-            type: Sequelize.STRING,
-            allowNull: true
-        },
         verified: {
             type: Sequelize.BOOLEAN,
             allowNull: false,
