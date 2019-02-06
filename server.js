@@ -96,7 +96,7 @@ const typeDefs = gql`
     parent: Cover,
     children: [Cover],
     firstapp: Boolean,
-    issue: Issue,
+    issue: Variant,
     artists: [Individual]
   }
   
@@ -139,6 +139,7 @@ const typeDefs = gql`
     cover: Cover,
     price: String,
     currency: String,
+    issue: Issue,
     variant: String,
     releasedate: Date,
     verified: Boolean
@@ -508,6 +509,7 @@ const resolvers = {
         url: (parent) => parent.url,
         number: (parent) => parent.number,
         parent: (parent) => models.Cover.findById(parent.fk_parent),
+        issue: (parent) => models.Issue.findById(parent.fk_issue),
         children: (parent) => models.Cover.findAll({
             where: {fk_parent: parent.id},
             include: [models.Issue],
@@ -518,7 +520,6 @@ const resolvers = {
             include: [{model: models.Cover, as: 'Covers'}],
             order: [['releasedate', 'ASC']]
         }) === 1,
-        issue: (parent) => models.Issue.findById(parent.fk_issue),
         addinfo: (parent) => parent.addinfo,
         artists: (parent) => models.Individual.findAll({
             include: [{
@@ -568,6 +569,12 @@ const resolvers = {
         format: (parent) => parent.format,
         limitation: (parent) => parent.limitation,
         cover: (parent) => models.Cover.findOne({where: {fk_issue: parent.id, number: 0}}),
+        issue: (parent) => {
+            if(parent.fk_variant !== null)
+                return models.Issue.findOne({where: {id: parent.fk_variant}});
+            else
+                return models.Issue.findOne({where: {id: parent.id}});
+        },
         price: (parent) => parent.price.toFixed(2).toString().replace(".", ","),
         currency: (parent) => parent.currency,
         releasedate: (parent) => parent.releasedate,
