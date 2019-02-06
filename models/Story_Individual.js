@@ -17,14 +17,17 @@ export default (sequelize) => {
     Story_Individual.init({
         fk_story: {
             type: Sequelize.INTEGER,
+            primaryKey: true,
             allowNull: false
         },
         fk_individual: {
             type: Sequelize.INTEGER,
+            primaryKey: true,
             allowNull: false
         },
         type: {
             type: Sequelize.STRING,
+            primaryKey: true,
             allowNull: false
         }
     }, {

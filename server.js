@@ -64,6 +64,7 @@ const typeDefs = gql`
     id: ID,
     title: String,
     number: Int,
+    addinfo: String,
     issue: Issue,
     writers: [Individual],
     translators: [Individual]
@@ -79,6 +80,7 @@ const typeDefs = gql`
     children: [Story],
     firstapp: Boolean,
     pencilers: [Individual],
+    writers: [Individual],
     inkers: [Individual],
     colourists: [Individual],
     letterers: [Individual],
@@ -90,7 +92,10 @@ const typeDefs = gql`
     id: ID,
     url: String,
     number: Int,
+    addinfo: String,
     parent: Cover,
+    children: [Cover],
+    firstapp: Boolean,
     issue: Issue,
     artists: [Individual]
   }
@@ -396,14 +401,25 @@ const resolvers = {
         id: (parent) => parent.id,
         title: (parent) => parent.title,
         number: (parent) => parent.number,
+        addinfo: (parent) => parent.addinfo,
         issue: (parent) => models.Issue.findById(parent.fk_issue),
         writers: (parent) => models.Individual.findAll({
-            where: {'Feature_Individual.fk_feature$': parent.id, 'Feature_Individual.type': 'WRITER'},
-            include: [models.Feature_Individual]
+            include: [{
+                model: models.Feature
+            }],
+            where: {
+                '$Features->Feature_Individual.fk_feature$': parent.id,
+                '$Features->Feature_Individual.type$': 'WRITER'
+            }
         }),
         translators: (parent) => models.Individual.findAll({
-            where: {'Feature_Individual.fk_feature': parent.id, 'Feature_Individual.type': 'TRANSLATOR'},
-            include: [models.Feature_Individual]
+            include: [{
+                model: models.Feature
+            }],
+            where: {
+                '$Features->Feature_Individual.fk_feature$': parent.id,
+                '$Features->Feature_Individual.type$': 'TRANSLATOR'
+            }
         })
     },
     Story: {
@@ -424,28 +440,67 @@ const resolvers = {
             order: [['releasedate', 'ASC']]
         }) === 1,
         pencilers: (parent) => models.Individual.findAll({
-            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'PENCILER'},
-            include: [models.Story_Individual]
+            include: [{
+                model: models.Story
+            }],
+            where: {
+                '$Stories->Story_Individual.fk_story$': parent.id,
+                '$Stories->Story_Individual.type$': 'PENCILER'
+            }
+        }),
+        writers: (parent) => models.Individual.findAll({
+            include: [{
+                model: models.Story
+            }],
+            where: {
+                '$Stories->Story_Individual.fk_story$': parent.id,
+                '$Stories->Story_Individual.type$': 'WRITER'
+            }
         }),
         inkers: (parent) => models.Individual.findAll({
-            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'INKER'},
-            include: [models.Story_Individual]
+            include: [{
+                model: models.Story
+            }],
+            where: {
+                '$Stories->Story_Individual.fk_story$': parent.id,
+                '$Stories->Story_Individual.type$': 'INKER'
+            }
         }),
         colourists: (parent) => models.Individual.findAll({
-            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'COLOURIST'},
-            include: [models.Story_Individual]
+            include: [{
+                model: models.Story
+            }],
+            where: {
+                '$Stories->Story_Individual.fk_story$': parent.id,
+                '$Stories->Story_Individual.type$': 'COLOURIST'
+            }
         }),
         letterers: (parent) => models.Individual.findAll({
-            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'LETTERER'},
-            include: [models.Story_Individual]
+            include: [{
+                model: models.Story
+            }],
+            where: {
+                '$Stories->Story_Individual.fk_story$': parent.id,
+                '$Stories->Story_Individual.type$': 'LETTERER'
+            }
         }),
         editors: (parent) => models.Individual.findAll({
-            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'EDITOR'},
-            include: [models.Story_Individual]
+            include: [{
+                model: models.Story
+            }],
+            where: {
+                '$Stories->Story_Individual.fk_story$': parent.id,
+                '$Stories->Story_Individual.type$': 'EDITOR'
+            }
         }),
         translators: (parent) => models.Individual.findAll({
-            where: {'Story_Individual.fk_story': parent.id, 'Story_Individual.type': 'TRANSLATOR'},
-            include: [models.Story_Individual]
+            include: [{
+                model: models.Story
+            }],
+            where: {
+                '$Stories->Story_Individual.fk_story$': parent.id,
+                '$Stories->Story_Individual.type$': 'TRANSLATOR'
+            }
         })
     },
     Cover: {
@@ -453,10 +508,26 @@ const resolvers = {
         url: (parent) => parent.url,
         number: (parent) => parent.number,
         parent: (parent) => models.Cover.findById(parent.fk_parent),
+        children: (parent) => models.Cover.findAll({
+            where: {fk_parent: parent.id},
+            include: [models.Issue],
+            order: [[models.Issue, 'releasedate', 'ASC']]
+        }),
+        firstapp: async (parent) => await models.Issue.count({
+            where: {'$Covers.fk_issue$': parent.fk_parent},
+            include: [{model: models.Cover, as: 'Covers'}],
+            order: [['releasedate', 'ASC']]
+        }) === 1,
         issue: (parent) => models.Issue.findById(parent.fk_issue),
+        addinfo: (parent) => parent.addinfo,
         artists: (parent) => models.Individual.findAll({
-            where: {'Cover_Individual.fk_cover$': parent.id, 'Cover_Individual.type': 'ARTIST'},
-            include: [models.Cover_Individual]
+            include: [{
+                model: models.Cover
+            }],
+            where: {
+                '$Covers->Cover_Individual.fk_cover$': parent.id,
+                '$Covers->Cover_Individual.type$': 'ARTIST'
+            }
         })
     },
     IssueBase: {
@@ -471,9 +542,9 @@ const resolvers = {
         format: (parent) => parent.format,
         series: (parent) => models.Series.findById(parent.fk_series),
         variants: (parent) => models.Issue.findAll({where: {fk_variant: parent.id}}),
-        features: (parent) => models.Feature.findAll({where: {fk_issue: parent.id}}),
-        stories: (parent) => models.Story.findAll({where: {fk_issue: parent.id}}),
-        covers: (parent) => models.Cover.findAll({where: {fk_issue: parent.id}}),
+        features: (parent) => models.Feature.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),
+        stories: (parent) => models.Story.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),
+        covers: (parent) => models.Cover.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),
         limitation: (parent) => parent.limitation,
         cover: (parent) => models.Cover.findOne({where: {fk_issue: parent.id, number: 0}}),
         price: (parent) => parent.price.toFixed(2).toString().replace(".", ","),
@@ -483,8 +554,13 @@ const resolvers = {
         releasedate: (parent) => parent.releasedate,
         verified: (parent) => parent.verified,
         editors: (parent) => models.Individual.findAll({
-            where: {'Issue_Individual.fk_issue$': parent.id, 'Issue_Individual.type': 'EDITOR'},
-            include: [models.Issue_Individual]
+            include: [{
+                model: models.Issue
+            }],
+            where: {
+                '$Issues->Issue_Individual.fk_issue$': parent.id,
+                '$Issues->Issue_Individual.type$': 'EDITOR'
+            }
         })
     },
     Variant: {

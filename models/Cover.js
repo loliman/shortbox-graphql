@@ -27,6 +27,10 @@ export default (sequelize) => {
         number: {
             type: Sequelize.INTEGER,
             allowNull: false,
+        },
+        addinfo: {
+            type: Sequelize.STRING,
+            allowNull: false
         }
     }, {
         indexes: [{
