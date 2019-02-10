@@ -25,18 +25,22 @@ const typeDefs = gql`
   }
   
   type Mutation {
-    login(name: String!, password: String!): User,
-    logout(id: Int!, sessionid: String!): Boolean,
+    login(user: UserInput!): User,
+    logout(user: UserInput!): Boolean,
     
-    deletePublishers(publisher_name: String!): Boolean,
-    deleteSeries(series_title: String!, series_volume: Int!, publisher_name: String!): Boolean,
-    deleteIssues(issue_number: String!, series_title: String!, series_volume: Int!, publisher_name: String!): Boolean,
+    deletePublishers(item: PublisherInput!): Boolean,
+    deleteSeries(item: SeriesInput!): Boolean,
+    deleteIssues(item: IssueInput!): Boolean,
     
-    createPublisher(name: String!): Publisher,
-    createSeries(title: String!, startyear: Int!, endyear: Int, volume: Int!, publisher_name: String!): Series,
+    createPublisher(publisher: PublisherInput!): Publisher,
+    createSeries(series: SeriesInput!): Series,
     
-    editPublisher(name_old: String!, name: String!): Publisher,
-    editSeries(title_old: String!, volume_old: Int!, publisher_old: String!, title: String!, publisher: String!, volume: Int!, startyear: Int!, endyear: Int): Series
+    editPublisher(old: PublisherInput!, new: PublisherInput!): Publisher,
+    editSeries(old: SeriesInput!, new: SeriesInput!): Series
+  }
+  
+  input PublisherInput {
+    name: String
   }
   
   type Publisher {
@@ -44,6 +48,14 @@ const typeDefs = gql`
     name: String,
     series: [Series],
     us: Boolean
+  }
+  
+  input SeriesInput {
+    title: String,
+    startyear: Int,
+    endyear: Int,
+    volume: Int,
+    publisher: PublisherInput
   }
   
   type Series {
@@ -55,9 +67,19 @@ const typeDefs = gql`
     publisher: Publisher
   }
   
+  input IndividualInput {
+    name: String
+  }
+  
   type Individual {
     id: ID,
     name: String
+  }
+  
+  input FeatureInput {
+    title: String,
+    number: Int,
+    addinfo: String
   }
   
   type Feature {
@@ -68,6 +90,12 @@ const typeDefs = gql`
     issue: Issue,
     writers: [Individual],
     translators: [Individual]
+  }
+  
+  input StoryInput {
+    title: String,
+    number: Int,
+    addinfo: String
   }
   
   type Story {
@@ -86,6 +114,12 @@ const typeDefs = gql`
     letterers: [Individual],
     editors: [Individual],
     translators: [Individual]    
+  }
+  
+  input CoverInput {
+    url: String,
+    number: Int,
+    addinfo: String
   }
   
   type Cover {
@@ -109,6 +143,20 @@ const typeDefs = gql`
     currency: String,
     releasedate: Date,
     verified: Boolean
+  }
+  
+  input IssueInput {
+    format: String,
+    limitation: Int,
+    cover: CoverInput,
+    price: String,
+    currency: String,
+    title: String,
+    number: String,
+    series: SeriesInput,
+    language: String,
+    pages: Int,
+    releasedate: Date
   }
   
   type Issue implements IssueBase {
@@ -143,6 +191,13 @@ const typeDefs = gql`
     variant: String,
     releasedate: Date,
     verified: Boolean
+  }
+  
+  input UserInput {
+    id: Int,
+    name: String,
+    password: String,
+    sessionid: String
   }
   
   type User {
@@ -237,7 +292,7 @@ const resolvers = {
             })
     },
     Mutation: {
-        login: async (_, {name, password}) => {
+        login: async (_, {user}) => {
             var sessionid = "";
             var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?%.,;:-_&$(){}[]";
 
@@ -246,7 +301,7 @@ const resolvers = {
 
             let res = await models.User.update(
                 {sessionid: sessionid},
-                {where: {name: name, password: password}}
+                {where: {name: user.name.trim(), password: user.password}}
             );
 
             if (res[0] === 0)
@@ -254,42 +309,42 @@ const resolvers = {
 
             return {id: res[0], sessionid: sessionid};
         },
-        logout: async (_, {id, sessionid}) => {
+        logout: async (_, {user}) => {
             let res = await models.User.update(
                 {sessionid: null},
-                {where: {id: id, sessionid: sessionid}}
+                {where: {id: user.id, sessionid: user.sessionid}}
             );
 
             return res[0] !== 0;
         },
-        deletePublishers: async (_, {publisher_name}, context) => {
+        deletePublishers: async (_, {item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let del = await models.Publisher.destroy({
-                where: {name: publisher_name}
+                where: {name: item.name.trim()}
             });
 
             return del === 1;
         },
-        deleteSeries: async (_, {series_title, series_volume, publisher_name}, context) => {
+        deleteSeries: async (_, {item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let pub = await models.Publisher.findOne({
                 where: {
-                    name: publisher_name
+                    name: item.publisher.name.trim()
                 }
             });
 
             let del = await models.Series.destroy({
-                where: {title: series_title, volume: series_volume, fk_publisher: pub.id},
+                where: {title: item.title.trim(), volume: item.volume, fk_publisher: pub.id},
                 include: [models.Publisher]
             });
 
             return del === 1;
         },
-        deleteIssues: async (_, {issue_number, series_title, series_volume, publisher_name}, context) => {
+        deleteIssues: async (_, {item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
@@ -308,73 +363,73 @@ const resolvers = {
             });
             return del === 1;*/
         },
-        createPublisher: async (_, {name}, context) => {
+        createPublisher: async (_, {publisher}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let res = await models.Publisher.create({
-                name: name,
+                name: publisher.name.trim(),
                 original: false
             });
 
             if (res)
                 return res.dataValues;
         },
-        createSeries: async (_, {title, volume, startyear, endyear, publisher_name}, context) => {
+        createSeries: async (_, {series}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let pub = await models.Publisher.findOne({
                 where: {
-                    name: publisher_name
+                    name: series.publisher.name.trim()
                 }
             });
 
             let res = await models.Series.create({
-                title: title,
-                volume: volume,
-                startyear: startyear,
-                endyear: endyear,
+                title: series.title.trim(),
+                volume: series.volume,
+                startyear: series.startyear,
+                endyear: series.endyear,
                 fk_publisher: pub.id
             });
 
             if(res)
                 return res.dataValues;
         },
-        editPublisher: async (_, {name_old, name}, context) => {
+        editPublisher: async (_, {o, n}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let res = await models.Publisher.findOne({
                 where: {
-                    name: name_old
+                    name: o.name.trim()
                 }
             });
 
-            res.name = name;
+            res.name = n.name.trim();
             res = await res.save();
 
             return res.dataValues;
         },
-        editSeries: async (_, {title_old, volume_old, publisher_old, title, publisher, volume, startyear, endyear}, context) => {
+        editSeries: async (_, {o, n}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let newPub = await models.Publisher.findOne({
                 where: {
-                    name: publisher
+                    name: n.publisher.trim()
                 }
             });
 
             let res = await models.Series.findOne({
-                where: {title: title_old, volume: volume_old, '$Publisher.name$': publisher_old},
+                where: {title: o.title.trim(), volume: o.volume, '$Publisher.name$': o.publisher.name},
                 include: [models.Publisher]
             });
 
-            res.title = title;
-            res.volume = volume;
-            res.startyear = startyear;
-            res.endyear = endyear;
+            res.title = n.title.trim();
+            res.volume = n.volume;
+            res.startyear = n.startyear;
+            res.endyear = n.endyear;
             res.setPublisher(newPub);
             res = await res.save();
 
