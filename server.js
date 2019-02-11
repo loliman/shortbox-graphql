@@ -17,11 +17,12 @@ const typeDefs = gql`
 
   type Query {
     publishers(us: Boolean!): [Publisher],
-    series(publisher_name: String!): [Series],
-    issues(series_title: String!, series_volume: Int!, publisher_name: String!): [Issue],
-    publisher(publisher_name: String!): Publisher,
-    seriesd(series_title: String!, series_volume: Int!, publisher_name: String!): Series,
-    issue(issue_number: String!, series_title: String!, series_volume: Int!, publisher_name: String!): Issue
+    series(publisher: PublisherInput!): [Series],
+    issues(series: SeriesInput!): [Issue],
+    
+    publisher(publisher: PublisherInput!): Publisher,
+    seriesd(series: SeriesInput!): Series,
+    issue(issue: IssueInput!): Issue
   }
   
   type Mutation {
@@ -35,12 +36,14 @@ const typeDefs = gql`
     createPublisher(publisher: PublisherInput!): Publisher,
     createSeries(series: SeriesInput!): Series,
     
-    editPublisher(old: PublisherInput!, new: PublisherInput!): Publisher,
-    editSeries(old: SeriesInput!, new: SeriesInput!): Series
+    editPublisher(old: PublisherInput!, edit: PublisherInput!): Publisher,
+    editSeries(old: SeriesInput!, edit: SeriesInput!): Series
   }
   
   input PublisherInput {
-    name: String
+    id: String,
+    name: String,
+    us: Boolean
   }
   
   type Publisher {
@@ -51,6 +54,7 @@ const typeDefs = gql`
   }
   
   input SeriesInput {
+    id: String,
     title: String,
     startyear: Int,
     endyear: Int,
@@ -149,6 +153,7 @@ const typeDefs = gql`
     format: String,
     limitation: Int,
     cover: CoverInput,
+    variant: String,
     price: String,
     currency: String,
     title: String,
@@ -231,14 +236,18 @@ const resolvers = {
             where: {original: (us ? 1 : 0)},
             order: [['name', 'ASC']]
         }),
-        series: (_, {publisher_name}) => models.Series.findAll({
-            where: {'$Publisher.name$': publisher_name},
+        series: (_, {publisher}) => models.Series.findAll({
+            where: {'$Publisher.name$': publisher.name},
             order: [['title', 'ASC'], ['volume', 'ASC']],
             include: [models.Publisher]
         }),
-        issues: async (_, {series_title, series_volume, publisher_name}) => {
+        issues: async (_, {series}) => {
             let res = await models.Issue.findAll({
-                where: {'$Series.title$': series_title, '$Series.volume$': series_volume, '$Series->Publisher.name$': publisher_name},
+                where: {
+                    '$Series.title$': series.title,
+                    '$Series.volume$': series.volume,
+                    '$Series->Publisher.name$': series.publisher.name
+                },
                 order: [['number', 'ASC']],
                 include: [
                     {
@@ -262,24 +271,24 @@ const resolvers = {
                 }
             })
         },
-        publisher: (_, {publisher_name}) =>
+        publisher: (_, {publisher}) =>
             models.Publisher.findOne({
                 where: {
-                    name: publisher_name
+                    name: publisher.name
                 }
             }),
-        seriesd: (_, {series_title, series_volume, publisher_name}) =>
+        seriesd: (_, {series}) =>
             models.Series.findOne({
-                where: {title: series_title, volume: series_volume, '$Publisher.name$': publisher_name},
+                where: {title: series.title, volume: series.volume, '$Publisher.name$': series.publisher.name},
                 include: [models.Publisher]
             }),
-        issue: (_, {issue_number, series_title, series_volume, publisher_name}) =>
+        issue: (_, {issue}) =>
             models.Issue.findOne({
                 where: {
-                    number: issue_number,
-                    '$Series.title$': series_title,
-                    '$Series.volume$': series_volume,
-                    '$Series->Publisher.name$': publisher_name
+                    number: issue.number,
+                    '$Series.title$': issue.series.title,
+                    '$Series.volume$': issue.series.volume,
+                    '$Series->Publisher.name$': issue.series.publisher.name
                 },
                 include: [
                     {
@@ -396,40 +405,40 @@ const resolvers = {
             if(res)
                 return res.dataValues;
         },
-        editPublisher: async (_, {o, n}, context) => {
+        editPublisher: async (_, {old, edit}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let res = await models.Publisher.findOne({
                 where: {
-                    name: o.name.trim()
+                    name: old.name.trim()
                 }
             });
 
-            res.name = n.name.trim();
+            res.name = edit.name.trim();
             res = await res.save();
 
             return res.dataValues;
         },
-        editSeries: async (_, {o, n}, context) => {
+        editSeries: async (_, {old, edit}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let newPub = await models.Publisher.findOne({
                 where: {
-                    name: n.publisher.trim()
+                    name: edit.publisher.name.trim()
                 }
             });
 
             let res = await models.Series.findOne({
-                where: {title: o.title.trim(), volume: o.volume, '$Publisher.name$': o.publisher.name},
+                where: {title: old.title.trim(), volume: old.volume, '$Publisher.name$': old.publisher.name},
                 include: [models.Publisher]
             });
 
-            res.title = n.title.trim();
-            res.volume = n.volume;
-            res.startyear = n.startyear;
-            res.endyear = n.endyear;
+            res.title = edit.title.trim();
+            res.volume = edit.volume;
+            res.startyear = edit.startyear;
+            res.endyear = edit.endyear;
             res.setPublisher(newPub);
             res = await res.save();
 
