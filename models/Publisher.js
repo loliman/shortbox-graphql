@@ -24,6 +24,10 @@ export default (sequelize) => {
             type: Sequelize.BOOLEAN,
             allowNull: false,
             defaultValue: false
+        },
+        addinfo: {
+            type: Sequelize.STRING,
+            allowNull: false
         }
     }, {
         indexes: [{

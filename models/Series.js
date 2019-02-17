@@ -33,6 +33,10 @@ export default (sequelize) => {
         volume: {
             type: Sequelize.INTEGER,
             allowNull: false
+        },
+        addinfo: {
+            type: Sequelize.STRING,
+            allowNull: false
         }
     }, {
         indexes: [{

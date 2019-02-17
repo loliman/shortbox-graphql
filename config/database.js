@@ -4,9 +4,6 @@ const sequelize = new Sequelize('shortbox', 'root', 'admin', {
     host: 'localhost',
     dialect: 'mysql',
     operatorsAliases: false,
-    define: {
-        timestamps: false
-    },
     pool: {
         max: 5,
         min: 0,

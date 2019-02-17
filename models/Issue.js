@@ -61,6 +61,10 @@ export default (sequelize) => {
             type: Sequelize.STRING,
             allowNull: false
         },
+        addinfo: {
+            type: Sequelize.STRING,
+            allowNull: false
+        },
         verified: {
             type: Sequelize.BOOLEAN,
             allowNull: false,

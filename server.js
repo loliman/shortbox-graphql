@@ -14,11 +14,14 @@ var reN = /[^0-9]/g;
 
 const typeDefs = gql`
   scalar Date
+  scalar DateTime
 
   type Query {
     publishers(us: Boolean!): [Publisher],
     series(publisher: PublisherInput!): [Series],
     issues(series: SeriesInput!): [Issue],
+    
+    lastEdited: [Issue],
     
     publisher(publisher: PublisherInput!): Publisher,
     seriesd(series: SeriesInput!): Series,
@@ -43,14 +46,16 @@ const typeDefs = gql`
   input PublisherInput {
     id: String,
     name: String,
-    us: Boolean
+    us: Boolean,
+    addinfo: String
   }
   
   type Publisher {
     id: ID,
     name: String,
     series: [Series],
-    us: Boolean
+    us: Boolean,
+    addinfo: String
   }
   
   input SeriesInput {
@@ -59,6 +64,7 @@ const typeDefs = gql`
     startyear: Int,
     endyear: Int,
     volume: Int,
+    addinfo: String,
     publisher: PublisherInput
   }
   
@@ -68,6 +74,7 @@ const typeDefs = gql`
     startyear: Int,
     endyear: Int,
     volume: Int,
+    addinfo: String,
     publisher: Publisher
   }
   
@@ -146,7 +153,8 @@ const typeDefs = gql`
     price: String,
     currency: String,
     releasedate: Date,
-    verified: Boolean
+    verified: Boolean,
+    addinfo: String
   }
   
   input IssueInput {
@@ -161,7 +169,8 @@ const typeDefs = gql`
     series: SeriesInput,
     language: String,
     pages: Int,
-    releasedate: Date
+    releasedate: Date,
+    addinfo: String,
   }
   
   type Issue implements IssueBase {
@@ -182,7 +191,10 @@ const typeDefs = gql`
     covers: [Cover],
     variants: [Variant],
     verified: Boolean,
-    editors: [Individual]
+    addinfo: String,
+    editors: [Individual],
+    createdAt: DateTime,
+    updatedAt: DateTime
   }
   
   type Variant implements IssueBase {
@@ -195,7 +207,8 @@ const typeDefs = gql`
     issue: Issue,
     variant: String,
     releasedate: Date,
-    verified: Boolean
+    verified: Boolean,
+    addinfo: String
   }
   
   input UserInput {
@@ -230,6 +243,13 @@ const resolvers = {
             }
             return null;
         },
+    }),
+    DateTime: new GraphQLScalarType({
+        name: 'DateTime',
+        description: 'DateTime custom scalar type',
+        serialize(value) {
+            return dateFormat(new Date(value.toLocaleString()), "dd.mm.yyyy HH:mm");
+        }
     }),
     Query: {
         publishers: (_, {us}) => models.Publisher.findAll({
@@ -271,6 +291,20 @@ const resolvers = {
                 }
             })
         },
+        lastEdited: () => models.Issue.findAll({
+            where: {
+                '$Series->Publisher.original$': false
+            },
+            include: [
+                {
+                    model: models.Series,
+                    include: [
+                        models.Publisher
+                    ]
+                }
+            ],
+            order: [['updatedAt', 'DESC']],
+            limit: 25}),
         publisher: (_, {publisher}) =>
             models.Publisher.findOne({
                 where: {
@@ -378,6 +412,7 @@ const resolvers = {
 
             let res = await models.Publisher.create({
                 name: publisher.name.trim(),
+                addinfo: publisher.addinfo,
                 original: false
             });
 
@@ -399,6 +434,7 @@ const resolvers = {
                 volume: series.volume,
                 startyear: series.startyear,
                 endyear: series.endyear,
+                addinfo: series.addinfo,
                 fk_publisher: pub.id
             });
 
@@ -416,6 +452,7 @@ const resolvers = {
             });
 
             res.name = edit.name.trim();
+            res.addinfo = edit.addinfo;
             res = await res.save();
 
             return res.dataValues;
@@ -439,6 +476,7 @@ const resolvers = {
             res.volume = edit.volume;
             res.startyear = edit.startyear;
             res.endyear = edit.endyear;
+            res.addinfo = edit.addinfo;
             res.setPublisher(newPub);
             res = await res.save();
 
@@ -448,7 +486,8 @@ const resolvers = {
     Publisher: {
         id: (parent) => parent.id,
         name: (parent) => parent.name,
-        us: (parent) => parent.original
+        us: (parent) => parent.original,
+        addinfo: (parent) => parent.addinfo
     },
     Series: {
         id: (parent) => parent.id,
@@ -456,6 +495,7 @@ const resolvers = {
         startyear: (parent) => parent.startyear,
         endyear: (parent) => parent.endyear,
         volume: (parent) => parent.volume,
+        addinfo: (parent) => parent.addinfo,
         publisher: (parent) => models.Publisher.findById(parent.fk_publisher)
     },
     Individual: {
@@ -618,6 +658,7 @@ const resolvers = {
         pages: (parent) => parent.pages,
         releasedate: (parent) => parent.releasedate,
         verified: (parent) => parent.verified,
+        addinfo: (parent) => parent.addinfo,
         editors: (parent) => models.Individual.findAll({
             include: [{
                 model: models.Issue
@@ -626,7 +667,9 @@ const resolvers = {
                 '$Issues->Issue_Individual.fk_issue$': parent.id,
                 '$Issues->Issue_Individual.type$': 'EDITOR'
             }
-        })
+        }),
+        createdAt: (parent) => parent.createdAt,
+        updatedAt: (parent) => parent.updatedAt
     },
     Variant: {
         id: (parent) => parent.id,
@@ -642,7 +685,8 @@ const resolvers = {
         price: (parent) => parent.price.toFixed(2).toString().replace(".", ","),
         currency: (parent) => parent.currency,
         releasedate: (parent) => parent.releasedate,
-        verified: (parent) => parent.verified
+        verified: (parent) => parent.verified,
+        addinfo: (parent) => parent.addinfo
     },
     User: {
         id: (parent) => parent.id,
@@ -656,13 +700,16 @@ const apollo = new ApolloServer({
     typeDefs,
     resolvers,
     context: async ({req}) => {
-        let userid = req.headers.authorization.split(/:(.+)/)[0];
-        let sessionid = req.headers.authorization.split(/:(.+)/)[1];
 
         let loggedIn = false;
-        let user = await models.User.count({where: {id: userid, sessionid: sessionid}});
-        if (user === 1)
-            loggedIn = true;
+        if(req.headers.authorization) {
+            let userid = req.headers.authorization.split(/:(.+)/)[0];
+            let sessionid = req.headers.authorization.split(/:(.+)/)[1];
+
+            let user = await models.User.count({where: {id: userid, sessionid: sessionid}});
+            if (user === 1)
+                loggedIn = true;
+        }
 
         const dataloader = createContext(models.sequelize);
         return {loggedIn, dataloader};
