@@ -696,8 +696,8 @@ apollo.applyMiddleware({app});
 
 const server = https.createServer(
     {
-        key: fs.readFileSync(`../localhost+2-key.pem`),
-        cert: fs.readFileSync(`../localhost+2.pem`)
+        key: fs.readFileSync(`../example.com+5-key.pem`),
+        cert: fs.readFileSync(`../example.com+5.pem`)
     },
     app
 );

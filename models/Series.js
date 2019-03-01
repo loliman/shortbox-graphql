@@ -20,7 +20,7 @@ export default (sequelize) => {
             autoIncrement: true
         },
         title: {
-            type: Sequelize.STRING(255)
+            type: Sequelize.STRING(125)
         },
         startyear: {
             type: Sequelize.INTEGER,
