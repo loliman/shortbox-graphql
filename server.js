@@ -141,22 +141,10 @@ const typeDefs = gql`
     parent: Cover,
     children: [Cover],
     firstapp: Boolean,
-    issue: Variant,
+    issue: Issue,
     artists: [Individual]
   }
-  
-  interface IssueBase {
-    id: ID,
-    format: String,
-    limitation: Int,
-    cover: Cover,
-    price: String,
-    currency: String,
-    releasedate: Date,
-    verified: Boolean,
-    addinfo: String
-  }
-  
+
   input IssueInput {
     format: String,
     limitation: Int,
@@ -173,7 +161,7 @@ const typeDefs = gql`
     addinfo: String,
   }
   
-  type Issue implements IssueBase {
+  type Issue {
     id: ID,
     format: String,
     limitation: Int,
@@ -189,26 +177,14 @@ const typeDefs = gql`
     features: [Feature],
     stories: [Story],
     covers: [Cover],
-    variants: [Variant],
+    variants: [Issue],
+    parent: Issue,
+    variant: String,
     verified: Boolean,
     addinfo: String,
     editors: [Individual],
     createdAt: DateTime,
     updatedAt: DateTime
-  }
-  
-  type Variant implements IssueBase {
-    id: ID,
-    format: String,
-    limitation: Int,
-    cover: Cover,
-    price: String,
-    currency: String,
-    issue: Issue,
-    variant: String,
-    releasedate: Date,
-    verified: Boolean,
-    addinfo: String
   }
   
   input UserInput {
@@ -316,14 +292,22 @@ const resolvers = {
                 where: {title: series.title, volume: series.volume, '$Publisher.name$': series.publisher.name},
                 include: [models.Publisher]
             }),
-        issue: (_, {issue}) =>
-            models.Issue.findOne({
-                where: {
-                    number: issue.number,
-                    '$Series.title$': issue.series.title,
-                    '$Series.volume$': issue.series.volume,
-                    '$Series->Publisher.name$': issue.series.publisher.name
-                },
+        issue: (_, {issue}) => {
+            let where = {
+                number: issue.number,
+                '$Series.title$': issue.series.title,
+                '$Series.volume$': issue.series.volume,
+                '$Series->Publisher.name$': issue.series.publisher.name
+            };
+
+            if (issue.format)
+                where.format = issue.format;
+
+            if (issue.variant)
+                where.variant = issue.variant;
+
+            return models.Issue.findOne({
+                where: where,
                 include: [
                     {
                         model: models.Series,
@@ -333,6 +317,7 @@ const resolvers = {
                     }
                 ]
             })
+        }
     },
     Mutation: {
         login: async (_, {user}) => {
@@ -635,18 +620,25 @@ const resolvers = {
             }
         })
     },
-    IssueBase: {
-        __resolveType(issue, context, info) {
-            return issue.variants ? 'Issue' : 'Variant';
-        }
-    },
     Issue: {
         id: (parent) => parent.id,
         title: (parent) => parent.title,
         number: (parent) => parent.number,
         format: (parent) => parent.format,
         series: (parent) => models.Series.findById(parent.fk_series),
-        variants: (parent) => models.Issue.findAll({where: {fk_variant: parent.id}}),
+        variants: (parent) => {
+            if (parent.fk_variant !== null)
+                return models.Issue.findAll({where: {fk_variant: parent.fk_variant}});
+            else
+                return models.Issue.findAll({where: {fk_variant: parent.id}})
+        },
+        parent: (parent) => {
+            if (parent.fk_variant !== null)
+                return models.Issue.findOne({where: {id: parent.fk_variant}});
+            else
+                return models.Issue.findOne({where: {id: parent.id}});
+        },
+        variant: (parent) => parent.variant,
         features: (parent) => models.Feature.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),
         stories: (parent) => models.Story.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),
         covers: (parent) => models.Cover.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),
@@ -670,23 +662,6 @@ const resolvers = {
         }),
         createdAt: (parent) => parent.createdAt,
         updatedAt: (parent) => parent.updatedAt
-    },
-    Variant: {
-        id: (parent) => parent.id,
-        format: (parent) => parent.format,
-        limitation: (parent) => parent.limitation,
-        cover: (parent) => models.Cover.findOne({where: {fk_issue: parent.id, number: 0}}),
-        issue: (parent) => {
-            if(parent.fk_variant !== null)
-                return models.Issue.findOne({where: {id: parent.fk_variant}});
-            else
-                return models.Issue.findOne({where: {id: parent.id}});
-        },
-        price: (parent) => parent.price.toFixed(2).toString().replace(".", ","),
-        currency: (parent) => parent.currency,
-        releasedate: (parent) => parent.releasedate,
-        verified: (parent) => parent.verified,
-        addinfo: (parent) => parent.addinfo
     },
     User: {
         id: (parent) => parent.id,
