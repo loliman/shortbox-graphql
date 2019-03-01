@@ -17,7 +17,7 @@ export default (sequelize) => {
             autoIncrement: true
         },
         name: {
-            type: Sequelize.STRING,
+            type: Sequelize.STRING(255),
             allowNull: false
         },
         original: {

@@ -20,7 +20,7 @@ export default (sequelize) => {
             autoIncrement: true
         },
         title: {
-            type: Sequelize.STRING,
+            type: Sequelize.STRING(255),
             allowNull: false
         },
         number: {
@@ -28,7 +28,7 @@ export default (sequelize) => {
             allowNull: false,
         },
         addinfo: {
-            type: Sequelize.STRING,
+            type: Sequelize.STRING(255),
             allowNull: false
         }
     }, {
