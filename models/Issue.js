@@ -22,7 +22,7 @@ export default (sequelize) => {
             autoIncrement: true
         },
         title: {
-            type: Sequelize.STRING(125),
+            type: Sequelize.STRING(255),
             allowNull: false
         },
         number: {
@@ -30,7 +30,7 @@ export default (sequelize) => {
             allowNull: false
         },
         format: {
-            type: Sequelize.STRING(125),
+            type: Sequelize.STRING(255),
             allowNull: false
         },
         limitation: {
@@ -38,7 +38,7 @@ export default (sequelize) => {
             allowNull: true
         },
         variant: {
-            type: Sequelize.STRING(125),
+            type: Sequelize.STRING(255),
             allowNull: true
         },
         releasedate: {

@@ -20,7 +20,7 @@ export default (sequelize) => {
             autoIncrement: true
         },
         name: {
-            type: Sequelize.STRING(125),
+            type: Sequelize.STRING(255),
             allowNull: false
         }
     }, {

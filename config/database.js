@@ -4,6 +4,10 @@ const sequelize = new Sequelize('shortbox_old', 'root', '', {
     host: 'localhost',
     dialect: 'mysql',
     define: {
+        charset: 'utf8',
+        dialectOptions: {
+            collate: 'utf8_general_ci'
+        },
         timestamps: true
     },
     operatorsAliases: false,
