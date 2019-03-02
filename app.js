@@ -1,5 +1,5 @@
-import server from './server';
 import sequelize from './config/database'
+import server from "./server";
 
 async function start() {
     await sequelize.authenticate().then(() => {
@@ -8,9 +8,9 @@ async function start() {
 
     await sequelize.sync();
 
-    server.listen({port: 4000}, () =>
-        console.log('🚀 Server ready at https://localhost:4000')
-    );
+    server.listen().then(({ url }) => {
+        console.log(`🚀  Server ready at ${url}`);
+    });
 }
 
 start();

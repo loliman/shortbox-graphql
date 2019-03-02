@@ -1,7 +1,4 @@
-const {ApolloServer, gql} = require('apollo-server-express');
-import express from 'express';
-import fs from 'fs';
-import https from 'https';
+const { ApolloServer, gql } = require('apollo-server');
 import {GraphQLScalarType} from 'graphql';
 import models from './models';
 import {createContext, EXPECTED_OPTIONS_KEY} from 'dataloader-sequelize';
@@ -671,7 +668,7 @@ const resolvers = {
 
 resolver.contextToOptions = {dataloader: EXPECTED_OPTIONS_KEY};
 
-const apollo = new ApolloServer({
+const server = new ApolloServer({
     typeDefs,
     resolvers,
     context: async ({req}) => {
@@ -690,18 +687,5 @@ const apollo = new ApolloServer({
         return {loggedIn, dataloader};
     }
 });
-
-const app = express();
-apollo.applyMiddleware({app});
-
-const server = https.createServer(
-    {
-        key: fs.readFileSync(`../example.com+5-key.pem`),
-        cert: fs.readFileSync(`../example.com+5.pem`)
-    },
-    app
-);
-
-apollo.installSubscriptionHandlers(server);
 
 export default server;
