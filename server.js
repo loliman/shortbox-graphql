@@ -175,7 +175,6 @@ const typeDefs = gql`
     stories: [Story],
     covers: [Cover],
     variants: [Issue],
-    parent: Issue,
     variant: String,
     verified: Boolean,
     addinfo: String,
@@ -242,6 +241,7 @@ const resolvers = {
                     '$Series->Publisher.name$': series.publisher.name
                 },
                 order: [['number', 'ASC']],
+                group: ['fk_series', 'number'],
                 include: [
                     {
                         model: models.Series,
@@ -624,16 +624,7 @@ const resolvers = {
         format: (parent) => parent.format,
         series: (parent) => models.Series.findById(parent.fk_series),
         variants: (parent) => {
-            if (parent.fk_variant !== null)
-                return models.Issue.findAll({where: {fk_variant: parent.fk_variant}});
-            else
-                return models.Issue.findAll({where: {fk_variant: parent.id}})
-        },
-        parent: (parent) => {
-            if (parent.fk_variant !== null)
-                return models.Issue.findOne({where: {id: parent.fk_variant}});
-            else
-                return models.Issue.findOne({where: {id: parent.id}});
+            return models.Issue.findAll({where: {fk_series: parent.fk_series, number: parent.number}, order: [['releasedate', 'ASC']]})
         },
         variant: (parent) => parent.variant,
         features: (parent) => models.Feature.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),

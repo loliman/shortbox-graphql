@@ -4,7 +4,6 @@ class Issue extends Model {
     static tableName = 'Issue';
 
     static associate(models) {
-        Issue.hasMany(models.Issue, {as: 'Variants', foreignKey: 'fk_variant', onDelete: 'cascade'});
         Issue.hasMany(models.Story, {as: {singular: 'Issue', plural: 'Stories'}, foreignKey: 'fk_issue', onDelete: 'cascade'});
         Issue.hasMany(models.Cover, {foreignKey: 'fk_issue', onDelete: 'cascade'});
 
