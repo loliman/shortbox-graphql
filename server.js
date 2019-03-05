@@ -17,7 +17,8 @@ const typeDefs = gql`
     publishers(us: Boolean!): [Publisher],
     series(publisher: PublisherInput!): [Series],
     issues(series: SeriesInput!): [Issue],
-    
+    individuals: [Individual],
+        
     lastEdited: [Issue],
     
     publisher(publisher: PublisherInput!): Publisher,
@@ -228,11 +229,20 @@ const resolvers = {
             where: {original: (us ? 1 : 0)},
             order: [['name', 'ASC']]
         }),
-        series: (_, {publisher}) => models.Series.findAll({
-            where: {'$Publisher.name$': publisher.name},
-            order: [['title', 'ASC'], ['volume', 'ASC']],
-            include: [models.Publisher]
-        }),
+        series: (_, {publisher}) => {
+            let options = {
+                order: [['title', 'ASC'], ['volume', 'ASC']],
+                include: [models.Publisher]
+            };
+
+            if (publisher.name !== "*")
+                options.where = {'$Publisher.name$': publisher.name};
+
+            if (publisher.us !== undefined)
+                options.where = {'$Publisher.original$': publisher.us ? 1 : 0};
+
+            return models.Series.findAll(options);
+        },
         issues: async (_, {series}) => {
             let res = await models.Issue.findAll({
                 where: {
@@ -264,6 +274,9 @@ const resolvers = {
                 }
             })
         },
+        individuals: () => models.Individual.findAll({
+            order: [['name', 'ASC']]
+        }),
         lastEdited: () => models.Issue.findAll({
             where: {
                 '$Series->Publisher.original$': false
