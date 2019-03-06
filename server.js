@@ -90,7 +90,8 @@ const typeDefs = gql`
     number: Int!,
     writer: IndividualInput,
     title: String,
-    addinfo: String
+    addinfo: String,
+    exclusive: Boolean
   }
   
   type Feature {
@@ -106,6 +107,7 @@ const typeDefs = gql`
   input StoryInput {
     number: Int!,
     parent: StoryInput,
+    issue: IssueInput,
     translator: IndividualInput,
     writer: IndividualInput,
     penciler: IndividualInput,
@@ -114,7 +116,8 @@ const typeDefs = gql`
     letterer: IndividualInput,
     editor: IndividualInput,
     title: String,
-    addinfo: String
+    addinfo: String,
+    exclusive: Boolean
   }
   
   type Story {
@@ -138,8 +141,10 @@ const typeDefs = gql`
   input CoverInput {
     number: Int!,
     parent: CoverInput,
+    issue: IssueInput,
     artist: IndividualInput,
-    addinfo: String
+    addinfo: String,
+    exclusive: Boolean
   }
   
   type Cover {
@@ -155,10 +160,10 @@ const typeDefs = gql`
   }
 
   input IssueInput {
-    title: String!,
+    title: String,
     series: SeriesInput!,
     number: String!,
-    format: String!,
+    format: String,
     variant: String,
     limitation: Int,
     cover: Upload,
@@ -449,7 +454,7 @@ const resolvers = {
             if(res)
                 return res.dataValues;
         },
-        createIssue: async (_, {issue}, context) => {
+        createIssue: (_, {issue}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 

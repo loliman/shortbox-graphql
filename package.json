@@ -12,6 +12,7 @@
     "dataloader-sequelize": "^1.7.9",
     "dateformat": "^3.0.3",
     "graphql": "^14.1.1",
+    "graphql-upload": "^8.0.4",
     "graphql-relay": "^0.5.5",
     "graphql-sequelize": "^9.3.4",
     "mysql2": "^1.6.5",
