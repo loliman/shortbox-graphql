@@ -12,7 +12,7 @@ var reN = /[^0-9]/g;
 const typeDefs = gql`
   scalar Date
   scalar DateTime
-
+  
   type Query {
     publishers(us: Boolean!): [Publisher],
     series(publisher: PublisherInput!): [Series],
@@ -36,7 +36,8 @@ const typeDefs = gql`
     
     createPublisher(publisher: PublisherInput!): Publisher,
     createSeries(series: SeriesInput!): Series,
-    
+    createIssue(issue: IssueInput!): Issue,
+        
     editPublisher(old: PublisherInput!, edit: PublisherInput!): Publisher,
     editSeries(old: SeriesInput!, edit: SeriesInput!): Series
   }
@@ -86,8 +87,9 @@ const typeDefs = gql`
   }
   
   input FeatureInput {
+    number: Int!,
+    writer: IndividualInput,
     title: String,
-    number: Int,
     addinfo: String
   }
   
@@ -102,8 +104,16 @@ const typeDefs = gql`
   }
   
   input StoryInput {
+    number: Int!,
+    parent: StoryInput,
+    translator: IndividualInput,
+    writer: IndividualInput,
+    penciler: IndividualInput,
+    inker: IndividualInput,
+    colourist: IndividualInput,
+    letterer: IndividualInput,
+    editor: IndividualInput,
     title: String,
-    number: Int,
     addinfo: String
   }
   
@@ -126,8 +136,9 @@ const typeDefs = gql`
   }
   
   input CoverInput {
-    url: String,
-    number: Int,
+    number: Int!,
+    parent: CoverInput,
+    artist: IndividualInput,
     addinfo: String
   }
   
@@ -144,19 +155,21 @@ const typeDefs = gql`
   }
 
   input IssueInput {
-    format: String,
-    limitation: Int,
-    cover: CoverInput,
+    title: String!,
+    series: SeriesInput!,
+    number: String!,
+    format: String!,
     variant: String,
-    price: String,
-    currency: String,
-    title: String,
-    number: String,
-    series: SeriesInput,
-    language: String,
+    limitation: Int,
+    cover: Upload,
     pages: Int,
     releasedate: Date,
+    price: String,
+    currency: String,
     addinfo: String,
+    stories: [StoryInput],
+    features: [FeatureInput],
+    covers: [CoverInput]
   }
   
   type Issue {
@@ -436,6 +449,14 @@ const resolvers = {
             if(res)
                 return res.dataValues;
         },
+        createIssue: async (_, {issue}, context) => {
+            if (!context.loggedIn)
+                throw new Error();
+
+            console.log(issue);
+
+            return {};
+        },
         editPublisher: async (_, {old, edit}, context) => {
             if (!context.loggedIn)
                 throw new Error();
@@ -534,11 +555,15 @@ const resolvers = {
             include: [models.Issue],
             order: [[models.Issue, 'releasedate', 'ASC']]
         }),
-        firstapp: async (parent) => await models.Issue.count({
-            where: {'$Stories.fk_issue$': parent.fk_parent},
-            include: [{model: models.Story, as: 'Stories'}],
-            order: [['releasedate', 'ASC']]
-        }) === 1,
+        firstapp: async (parent) => {
+            let stories = await models.Story.findAll({
+                where: {fk_parent: parent.fk_parent},
+                include: [models.Issue],
+                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
+            });
+
+            return (stories.length > 0 && stories[0].id === parent.id);
+        },
         pencilers: (parent) => models.Individual.findAll({
             include: [{
                 model: models.Story
@@ -614,11 +639,15 @@ const resolvers = {
             include: [models.Issue],
             order: [[models.Issue, 'releasedate', 'ASC']]
         }),
-        firstapp: async (parent) => await models.Issue.count({
-            where: {'$Covers.fk_issue$': parent.fk_parent},
-            include: [{model: models.Cover, as: 'Covers'}],
-            order: [['releasedate', 'ASC']]
-        }) === 1,
+        firstapp: async (parent) => {
+            let cover = await models.Cover.findAll({
+                where: {fk_parent: parent.fk_parent},
+                include: [models.Issue],
+                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
+            });
+
+            return (cover.length > 0 && cover[0].id === parent.id);
+        },
         addinfo: (parent) => parent.addinfo,
         artists: (parent) => models.Individual.findAll({
             include: [{
@@ -637,7 +666,10 @@ const resolvers = {
         format: (parent) => parent.format,
         series: (parent) => models.Series.findById(parent.fk_series),
         variants: (parent) => {
-            return models.Issue.findAll({where: {fk_series: parent.fk_series, number: parent.number}, order: [['releasedate', 'ASC']]})
+            return models.Issue.findAll({
+                where: {fk_series: parent.fk_series, number: parent.number},
+                order: [['releasedate', 'ASC'], ['variant', 'ASC']]
+            })
         },
         variant: (parent) => parent.variant,
         features: (parent) => models.Feature.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),
