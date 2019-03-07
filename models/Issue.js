@@ -56,10 +56,6 @@ export default (sequelize) => {
             type: Sequelize.STRING,
             allowNull: true
         },
-        language: {
-            type: Sequelize.STRING,
-            allowNull: false
-        },
         addinfo: {
             type: Sequelize.STRING,
             allowNull: false

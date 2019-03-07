@@ -1,8 +1,10 @@
 const { ApolloServer, gql } = require('apollo-server');
 import {GraphQLScalarType} from 'graphql';
+import crypto from 'crypto';
 import models from './models';
 import {createContext, EXPECTED_OPTIONS_KEY} from 'dataloader-sequelize';
 import {resolver} from 'graphql-sequelize';
+import fs from 'fs'
 
 var dateFormat = require('dateformat');
 
@@ -404,20 +406,34 @@ const resolvers = {
             if (!context.loggedIn)
                 throw new Error();
 
-            return true;
-            /*            let del = await models.Series.destroy({
-                where: {'$Series.title$': series_title, '$Series.volume$': series_volume, '$Series->Publisher.name$': publisher_name},
-                order: [['number', 'ASC']],
-                include: [
-                    {
-                        model: models.Series,
-                        include: [
-                            models.Publisher
-                        ]
-                    }
-                ]
+            let series = await models.Series.findOne({
+                where: {
+                    title: item.series.title.trim(),
+                    volume: item.series.volume,
+                    '$Publisher.name$': item.series.publisher.name.trim()
+                },
+                include: [models.Publisher]
             });
-            return del === 1;*/
+
+            let issue = await models.Issue.findOne({
+                where: {
+                    number: item.number.trim(),
+                    fk_series: series.id,
+                    format: item.format.trim(),
+                    variant: item.variant.trim()
+                },
+            });
+
+            let cover = await models.Cover.findOne({
+                where: {fk_issue: issue.id}
+            });
+
+            fs.unlinkSync(cover.url);
+
+            await cover.destroy();
+            let del = await issue.destroy();
+
+            return del === 1;
         },
         createPublisher: async (_, {publisher}, context) => {
             if (!context.loggedIn)
@@ -454,13 +470,51 @@ const resolvers = {
             if(res)
                 return res.dataValues;
         },
-        createIssue: (_, {issue}, context) => {
+        createIssue: async (_, {issue}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
-            console.log(issue);
+            let series = await models.Series.findOne({
+                where: {
+                    title: issue.series.title.trim(),
+                    volume: issue.series.volume,
+                    '$Publisher.name$': issue.series.publisher.name.trim()
+                },
+                include: [models.Publisher]
+            });
 
-            return {};
+            let res = await models.Issue.create({
+                title: issue.title.trim(),
+                fk_series: series.id,
+                number: issue.number.trim(),
+                format: issue.format.trim(),
+                variant: issue.variant.trim(),
+                limitation: issue.limitation,
+                pages: issue.pages,
+                releasedate: issue.releasedate,
+                price: issue.price && issue.price !== '' ? issue.price : 0,
+                currency: issue.currency,
+                addinfo: issue.addinfo
+            });
+
+            if (issue.cover) {
+                const {createReadStream, filename} = await issue.cover;
+                const stream = createReadStream();
+                const {path} = await store({stream, filename});
+
+                let cover = await models.Cover.create({
+                    url: path,
+                    number: 0,
+                    addinfo: ''
+                });
+
+                cover.setIssue(res);
+                cover = await cover.save();
+                res.dataValues.cover = cover;
+            }
+
+            if (res)
+                return res.dataValues;
         },
         editPublisher: async (_, {old, edit}, context) => {
             if (!context.loggedIn)
@@ -713,7 +767,6 @@ const server = new ApolloServer({
     typeDefs,
     resolvers,
     context: async ({req}) => {
-
         let loggedIn = false;
         if(req.headers.authorization) {
             let userid = req.headers.authorization.split(/:(.+)/)[0];
@@ -726,7 +779,27 @@ const server = new ApolloServer({
 
         const dataloader = createContext(models.sequelize);
         return {loggedIn, dataloader};
+    },
+    uploads: {
+        maxFileSize: 10000000 // 10 MB
     }
 });
+
+const store = ({stream, filename}) => {
+    let hash = crypto.createHash('sha256').update(filename).digest('hex');
+    let path = hash;
+
+    return new Promise((resolve, reject) =>
+        stream
+            .on('error', error => {
+                if (stream.truncated)
+                    fs.unlinkSync(path);
+                reject(error)
+            })
+            .pipe(fs.createWriteStream(path))
+            .on('error', error => reject(error))
+            .on('finish', () => resolve({path}))
+    )
+};
 
 export default server;

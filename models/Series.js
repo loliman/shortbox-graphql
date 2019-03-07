@@ -1,5 +1,4 @@
 import Sequelize, {Model} from 'sequelize';
-import models from '../models';
 
 class Series extends Model {
     static tableName = 'Series';
@@ -44,16 +43,7 @@ export default (sequelize) => {
             fields: ['title', 'volume', 'fk_publisher']
         }],
         sequelize,
-        tableName: Series.tableName,
-        hooks: {
-            afterDestroy: (series) => {
-                models.Series.findAndCount({where: {fk_publisher: series.fk_publisher}})
-                    .then(({count}) => {
-                        if (count === 0)
-                            models.Publisher.destroy({where: {id: series.fk_publisher}});
-                });
-            }
-        }
+        tableName: Series.tableName
     });
 
     return Series;
