@@ -32,16 +32,19 @@ const typeDefs = gql`
     login(user: UserInput!): User,
     logout(user: UserInput!): Boolean,
     
-    deletePublishers(item: PublisherInput!): Boolean,
+    deletePublisher(item: PublisherInput!): Boolean,
     deleteSeries(item: SeriesInput!): Boolean,
-    deleteIssues(item: IssueInput!): Boolean,
+    deleteIssue(item: IssueInput!): Boolean,
     
-    createPublisher(publisher: PublisherInput!): Publisher,
-    createSeries(series: SeriesInput!): Series,
-    createIssue(issue: IssueInput!): Issue,
+    createPublisher(item: PublisherInput!): Publisher,
+    createSeries(item: SeriesInput!): Series,
+    createIssue(item: IssueInput!): Issue,
         
-    editPublisher(old: PublisherInput!, edit: PublisherInput!): Publisher,
-    editSeries(old: SeriesInput!, edit: SeriesInput!): Series
+    editPublisher(old: PublisherInput!, publisher: PublisherInput!): Publisher,
+    editSeries(old: SeriesInput!, item: SeriesInput!): Series,
+    editIssue(old: SeriesInput!, item: IssueInput!): Issue,
+    
+    verifyIssue(item: IssueInput!): Issue
   }
   
   input PublisherInput {
@@ -131,6 +134,7 @@ const typeDefs = gql`
     parent: Story,
     children: [Story],
     firstapp: Boolean,
+    exclusive: Boolean,
     pencilers: [Individual],
     writers: [Individual],
     inkers: [Individual],
@@ -157,6 +161,7 @@ const typeDefs = gql`
     parent: Cover,
     children: [Cover],
     firstapp: Boolean,
+    exclusive: Boolean,
     issue: Issue,
     artists: [Individual]
   }
@@ -228,7 +233,7 @@ const resolvers = {
             if (value.indexOf('-00') !== -1)
                 value = '1900-01-01';
 
-            return dateFormat(new Date(value), "dd.mm.yyyy");
+            return dateFormat(new Date(value), "yyyy-mm-dd");
         },
         parseLiteral(ast) {
             if (ast.kind === Kind.INT) {
@@ -375,7 +380,7 @@ const resolvers = {
 
             return res[0] !== 0;
         },
-        deletePublishers: async (_, {item}, context) => {
+        deletePublisher: async (_, {item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
@@ -402,7 +407,7 @@ const resolvers = {
 
             return del === 1;
         },
-        deleteIssues: async (_, {item}, context) => {
+        deleteIssue: async (_, {item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
@@ -435,70 +440,70 @@ const resolvers = {
 
             return del === 1;
         },
-        createPublisher: async (_, {publisher}, context) => {
+        createPublisher: async (_, {item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let res = await models.Publisher.create({
-                name: publisher.name.trim(),
-                addinfo: publisher.addinfo,
+                name: item.name.trim(),
+                addinfo: item.addinfo,
                 original: false
             });
 
             if (res)
                 return res.dataValues;
         },
-        createSeries: async (_, {series}, context) => {
+        createSeries: async (_, {item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let pub = await models.Publisher.findOne({
                 where: {
-                    name: series.publisher.name.trim()
+                    name: item.publisher.name.trim()
                 }
             });
 
             let res = await models.Series.create({
-                title: series.title.trim(),
-                volume: series.volume,
-                startyear: series.startyear,
-                endyear: series.endyear,
-                addinfo: series.addinfo,
+                title: item.title.trim(),
+                volume: item.volume,
+                startyear: item.startyear,
+                endyear: item.endyear,
+                addinfo: item.addinfo,
                 fk_publisher: pub.id
             });
 
             if(res)
                 return res.dataValues;
         },
-        createIssue: async (_, {issue}, context) => {
+        createIssue: async (_, {item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let series = await models.Series.findOne({
                 where: {
-                    title: issue.series.title.trim(),
-                    volume: issue.series.volume,
-                    '$Publisher.name$': issue.series.publisher.name.trim()
+                    title: item.series.title.trim(),
+                    volume: item.series.volume,
+                    '$Publisher.name$': item.series.publisher.name.trim()
                 },
                 include: [models.Publisher]
             });
 
             let res = await models.Issue.create({
-                title: issue.title.trim(),
+                title: item.title.trim(),
                 fk_series: series.id,
-                number: issue.number.trim(),
-                format: issue.format.trim(),
-                variant: issue.variant.trim(),
-                limitation: issue.limitation,
-                pages: issue.pages,
-                releasedate: issue.releasedate,
-                price: issue.price && issue.price !== '' ? issue.price : 0,
-                currency: issue.currency,
-                addinfo: issue.addinfo
+                number: item.number.trim(),
+                format: item.format.trim(),
+                variant: item.variant.trim(),
+                limitation: item.limitation,
+                pages: item.pages,
+                releasedate: item.releasedate,
+                price: item.price && issue.price !== '' ? issue.price : 0,
+                currency: item.currency,
+                addinfo: item.addinfo
             });
 
-            if (issue.cover) {
-                const {createReadStream, filename} = await issue.cover;
+            if (item.cover) {
+                const {createReadStream, filename} = await item.cover;
                 const stream = createReadStream();
                 const {path} = await store({stream, filename});
 
@@ -516,7 +521,7 @@ const resolvers = {
             if (res)
                 return res.dataValues;
         },
-        editPublisher: async (_, {old, edit}, context) => {
+        editPublisher: async (_, {old, item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
@@ -526,19 +531,19 @@ const resolvers = {
                 }
             });
 
-            res.name = edit.name.trim();
-            res.addinfo = edit.addinfo;
+            res.name = item.name.trim();
+            res.addinfo = item.addinfo;
             res = await res.save();
 
             return res.dataValues;
         },
-        editSeries: async (_, {old, edit}, context) => {
+        editSeries: async (_, {old, item}, context) => {
             if (!context.loggedIn)
                 throw new Error();
 
             let newPub = await models.Publisher.findOne({
                 where: {
-                    name: edit.publisher.name.trim()
+                    name: item.publisher.name.trim()
                 }
             });
 
@@ -547,16 +552,53 @@ const resolvers = {
                 include: [models.Publisher]
             });
 
-            res.title = edit.title.trim();
-            res.volume = edit.volume;
-            res.startyear = edit.startyear;
-            res.endyear = edit.endyear;
-            res.addinfo = edit.addinfo;
+            res.title = item.title.trim();
+            res.volume = item.volume;
+            res.startyear = item.startyear;
+            res.endyear = item.endyear;
+            res.addinfo = item.addinfo;
             res.setPublisher(newPub);
             res = await res.save();
 
             return res.dataValues;
-        }
+        },
+        editIssue: async (_, {old, item}, context) => {
+            return item;
+        },
+        verifyIssue: async (_, {item}, context) => {
+            if (!context.loggedIn)
+                throw new Error();
+
+            let where = {
+                number: item.number,
+                '$Series.title$': item.series.title,
+                '$Series.volume$': item.series.volume,
+                '$Series->Publisher.name$': item.series.publisher.name
+            };
+
+            if (item.format)
+                where.format = item.format;
+
+            if (item.variant)
+                where.variant = item.variant;
+
+            let res = await models.Issue.findOne({
+                where: where,
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            });
+
+            res.verified = !res.verified;
+            res = await res.save();
+
+            return res.dataValues;
+        },
     },
     Publisher: {
         id: (parent) => parent.id,
@@ -622,6 +664,9 @@ const resolvers = {
             });
 
             return (stories.length > 0 && stories[0].id === parent.id);
+        },
+        exclusive: async (parent) => {
+            return parent.fk_parent === null;
         },
         pencilers: (parent) => models.Individual.findAll({
             include: [{
@@ -707,6 +752,9 @@ const resolvers = {
 
             return (cover.length > 0 && cover[0].id === parent.id);
         },
+        exclusive: async (parent) => {
+            return parent.fk_parent === null;
+        },
         addinfo: (parent) => parent.addinfo,
         artists: (parent) => models.Individual.findAll({
             include: [{
@@ -736,7 +784,7 @@ const resolvers = {
         covers: (parent) => models.Cover.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]}),
         limitation: (parent) => parent.limitation,
         cover: (parent) => models.Cover.findOne({where: {fk_issue: parent.id, number: 0}}),
-        price: (parent) => parent.price.toFixed(2).toString().replace(".", ","),
+        price: (parent) => parent.price.toFixed(2).toString(),
         currency: (parent) => parent.currency,
         language: (parent) => parent.language,
         pages: (parent) => parent.pages,
