@@ -54,7 +54,7 @@ export default (sequelize) => {
             defaultValue: ''
         },
         number: {
-            type: Sequelize.INTEGER,
+            type: Sequelize.STRING(255),
             allowNull: false
         },
         format: {
@@ -187,19 +187,15 @@ export const resolvers = {
                 ]
             });
 
-            let reA = /[^a-zA-Z]/g;
-            let reN = /[^0-9]/g;
             return res.sort((a, b) => {
-                var aA = toString(a.number).replace(reA, "");
-                var bA = toString(b.number).replace(reA, "");
-                if (aA === bA) {
-                    var aN = parseInt(toString(a.number).replace(reN, ""), 10);
-                    var bN = parseInt(toString(b.number).replace(reN, ""), 10);
-                    return aN === bN ? 0 : aN > bN ? 1 : -1;
-                } else {
-                    return aA > bA ? 1 : -1;
+                if (a === b) {
+                    return 0;
                 }
-            })
+                if (typeof a === typeof b) {
+                    return a < b ? 1 : -1;
+                }
+                return typeof a < typeof b ? 1 : -1;
+            });
         },
         lastEdited: async () => await models.Issue.findAll({
             where: {
