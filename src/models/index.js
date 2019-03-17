@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import Sequelize from 'sequelize';
 
-import sequelize from '../config/database';
+import sequelize from '../core/database';
 
 const db = {
     sequelize,

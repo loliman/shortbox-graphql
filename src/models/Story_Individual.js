@@ -1,15 +1,21 @@
 import Sequelize, {Model} from 'sequelize';
 
 /*
-ARTIST
+PENCILER
+INKER
+WRITER
+COLOURIST
+LETTER
+EDITOR
+TRANSLATOR
 */
-class Cover_Individual extends Model {
-    static tableName = 'Cover_Individual';
+class Story_Individual extends Model {
+    static tableName = 'Story_Individual';
 }
 
 export default (sequelize) => {
-    Cover_Individual.init({
-        fk_cover: {
+    Story_Individual.init({
+        fk_story: {
             type: Sequelize.INTEGER,
             primaryKey: true,
             allowNull: false
@@ -25,13 +31,9 @@ export default (sequelize) => {
             allowNull: false
         }
     }, {
-        indexes: [{
-            unique: true,
-            fields: ['fk_cover', 'fk_individual', 'type']
-        }],
         sequelize,
-        tableName: Cover_Individual.tableName
+        tableName: Story_Individual.tableName
     });
 
-    return Cover_Individual;
+    return Story_Individual;
 };

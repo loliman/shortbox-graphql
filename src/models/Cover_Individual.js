@@ -3,13 +3,13 @@ import Sequelize, {Model} from 'sequelize';
 /*
 ARTIST
 */
-class Issue_Individual extends Model {
-    static tableName = 'Issue_Individual';
+class Cover_Individual extends Model {
+    static tableName = 'Cover_Individual';
 }
 
 export default (sequelize) => {
-    Issue_Individual.init({
-        fk_issue: {
+    Cover_Individual.init({
+        fk_cover: {
             type: Sequelize.INTEGER,
             primaryKey: true,
             allowNull: false
@@ -25,13 +25,9 @@ export default (sequelize) => {
             allowNull: false
         }
     }, {
-        indexes: [{
-            unique: true,
-            fields: ['fk_issue', 'fk_individual', 'type']
-        }],
         sequelize,
-        tableName: Issue_Individual.tableName
+        tableName: Cover_Individual.tableName
     });
 
-    return Issue_Individual;
+    return Cover_Individual;
 };

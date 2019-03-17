@@ -1,16 +1,15 @@
 import Sequelize, {Model} from 'sequelize';
 
 /*
-WRITER
-TRANSLATOR
- */
-class Feature_Individual extends Model {
-    static tableName = 'Feature_Individual';
+ARTIST
+*/
+class Issue_Individual extends Model {
+    static tableName = 'Issue_Individual';
 }
 
 export default (sequelize) => {
-    Feature_Individual.init({
-        fk_feature: {
+    Issue_Individual.init({
+        fk_issue: {
             type: Sequelize.INTEGER,
             primaryKey: true,
             allowNull: false
@@ -26,13 +25,9 @@ export default (sequelize) => {
             allowNull: false
         }
     }, {
-        indexes: [{
-            unique: true,
-            fields: ['fk_feature', 'fk_individual', 'type']
-        }],
         sequelize,
-        tableName: Feature_Individual.tableName
+        tableName: Issue_Individual.tableName
     });
 
-    return Feature_Individual;
+    return Issue_Individual;
 };

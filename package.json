@@ -2,21 +2,25 @@
   "name": "shortbox-graphql",
   "version": "0.0.0",
   "private": true,
-  "main": "app.js",
+  "main": "src/app.js",
   "scripts": {
-    "start": "nodemon --exec babel-node app.js"
+    "start": "nodemon --exec babel-node src/app.js"
   },
   "keywords": [],
   "dependencies": {
     "apollo-server": "^2.4.8",
+    "cheerio": "^1.0.0-rc.2",
     "dataloader-sequelize": "^1.7.9",
     "dateformat": "^3.0.3",
     "graphql": "^14.1.1",
-    "graphql-upload": "^8.0.4",
     "graphql-relay": "^0.5.5",
     "graphql-sequelize": "^9.3.4",
+    "graphql-upload": "^8.0.4",
     "mysql2": "^1.6.5",
-    "sequelize": "^4.43.0"
+    "request": "^2.88.0",
+    "request-promise": "^4.2.4",
+    "sequelize": "^4.43.0",
+    "shelljs": "^0.8.3"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",

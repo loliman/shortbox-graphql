@@ -1,6 +1,7 @@
 import Sequelize from 'sequelize';
+import {dbPassword, dbUser} from "../config/config";
 
-const sequelize = new Sequelize('shortbox_old', 'root', '', {
+const sequelize = new Sequelize(dbUser, dbPassword, '', {
     host: 'localhost',
     dialect: 'mysql',
     define: {
