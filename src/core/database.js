@@ -1,7 +1,7 @@
 import Sequelize from 'sequelize';
-import {dbPassword, dbUser} from "../config/config";
+import {db, dbPassword, dbUser} from "../config/config";
 
-const sequelize = new Sequelize(dbUser, dbPassword, '', {
+const sequelize = new Sequelize(db, dbUser, dbPassword, {
     host: 'localhost',
     dialect: 'mysql',
     define: {
