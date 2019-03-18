@@ -1,12 +1,34 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
+import {asyncForEach} from "../util/util";
 
 class Publisher extends Model {
     static tableName = 'Publisher';
 
     static associate(models) {
         Publisher.hasMany(models.Series, {as: 'Series', foreignKey: 'fk_publisher', onDelete: 'cascade'});
+    }
+
+    async delete(transaction) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                let series = await models.Series.findAll({
+                    where: {
+                        fk_publisher: this.id
+                    }
+                });
+
+                await asyncForEach(series, async (series) => {
+                    await series.delete(transaction);
+                });
+
+                let del = await this.destroy({transaction});
+                resolve(del);
+            } catch (e) {
+                reject(e);
+            }
+        });
     }
 }
 
@@ -92,9 +114,11 @@ export const resolvers = {
                 if (!loggedIn)
                     throw new Error();
 
-                let del = await models.Publisher.destroy({
+                let pub = await models.Publisher.findOne({
                     where: {name: item.name.trim()}
                 });
+
+                let del = await pub.delete(transaction);
 
                 transaction.commit();
                 return del === 1;;

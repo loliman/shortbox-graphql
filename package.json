@@ -10,6 +10,7 @@
   "dependencies": {
     "apollo-server": "^2.4.8",
     "cheerio": "^1.0.0-rc.2",
+    "cron": "^1.7.0",
     "dataloader-sequelize": "^1.7.9",
     "dateformat": "^3.0.3",
     "graphql": "^14.1.1",

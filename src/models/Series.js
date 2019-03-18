@@ -1,6 +1,7 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
+import {asyncForEach} from "../util/util";
 
 class Series extends Model {
     static tableName = 'Series';
@@ -9,6 +10,27 @@ class Series extends Model {
         Series.hasMany(models.Issue, {as: 'Issue', foreignKey: 'fk_series', onDelete: 'cascade'});
 
         Series.belongsTo(models.Publisher, {foreignKey: 'fk_publisher'})
+    }
+
+    async delete(transaction) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                let issues = await models.Issue.findAll({
+                    where: {
+                        fk_series: this.id
+                    }
+                });
+
+                await asyncForEach(issues, async (issue) => {
+                    await issue.delete(transaction);
+                });
+
+                let del = await this.destroy({transaction});
+                resolve(del);
+            } catch (e) {
+                reject(e);
+            }
+        });
     }
 }
 
@@ -123,13 +145,15 @@ export const resolvers = {
                     }
                 });
 
-                let del = await models.Series.destroy({
+                let series = await models.Series.findOne({
                     where: {title: item.title.trim(), volume: item.volume, fk_publisher: pub.id},
                     include: [models.Publisher]
                 });
 
+                let del = await series.delete(transaction);
+
                 transaction.commit();
-                return del === 1;;
+                return del === 1;
             } catch (e) {
                 transaction.rollback();
                 throw e;

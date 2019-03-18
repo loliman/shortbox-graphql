@@ -38,6 +38,25 @@ class Issue extends Model {
             }
         });
     }
+
+    async delete(transaction) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                let cover = await models.Cover.findOne({where: {fk_issue: this.id, number: 0}});
+                if(cover)
+                    deleteFile(cover.url);
+
+                await models.Story.destroy({where: {fk_issue: this.id}, transaction});
+                await models.Feature.destroy({where: {fk_issue: this.id}, transaction});
+                await models.Cover.destroy({where: {fk_issue: this.id}, transaction});
+
+                let del = await this.destroy({transaction});
+                resolve(del);
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
 }
 
 export default (sequelize) => {
@@ -272,17 +291,7 @@ export const resolvers = {
                     where: where
                 });
 
-                let cover = await models.Cover.findOne({where: {fk_issue: issue.id, number: 0}});
-                if(cover)
-                    deleteFile(cover.url);
-
-                await models.Story.destroy({where: {fk_issue: issue.id}});
-                await models.Feature.destroy({where: {fk_issue: issue.id}});
-                await models.Cover.destroy({where: {fk_issue: issue.id}});
-
-                let del = await models.Issue.destroy({
-                    where: {id: issue.id}
-                });
+                let del = await issue.delete(transaction);
 
                 transaction.commit();
                 return del === 1;
@@ -401,12 +410,12 @@ export const resolvers = {
                 if(item.cover === '') { //Cover has been deleted
                     if (cover) {
                         deleteFile(cover.url);
-                        await cover.destroy();
+                        await cover.destroy({transaction});
                     }
                 } else if(item.cover instanceof Promise) { //Cover has been changed
                     if(cover) {
                         deleteFile(cover.url);
-                        await cover.destroy();
+                        await cover.destroy({transaction});
                     }
 
                     coverUrl = await createCoverForIssue(item.cover, item.covers, res);

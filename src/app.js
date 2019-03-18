@@ -2,6 +2,7 @@ import sequelize from './core/database'
 import server from "./core/server";
 import fs from "fs";
 import {coverDir, wwwDir} from "./config/config";
+import {cleanup} from './core/cleanup';
 const shell = require('shelljs');
 
 async function start() {
@@ -27,7 +28,14 @@ async function start() {
 
     console.log('🚀 Coverdir is set up at ' + wwwDir + '/' + coverDir);
 
+    console.log('🚀 Starting cleanup process');
+
+    cleanup.start();
+
+    console.log('🚀 Cleanup process is running');
+
     let {url} = await server.listen();
+
     console.log('🚀 Server is up and running at ' + url);
 
     console.log('🚀 All done, lets go!');
