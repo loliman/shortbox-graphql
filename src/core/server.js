@@ -37,7 +37,6 @@ const server = new ApolloServer({
 
         let isMutation = req.body.query.indexOf('mutation') === 0;
 
-        loggedIn = true;
         if(isMutation) {
             const transaction = await models.sequelize.transaction();
             return {loggedIn, dataloader, transaction};
