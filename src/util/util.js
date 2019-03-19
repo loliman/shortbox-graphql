@@ -3,7 +3,9 @@ import fs from "fs";
 import {coverDir, wwwDir} from "../config/config";
 
 export const storeFile = ({stream, filename}) => {
-    let hash = crypto.createHash('sha256').update(filename).digest('hex');
+    let hash = crypto.createHash('sha256')
+        .update(filename + new Date().toLocaleTimeString())
+        .digest('hex');
     let path = wwwDir + '/' + coverDir + '/' + hash;
 
     return new Promise((resolve, reject) =>
