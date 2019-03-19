@@ -257,7 +257,8 @@ export const resolvers = {
                 ]
             });
 
-            res.edit = (edit === true);
+            if(res)
+                res.edit = (edit === true);
             return res;
         }
     },
