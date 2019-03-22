@@ -54,7 +54,7 @@ export async function crawlSeries(series) {
                 }
             });
         } catch (e) {
-            reject(e);
+            reject(new Error("Series not found"));
         }
     });
 }
@@ -162,6 +162,9 @@ export async function crawlIssue(issue) {
                                 .first().children()
                                 .first().children().text().trim();
 
+                            if(storyName.indexOf('"') === 0)
+                                storyName = storyName.substring(1, storyName.length-1);
+
                             story.title = storyName;
                             story.individuals = [];
 
@@ -187,7 +190,7 @@ export async function crawlIssue(issue) {
 
             resolve(res);
         } catch (e) {
-            reject(e);
+            reject(new Error("Issue not found"));
         }
     });
 }

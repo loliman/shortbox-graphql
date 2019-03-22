@@ -64,7 +64,7 @@ export const resolvers = {
 
             try {
                 if (loggedIn)
-                    throw new Error();
+                    throw new Error("You are already logged in.");
 
                 var sessionid = "";
                 var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?%.,;:-_&$(){}[]";
@@ -74,7 +74,8 @@ export const resolvers = {
 
                 let res = await models.User.update(
                     {sessionid: sessionid},
-                    {where: {name: user.name.trim(), password: user.password}}
+                    {where: {name: user.name.trim(), password: user.password}},
+                    transaction
                 );
 
                 if (res[0] === 0)
@@ -92,11 +93,12 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let res = await models.User.update(
                     {sessionid: null},
-                    {where: {id: user.id, sessionid: user.sessionid}}
+                    {where: {id: user.id, sessionid: user.sessionid}},
+                    transaction
                 );
 
                 transaction.commit();

@@ -1,6 +1,7 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
+import {asyncForEach} from "../util/util";
 
 class Feature extends Model {
     static tableName = 'Feature';
@@ -10,15 +11,16 @@ class Feature extends Model {
         Feature.belongsToMany(models.Individual, {through: models.Feature_Individual, foreignKey: 'fk_feature'});
     }
 
-    async associateIndividual(name, type) {
+    async associateIndividual(name, type, transaction) {
         return new Promise(async (resolve, reject) => {
             try {
                 models.Individual.findOrCreate({
                     where: {
                         name: name
-                    }
+                    },
+                    transaction
                 }).then(async ([individual, created]) => {
-                    resolve(await models.Feature_Individual.create({fk_feature: this.id, fk_individual: individual.id, type: type}));
+                    resolve(await models.Feature_Individual.create({fk_feature: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
                 });
             } catch (e) {
                 reject(e);
@@ -81,7 +83,7 @@ export const typeDef = gql`
 export const resolvers = {
     Feature: {
         id: (parent) => parent.id,
-        title: (parent) => parent.title,
+        title: (parent) => parent.title.trim(),
         number: (parent) => parent.number,
         addinfo: (parent) => parent.addinfo,
         issue: async (parent) => await models.Issue.findById(parent.fk_issue),
@@ -97,24 +99,66 @@ export const resolvers = {
     }
 };
 
-export async function create(feature, issue) {
+export async function create(feature, issue, transaction) {
     return new Promise(async (resolve, reject) => {
         try {
             let resFeature = await models.Feature.create({
                 number: feature.number,
-                title: feature.title,
+                title: feature.title.trim(),
                 addinfo: feature.addinfo,
                 fk_issue: issue.id
-            });
+            }, {transaction: transaction});
 
             if (feature.writer.name.trim() !== '')
-                await resFeature.associateIndividual(feature.writer.name.trim(), 'WRITER');
+                await resFeature.associateIndividual(feature.writer.name.trim(), 'WRITER', transaction);
 
-            await resFeature.save();
+            await resFeature.save({transaction: transaction});
 
             resolve(feature);
         } catch (e) {
             reject(e);
         }
     });
+}
+
+export async function getFeatures(issue, transaction) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let oldFeatures = [];
+            let rawFeatures = await models.Feature.findAll({where: {fk_issue: issue.id}, transaction});
+            await asyncForEach(rawFeatures, async feature => {
+                let rawFeature = {};
+                rawFeature.title = feature.title;
+                rawFeature.number = feature.number;
+                rawFeature.addinfo = feature.addinfo;
+
+                let writer = await models.Individual.findAll({
+                    include: [{
+                        model: models.Feature
+                    }],
+                    where: {
+                        '$Features->Feature_Individual.fk_feature$': feature.id,
+                        '$Features->Feature_Individual.type$': 'WRITER'
+                    },
+                    transaction
+                });
+
+                if(writer && writer[0])
+                    rawFeature.writer = {name: writer[0].name};
+                else
+                    rawFeature.writer = {name: ''};
+
+                oldFeatures.push(rawFeature);
+            });
+
+            resolve(oldFeatures);
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+export function equals(a, b) {
+    if(a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo || a.writer.name !== b.writer.name)
+        return false;
 }

@@ -1,6 +1,8 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
+import {findOrCrawlIssue} from "./Issue";
+import {asyncForEach} from "../util/util";
 
 class Story extends Model {
     static tableName = 'Story';
@@ -12,15 +14,16 @@ class Story extends Model {
         Story.belongsToMany(models.Individual, {through: models.Story_Individual, foreignKey: 'fk_story', unique: false});
     }
 
-    async associateIndividual(name, type) {
+    async associateIndividual(name, type, transaction) {
         return new Promise(async (resolve, reject) => {
             try {
                 models.Individual.findOrCreate({
                     where: {
                         name: name
-                    }
+                    },
+                    transaction
                 }).then(async ([individual, created]) => {
-                    resolve(await models.Story_Individual.create({fk_story: this.id, fk_individual: individual.id, type: type}));
+                    resolve(await models.Story_Individual.create({fk_story: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
                 });
             } catch (e) {
                 reject(e);
@@ -135,7 +138,7 @@ export const resolvers = {
             });
 
             let firstapp = false;
-            if(stories.length > 0) {
+            if(stories.length > 0 && stories[0]['Issue']) {
                 if(stories[0]['Issue'].id === parent.fk_issue)
                     firstapp = true;
                 else {
@@ -219,40 +222,40 @@ export const resolvers = {
     }
 };
 
-export async function create(story, issue) {
+export async function create(story, issue, transaction, us) {
     return new Promise(async (resolve, reject) => {
         try {
-            if (story.exclusive) {
+            if (story.exclusive || us) {
                 let resStory = await models.Story.create({
                     number: story.number,
-                    title: story.title,
+                    title: story.title ? story.title.trim() : '',
                     addinfo: story.addinfo,
                     fk_issue: issue.id
-                });
+                }, {transaction: transaction});
 
                 if (story.writer.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'WRITER');
+                    await resStory.associateIndividual(story.writer.name.trim(), 'WRITER', transaction);
 
                 if (story.penciler.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'PENCILER');
+                    await resStory.associateIndividual(story.writer.name.trim(), 'PENCILER', transaction);
 
                 if (story.inker.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'COLOURIST');
+                    await resStory.associateIndividual(story.writer.name.trim(), 'COLOURIST', transaction);
 
                 if (story.colourist.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'WRITER');
+                    await resStory.associateIndividual(story.writer.name.trim(), 'WRITER', transaction);
 
                 if (story.letterer.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'LETTERER');
+                    await resStory.associateIndividual(story.writer.name.trim(), 'LETTERER', transaction);
 
                 if (story.editor.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'EDITOR');
+                    await resStory.associateIndividual(story.writer.name.trim(), 'EDITOR', transaction);
 
                 await resStory.save();
             } else {
-                let resIssue = await findOrCrawlIssue(story.parent.issue);
+                let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
 
-                let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']]});
+                let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
                 let oStory;
 
                 oStories.forEach(e => {
@@ -261,19 +264,19 @@ export async function create(story, issue) {
                 });
 
                 if (!oStory)
-                    throw new Error();
+                    throw new Error("Story not found");
 
                 let newStory = await models.Story.create({
-                    title: story.title ? story.title : '',
+                    title: story.title && story.title.trim() ? story.title.trim() : '',
                     number: story.number,
-                    addinfo: story.addinfo,
+                    addinfo: story.addinfo ? story.addinfo : '',
                     fk_parent: oStory.id
-                });
+                }, {transaction: transaction});
 
                 if (story.translator.name.trim() !== '')
-                    await newStory.associateIndividual(story.translator.name.trim(), 'TRANSLATOR');
-                await newStory.setIssue(res);
-                await newStory.save();
+                    await newStory.associateIndividual(story.translator.name.trim(), 'TRANSLATOR', transaction);
+                await newStory.setIssue(issue, {transaction: transaction});
+                await newStory.save({transaction: transaction});
             }
 
             resolve(story);
@@ -281,4 +284,106 @@ export async function create(story, issue) {
             reject(e);
         }
     });
+}
+
+export async function getStories(issue, transaction) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let oldStories = [];
+            let rawStories = await models.Story.findAll({where: {fk_issue: issue.id}, transaction});
+            await asyncForEach(rawStories, async story => {
+                let rawStory = {};
+                rawStory.title = story.title;
+                rawStory.number = story.number;
+                rawStory.addinfo = story.addinfo;
+
+                rawStory.exclusive = story.fk_parent === null;
+
+                if (story.fk_parent !== null) {
+                    let rawParent = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+                    let rawIssue = await models.Issue.findOne({where: {id: rawParent.fk_issue}, transaction});
+                    let rawSeries = await models.Series.findOne({where: {id: rawIssue.fk_series}, transaction});
+
+                    rawStory.parent = {number: rawParent.number};
+
+                    rawStory.parent.issue = {number: rawIssue.number.toString()};
+
+                    rawStory.parent.issue.series = {
+                        title: rawSeries.title,
+                        volume: rawSeries.volume,
+                    };
+
+                    let translator = await models.Individual.findAll({
+                        include: [{
+                            model: models.Story
+                        }],
+                        where: {
+                            '$Stories->Story_Individual.fk_story$': story.id,
+                            '$Stories->Story_Individual.type$': 'TRANSLATOR'
+                        },
+                        transaction
+                    });
+
+                    if(translator && translator[0])
+                        rawStory.translator = {name: translator[0].name};
+                    else
+                        rawStory.translator = {name: ''};
+                } else {
+                    let individuals = ['COLOURIST', 'EDITOR', 'INKER', 'LETTERER', 'PENCILER', 'WRITER'];
+
+                    await asyncForEach(individuals, async type => {
+                        let individual = await models.Individual.findAll({
+                            include: [{
+                                model: models.Story
+                            }],
+                            where: {
+                                '$Stories->Story_Individual.fk_story$': story.id,
+                                '$Stories->Story_Individual.type$': type
+                            },
+                            transaction
+                        });
+
+                        if(individual && individual[0])
+                            rawStory[type.toLowerCase()] = {name: individual[0].name};
+                        else
+                            rawStory[type.toLowerCase()]= {name: ''};
+                    });
+
+                }
+                    console.log(rawStory);
+                oldStories.push(rawStory);
+            });
+
+            resolve(oldStories);
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+export function equals(a, b) {
+    if(a.exclusive !== b.exclusive)
+        return false;
+
+    if(a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo)
+        return false;
+
+    if(!a.exclusive) {
+        return (
+          a.parent.number === b.number &&
+          a.parent.issue.number === b.parent.issue.number &&
+          a.parent.issue.series.title === b.parent.issue.series.title &&
+          a.parent.issue.series.volume === b.parent.issue.series.volume &&
+          a.translator.name === b.translator.name
+        );
+    } else {
+        return (
+            a.colourist.name === b.colourist.name &&
+            a.editor.name === b.editor.name &&
+            a.inker.name === b.inker.name &&
+            a.penciler.name === b.penciler.name &&
+            a.writer.name === b.writer.name &&
+            a.letterer.name === b.letterer.name
+        );
+    }
 }

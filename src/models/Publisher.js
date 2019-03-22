@@ -16,7 +16,8 @@ class Publisher extends Model {
                 let series = await models.Series.findAll({
                     where: {
                         fk_publisher: this.id
-                    }
+                    },
+                    transaction
                 });
 
                 await asyncForEach(series, async (series) => {
@@ -70,7 +71,7 @@ export const typeDef = gql`
   extend type Mutation {
     deletePublisher(item: PublisherInput!): Boolean,
     createPublisher(item: PublisherInput!): Publisher,    
-    editPublisher(old: PublisherInput!, publisher: PublisherInput!): Publisher
+    editPublisher(old: PublisherInput!, item: PublisherInput!): Publisher
   }
   
   extend type Query {
@@ -78,20 +79,20 @@ export const typeDef = gql`
     publisher(publisher: PublisherInput!): Publisher
   }
   
-    input PublisherInput {
-        id: String,
-        name: String,
-        us: Boolean,
-        addinfo: String
-    }
+  input PublisherInput {
+    id: String,
+    name: String,
+    us: Boolean,
+    addinfo: String
+  }
     
-    type Publisher {
-        id: ID,
-        name: String,
-        series: [Series],
-        us: Boolean,
-        addinfo: String
-    }
+  type Publisher {
+    id: ID,
+    name: String,
+    series: [Series],
+    us: Boolean,
+    addinfo: String
+  }
 `;
 
 export const resolvers = {
@@ -112,16 +113,17 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let pub = await models.Publisher.findOne({
-                    where: {name: item.name.trim()}
+                    where: {name: item.name.trim()},
+                    transaction
                 });
 
                 let del = await pub.delete(transaction);
 
                 transaction.commit();
-                return del === 1;;
+                return del === 1;
             } catch (e) {
                 transaction.rollback();
                 throw e;
@@ -132,13 +134,13 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let res = await models.Publisher.create({
                     name: item.name.trim(),
                     addinfo: item.addinfo,
-                    original: false
-                });
+                    original: item.us
+                }, {transaction: transaction});
 
                 transaction.commit();
                 return res;
@@ -152,17 +154,18 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let res = await models.Publisher.findOne({
                     where: {
-                        name: old.name.trim()
-                    }
+                        name: old.name.trim(),
+                    },
+                    transaction
                 });
 
                 res.name = item.name.trim();
                 res.addinfo = item.addinfo;
-                res = await res.save();
+                res = await res.save({transaction: transaction});
 
                 transaction.commit();
                 return res;

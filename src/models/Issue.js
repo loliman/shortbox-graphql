@@ -4,9 +4,9 @@ import models from "./index";
 import {asyncForEach, deleteFile, storeFile} from "../util/util";
 import {crawlIssue, crawlSeries} from "../core/crawler";
 import {coverDir} from "../config/config";
-import {create as createStory} from "./Story";
-import {create as createCover} from "./Cover";
-import {create as createFeature} from "./Feature";
+import {create as createStory, equals as storyEquals, getStories} from "./Story";
+import {create as createCover, equals as coverEquals, getCovers} from "./Cover";
+import {create as createFeature, equals as featureEquals, getFeatures} from "./Feature";
 
 class Issue extends Model {
     static tableName = 'Issue';
@@ -23,15 +23,16 @@ class Issue extends Model {
         Issue.belongsToMany(models.Individual, {through: models.Issue_Individual, foreignKey: 'fk_issue'});
     }
 
-    async associateIndividual(name, type) {
+    async associateIndividual(name, type, transaction) {
         return new Promise(async (resolve, reject) => {
             try {
                 models.Individual.findOrCreate({
                     where: {
                         name: name
-                    }
+                    },
+                    transaction
                 }).then(async ([individual, created]) => {
-                    resolve(await models.Issue_Individual.create({fk_issue: this.id, fk_individual: individual.id, type: type}));
+                    resolve(await models.Issue_Individual.create({fk_issue: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
                 });
             } catch (e) {
                 reject(e);
@@ -42,9 +43,10 @@ class Issue extends Model {
     async delete(transaction) {
         return new Promise(async (resolve, reject) => {
             try {
-                let cover = await models.Cover.findOne({where: {fk_issue: this.id, number: 0}});
+                let cover = await models.Cover.findOne({where: {fk_issue: this.id, number: 0}, transaction});
                 if(cover)
-                    deleteFile(cover.url);
+                    if(!cover.url.indexOf('http') === 0)
+                        deleteFile(cover.url);
 
                 await models.Story.destroy({where: {fk_issue: this.id}, transaction});
                 await models.Feature.destroy({where: {fk_issue: this.id}, transaction});
@@ -78,11 +80,13 @@ export default (sequelize) => {
         },
         format: {
             type: Sequelize.STRING(255),
-            allowNull: false
+            allowNull: false,
+            defaultValue: ''
         },
         limitation: {
             type: Sequelize.INTEGER,
-            allowNull: true
+            allowNull: true,
+            defaultValue: 0
         },
         variant: {
             type: Sequelize.STRING(255),
@@ -95,7 +99,8 @@ export default (sequelize) => {
         },
         pages: {
             type: Sequelize.INTEGER,
-            allowNull: true
+            allowNull: true,
+            defaultValue: 0
         },
         price: {
             type: Sequelize.FLOAT,
@@ -137,7 +142,7 @@ export const typeDef = gql`
   
   extend type Query {
     issues(series: SeriesInput!): [Issue], 
-    lastEdited: [Issue],
+    lastEdited(us: Boolean): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }
     
@@ -154,6 +159,7 @@ export const typeDef = gql`
     releasedate: Date,
     price: String,
     currency: String,
+    editor: IndividualInput,
     addinfo: String,
     stories: [StoryInput],
     features: [FeatureInput],
@@ -216,9 +222,9 @@ export const resolvers = {
                 return typeof a < typeof b ? 1 : -1;
             });
         },
-        lastEdited: async () => await models.Issue.findAll({
+        lastEdited: async (_, {us}) => await models.Issue.findAll({
             where: {
-                '$Series->Publisher.original$': false
+                '$Series->Publisher.original$': us
             },
             include: [
                 {
@@ -268,28 +274,28 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let series = await models.Series.findOne({
-                    where: {title: item.series.title, volume: item.series.volume, '$Publisher.name$': item.series.publisher.name},
-                    include: [models.Publisher]
+                    where: {title: item.series.title.trim(), volume: item.series.volume, '$Publisher.name$': item.series.publisher.name.trim()},
+                    include: [models.Publisher],
+                    transaction
                 });
 
                 let where = {
-                    number: item.number,
-                    format: item.format,
-                    variant: item.variant,
+                    number: item.number.trim(),
                     fk_series: series.id
                 };
 
                 if (item.format)
-                    where.format = item.format;
+                    where.format = item.format.trim();
 
                 if (item.variant)
-                    where.variant = item.variant;
+                    where.variant = item.variant.trim();
 
                 let issue = await models.Issue.findOne({
-                    where: where
+                    where: where,
+                    transaction
                 });
 
                 let del = await issue.delete(transaction);
@@ -306,7 +312,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let series = await models.Series.findOne({
                     where: {
@@ -314,35 +320,43 @@ export const resolvers = {
                         volume: item.series.volume,
                         '$Publisher.name$': item.series.publisher.name.trim()
                     },
-                    include: [models.Publisher]
+                    include: [models.Publisher],
+                    transaction
                 });
 
                 let res = await models.Issue.create({
-                    title: item.title.trim(),
+                    title: item.title ? item.title.trim() : '',
                     fk_series: series.id,
                     number: item.number.trim(),
-                    format: item.format.trim(),
-                    variant: item.variant.trim(),
+                    format: item.format ? item.format.trim() : '',
+                    variant: item.variant ? item.variant.trim() : '',
                     limitation: item.limitation,
                     pages: item.pages,
                     releasedate: item.releasedate,
                     price: item.price && item.price.trim() !== '' ? item.price : 0,
-                    currency: item.currency,
+                    currency: item.currency ? item.currency.trim() : '',
                     addinfo: item.addinfo
-                });
+                }, {transaction: transaction});
 
                 let coverUrl = '';
                 if (item.cover)
-                    coverUrl = await createCoverForIssue(item.cover, item.covers, res);
+                    coverUrl = await createCoverForIssue(item.cover, item.covers, res, transaction);
+
+                let us = item.series.publisher.us;
+
+                if (us && item.editor.name.trim() !== '') {
+                    await res.associateIndividual(item.editor.name.trim(), 'EDITOR', transaction);
+                    await res.save({transaction: transaction});
+                }
 
                 if (item.stories)
-                    await asyncForEach(item.stories, async (story) => createStory(story, res));
+                    await asyncForEach(item.stories, async (story) => createStory(story, res, transaction, us));
 
-                if (item.features)
-                    await asyncForEach(item.features, async feature => createFeature(feature, res));
+                if (item.features && !us)
+                    await asyncForEach(item.features, async feature => createFeature(feature, res, transaction));
 
                 if (item.covers)
-                    await asyncForEach(item.covers, async cover => createCover(cover, res, coverUrl));
+                    await asyncForEach(item.covers, async cover => createCover(cover, res, coverUrl, transaction, us));
 
                 transaction.commit();
                 return res;
@@ -356,28 +370,46 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
+
+                let oldPub = await models.Publisher.findOne({
+                    where: {
+                        name: old.series.publisher.name.trim()
+                    },
+                    transaction
+                });
+
+                let newPub = await models.Publisher.findOne({
+                    where: {
+                        name: old.series.publisher.name.trim()
+                    },
+                    transaction
+                });
+
+                if(oldPub.original !== newPub.original)
+                    throw new Error("You must not change to another publisher type");
 
                 let where = {
-                    number: old.number,
-                    '$Series.title$': old.series.title,
+                    number: old.number.trim(),
+                    '$Series.title$': old.series.title.trim(),
                     '$Series.volume$': old.series.volume,
-                    '$Series->Publisher.name$': old.series.publisher.name
+                    '$Series->Publisher.name$': old.series.publisher.name.trim()
                 };
 
                 if (old.format)
-                    where.format = old.format;
+                    where.format = old.format.trim();
 
                 if (old.variant)
-                    where.variant = old.variant;
+                    where.variant = old.variant.trim();
 
                 let newSeries = await models.Series.findOne({
                     where: {
                         title: item.series.title.trim(),
                         volume: item.series.volume,
-                        '$Publisher.name$': item.series.publisher.name
+                        '$Publisher.name$': item.series.publisher.name.trim()
                     },
-                    include: [models.Publisher]
+                    include: [models.Publisher],
+                    transaction
                 });
 
                 let res = await models.Issue.findOne({
@@ -389,120 +421,160 @@ export const resolvers = {
                                 models.Publisher
                             ]
                         }
-                    ]
+                    ],
+                    transaction
                 });
 
-                res.title = item.title;
-                res.number = item.number;
-                res.setSeries(newSeries);
-                res.format = item.format;
-                res.variant = item.variant;
+                res.title = item.title ? item.title.trim() : '';
+                res.number = item.number.trim();
+                res.setSeries(newSeries, {transaction: transaction});
+                res.format = item.format ? item.format.trim() : '';
+                res.variant = item.variant ? item.variant.trim() : '';
                 res.limitation = item.limitation;
                 res.pages = item.pages;
                 res.releasedate = item.releasedate;
-                res.price = item.price;
-                res.currency = item.currency;
+                res.price = item.price && item.price.trim() !== '' ? item.price : 0;
+                res.currency = item.currency ? item.currency.trim() : '';
                 res.addinfo = item.addinfo;
-                res = await res.save();
 
-                let cover = await models.Cover.findOne({where: {fk_issue: res.id, number: 0}});
+                res = await res.save({transaction: transaction});
+
+                let cover = await models.Cover.findOne({where: {fk_issue: res.id, number: 0}, transaction});
                 let coverUrl = '';
 
                 if(item.cover === '') { //Cover has been deleted
                     if (cover) {
-                        deleteFile(cover.url);
+                        if(!cover.url.indexOf('http') === 0)
+                            deleteFile(cover.url);
                         await cover.destroy({transaction});
                     }
                 } else if(item.cover instanceof Promise) { //Cover has been changed
                     if(cover) {
-                        deleteFile(cover.url);
+                        if(!cover.url.indexOf('http') === 0)
+                            deleteFile(cover.url);
                         await cover.destroy({transaction});
                     }
 
-                    coverUrl = await createCoverForIssue(item.cover, item.covers, res);
+                    coverUrl = await createCoverForIssue(item.cover, item.covers, res, transaction);
                 } // else nothing has changed
 
-                let deletedStories = old.stories.filter(o => {
+                let us = item.series.publisher.us;
+
+                if (us && item.editor && item.editor.name.trim() !== '') {
+                    await models.Issue_Individual.destroy({where: {fk_issue: res.id, type: 'EDITOR'}, transaction});
+                    await res.associateIndividual(item.editor.name.trim(), 'EDITOR', transaction);
+                    await res.save({transaction: transaction});
+                }
+
+                let oldStories = await getStories(res, transaction);
+
+                let deletedStories = oldStories.filter(o => {
                     let found = false;
                     item.stories.forEach(n => {
-                        if(JSON.stringify(o) === JSON.stringify(n))
-                            found = true;
+                        if(!found)
+                            found = storyEquals(o, n);
                     });
                     return !found;
                 });
 
-                asyncForEach(deletedStories, async story => {
-                    await models.Story.destroy({
+                if(us)
+                    deletedStories.forEach(deletedStory => {
+                        if(!deletedStory.exclusive)
+                            throw Error('You must not delete original stories with children');
+                    });
+
+
+                await asyncForEach(deletedStories, async story => {
+                    let resStory = await models.Story.findOne({
                         where: {
                             number: story.number,
                             fk_issue: res.id
-                        }
-                    })
+                        },
+                        transaction
+                    });
+
+                    await resStory.destroy({transaction: transaction});
                 });
 
                 let newStories = item.stories.filter(n => {
                     let found = false;
-                    old.stories.forEach(o => {
-                        if(JSON.stringify(n) === JSON.stringify(o))
-                            found = true;
+                    oldStories.forEach(o => {
+                        if(!found)
+                            found = storyEquals(n, o);
                     });
                     return !found;
                 });
 
-                await asyncForEach(newStories, async (story) => create(story, res));
+                await asyncForEach(newStories, async (story) => createStory(story, res, transaction, us));
 
-                let deletedFeatures = old.features.filter(o => {
-                    let found = false;
-                    item.features.forEach(n => {
-                        if(JSON.stringify(o) === JSON.stringify(n))
-                            found = true;
+                if(!us) {
+                    let oldFeatures = await getFeatures(res, transaction);
+
+                    let deletedFeatures = oldFeatures.filter(o => {
+                        let found = false;
+                        item.features.forEach(n => {
+                            if(!found)
+                                found = featureEquals(o, n);
+                        });
+                        return !found;
                     });
-                    return !found;
-                });
 
-                asyncForEach(deletedFeatures, async (feature) => {
-                    await models.Feature.destroy({
-                        where: {
-                            number: feature.number,
-                            fk_issue: res.id
-                        }
-                    })
-                });
-
-                let newFeatures = item.features.filter(n => {
-                    let found = false;
-                    old.features.forEach(o => {
-                        if(JSON.stringify(n) === JSON.stringify(o))
-                            found = true;
+                    await asyncForEach(deletedFeatures, async (feature) => {
+                        await models.Feature.destroy({
+                            where: {
+                                number: feature.number,
+                                fk_issue: res.id
+                            },
+                            transaction
+                        })
                     });
-                    return !found;
-                });
 
-                await asyncForEach(newFeatures, async feature => createFeature(feature, res));
+                    let newFeatures = item.features.filter(n => {
+                        let found = false;
+                        oldFeatures.forEach(o => {
+                            if(!found)
+                                found = featureEquals(n, o);
+                        });
+                        return !found;
+                    });
 
-                let deletedCovers = old.covers.filter(o => {
+                    await asyncForEach(newFeatures, async feature => createFeature(feature, res, transaction));
+                }
+
+                let oldCovers = await getCovers(res, transaction);
+
+                let deletedCovers = oldCovers.filter(o => {
                     let found = false;
                     item.covers.forEach(n => {
-                        if(JSON.stringify(o) === JSON.stringify(n))
-                            found = true;
+                        if(!found)
+                            found = coverEquals(o, n);
                     });
                     return !found;
                 });
 
-                asyncForEach(deletedCovers, async cover => {
-                    await models.Feature.destroy({
+                if(us)
+                    deletedCovers.forEach(deletedCover => {
+                        if(!deletedCover.exclusive)
+                            throw Error('You must not delete original covers with children');
+                    });
+
+                await asyncForEach(deletedCovers, async cover => {
+                    let resCover = await models.Cover.findOne({
                         where: {
                             number: cover.number,
                             fk_issue: res.id
-                        }
-                    })
+                        },
+                        transaction
+                    });
+
+                    await resCover.destroy({transaction: transaction});
                 });
 
                 let newCovers = item.covers.filter(n => {
                     let found = false;
-                    old.covers.forEach(o => {
-                        if(JSON.stringify(n) === JSON.stringify(o))
-                            found = true;
+                    oldCovers.forEach(o => {
+                        if(!found)
+                            found = coverEquals(n, o);
                     });
 
                     if(n.number === 0 && coverUrl !== '')
@@ -511,7 +583,7 @@ export const resolvers = {
                     return !found;
                 });
 
-                await asyncForEach(newCovers, async cover => createCover(cover, res, coverUrl));
+                await asyncForEach(newCovers, async cover => createCover(cover, res, coverUrl, transaction, us));
 
                 transaction.commit();
                 return res;
@@ -525,20 +597,20 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let where = {
-                    number: item.number,
-                    '$Series.title$': item.series.title,
+                    number: item.number.trim(),
+                    '$Series.title$': item.series.title.trim(),
                     '$Series.volume$': item.series.volume,
-                    '$Series->Publisher.name$': item.series.publisher.name
+                    '$Series->Publisher.name$': item.series.publisher.name.trim()
                 };
 
-                if (item.format)
-                    where.format = item.format;
+                if (item.format.trim())
+                    where.format = item.format.trim();
 
-                if (item.variant)
-                    where.variant = item.variant;
+                if (item.variant.trim())
+                    where.variant = item.variant.trim();
 
                 let res = await models.Issue.findOne({
                     where: where,
@@ -549,11 +621,12 @@ export const resolvers = {
                                 models.Publisher
                             ]
                         }
-                    ]
+                    ],
+                    transaction
                 });
 
                 res.verified = !res.verified;
-                res = await res.save();
+                res = await res.save({transaction: transaction});
 
                 transaction.commit();
                 return res;
@@ -640,7 +713,7 @@ export const resolvers = {
     }
 };
 
-function findOrCrawlIssue(i) {
+export function findOrCrawlIssue(i, transaction) {
     return new Promise(async (resolve, reject) => {
         try {
             let series = await models.Series.findOne({
@@ -649,7 +722,8 @@ function findOrCrawlIssue(i) {
                     volume: i.series.volume,
                     '$Publisher.original$': 1
                 },
-                include: [models.Publisher]
+                include: [models.Publisher],
+                transaction
             });
 
             let issueCreated = false;
@@ -667,7 +741,8 @@ function findOrCrawlIssue(i) {
                             models.Publisher
                         ]
                     }
-                ]
+                ],
+                transaction
             });
 
             if(!series) {
@@ -681,7 +756,8 @@ function findOrCrawlIssue(i) {
                         name: crawledSeries.publisher.name,
                         addinfo: '',
                         original: true,
-                    }
+                    },
+                    transaction
                 });
 
                 series = await models.Series.create({
@@ -691,7 +767,7 @@ function findOrCrawlIssue(i) {
                     endyear: crawledSeries.endyear,
                     addinfo: '',
                     fk_publisher: publisher.id
-                });
+                }, {transaction: transaction});
             }
 
             let crawledIssue;
@@ -706,10 +782,10 @@ function findOrCrawlIssue(i) {
                     price: crawledIssue.price ? crawledIssue.price : 0,
                     currency: crawledIssue.currency ? crawledIssue.currency : 'USD',
                     addinfo: ''
-                });
+                }, {transaction: transaction});
 
-                await issue.associateIndividual(crawledIssue.editor.name.trim(), 'EDITOR');
-                await issue.save();
+                await issue.associateIndividual(crawledIssue.editor.name.trim(), 'EDITOR', transaction);
+                await issue.save({transaction: transaction});
 
                 issueCreated = true;
             }
@@ -719,11 +795,11 @@ function findOrCrawlIssue(i) {
                     url: crawledIssue.cover.url,
                     number: 0,
                     addinfo: ''
-                });
+                }, {transaction: transaction});
 
-                await newCover.associateIndividual(crawledIssue.cover.artist.name.trim(), 'ARTIST');
-                await newCover.setIssue(issue);
-                await newCover.save();
+                await newCover.associateIndividual(crawledIssue.cover.artist.name.trim(), 'ARTIST', transaction);
+                await newCover.setIssue(issue, {transaction: transaction});
+                await newCover.save({transaction: transaction});
 
                 await Promise.all(crawledIssue.variants.map(async (crawledVariant) => {
                     let variant = await models.Issue.create({title: '',
@@ -735,18 +811,18 @@ function findOrCrawlIssue(i) {
                         price: crawledIssue.price ? crawledIssue.price : 0,
                         currency: crawledIssue.currency ? crawledIssue.currency : 'USD',
                         addinfo: ''
-                    });
+                    }, {transaction: transaction});
 
-                    await variant.associateIndividual(crawledIssue.editor.name.trim(), 'EDITOR');
+                    await variant.associateIndividual(crawledIssue.editor.name.trim(), 'EDITOR', transaction);
 
                     let newCover = await models.Cover.create({
                         url: crawledVariant.cover.url,
                         number: 0,
                         addinfo: ''
-                    });
+                    }, {transaction: transaction});
 
-                    await newCover.setIssue(variant);
-                    await newCover.save();
+                    await newCover.setIssue(variant, {transaction: transaction});
+                    await newCover.save({transaction: transaction});
 
                     return variant;
                 }));
@@ -756,13 +832,13 @@ function findOrCrawlIssue(i) {
                         title: crawledStory.title ? crawledStory.title : '',
                         number: crawledStory.number,
                         addinfo: ''
-                    });
+                    }, {transaction: transaction});
 
                     await asyncForEach(crawledStory.individuals, async (individual) => {
-                        await newStory.associateIndividual(individual.name.trim(), individual.type);
+                        await newStory.associateIndividual(individual.name.trim(), individual.type, transaction);
                     });
-                    await newStory.setIssue(issue);
-                    await newStory.save();
+                    await newStory.setIssue(issue, {transaction: transaction});
+                    await newStory.save({transaction: transaction});
 
                     return newStory;
                 }));
@@ -775,7 +851,7 @@ function findOrCrawlIssue(i) {
     })
 }
 
-async function createCoverForIssue(cover, covers, issue) {
+async function createCoverForIssue(cover, covers, issue, transaction) {
     return new Promise(async (resolve, reject) => {
         try {
             const {createReadStream, filename} = await cover;
@@ -796,10 +872,10 @@ async function createCoverForIssue(cover, covers, issue) {
                     url: coverUrl,
                     number: 0,
                     addinfo: ''
-                });
+                }, {transaction: transaction});
 
-                res.setIssue(issue);
-                await res.save();
+                res.setIssue(issue, {transaction: transaction});
+                await res.save({transaction: transaction});
             } //else it's handled during array iteration
 
             resolve(coverUrl);

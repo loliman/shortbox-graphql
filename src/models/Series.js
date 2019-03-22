@@ -18,7 +18,8 @@ class Series extends Model {
                 let issues = await models.Issue.findAll({
                     where: {
                         fk_series: this.id
-                    }
+                    },
+                    transaction
                 });
 
                 await asyncForEach(issues, async (issue) => {
@@ -114,7 +115,7 @@ export const resolvers = {
         series: (_, {publisher}) => {
             let options = {
                 order: [['title', 'ASC'], ['volume', 'ASC']],
-                include: [models.Publisher]
+                include: [models.Publisher],
             };
 
             if (publisher.name !== "*")
@@ -137,17 +138,19 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let pub = await models.Publisher.findOne({
                     where: {
                         name: item.publisher.name.trim()
-                    }
+                    },
+                    transaction
                 });
 
                 let series = await models.Series.findOne({
                     where: {title: item.title.trim(), volume: item.volume, fk_publisher: pub.id},
-                    include: [models.Publisher]
+                    include: [models.Publisher],
+                    transaction
                 });
 
                 let del = await series.delete(transaction);
@@ -164,12 +167,13 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
 
                 let pub = await models.Publisher.findOne({
                     where: {
                         name: item.publisher.name.trim()
-                    }
+                    },
+                    transaction
                 });
 
                 let res = await models.Series.create({
@@ -179,7 +183,7 @@ export const resolvers = {
                     endyear: item.endyear,
                     addinfo: item.addinfo,
                     fk_publisher: pub.id
-                });
+                }, {transaction: transaction});
 
                 transaction.commit();
                 return res;
@@ -193,17 +197,29 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error();
+                    throw new Error("Sorry, you're not logged in");
+
+                let oldPub = await models.Publisher.findOne({
+                    where: {
+                        name: old.publisher.name.trim()
+                    },
+                    transaction
+                });
 
                 let newPub = await models.Publisher.findOne({
                     where: {
                         name: item.publisher.name.trim()
-                    }
+                    },
+                    transaction
                 });
+
+                if(oldPub.original !== newPub.original)
+                    throw new Error("You must not change to another publisher type");
 
                 let res = await models.Series.findOne({
                     where: {title: old.title.trim(), volume: old.volume, '$Publisher.name$': old.publisher.name},
-                    include: [models.Publisher]
+                    include: [models.Publisher],
+                    transaction
                 });
 
                 res.title = item.title.trim();
@@ -211,8 +227,8 @@ export const resolvers = {
                 res.startyear = item.startyear;
                 res.endyear = item.endyear;
                 res.addinfo = item.addinfo;
-                res.setPublisher(newPub);
-                res = await res.save();
+                res.setPublisher(newPub, {transaction: transaction});
+                res = await res.save({transaction: transaction});
 
                 transaction.commit();
                 return res;
