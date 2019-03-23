@@ -72,7 +72,7 @@ export const typeDef = gql`
     number: Int!,
     parent: CoverInput,
     issue: IssueInput,
-    artist: IndividualInput,
+    artists: [IndividualInput],
     addinfo: String,
     exclusive: Boolean
   }
@@ -166,8 +166,10 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                if (cover.artist.name.trim() !== '')
-                    await resCover.associateIndividual(cover.artist.name.trim(), 'ARTIST', transaction);
+                await asyncForEach(cover.artists, async artist => {
+                    if(artist.name && artist.name.trim() !== '')
+                        await resCover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
+                });
 
                 await resCover.save();
             } else {
@@ -239,7 +241,7 @@ export async function getCovers(issue, transaction) {
                         volume: rawSeries.volume,
                     };
                 } else {
-                    let artist = await models.Individual.findAll({
+                    let artists = await models.Individual.findAll({
                         include: [{
                             model: models.Cover
                         }],
@@ -250,10 +252,9 @@ export async function getCovers(issue, transaction) {
                         transaction
                     });
 
-                    if(artist && artist[0])
-                        rawCover.artist = {name: artist[0].name};
-                    else
-                        rawCover.artist = {name: ''};
+                    rawCover.artists = [];
+                    if(artists)
+                        artists.forEach(artist => rawCover.artists.push({name: artist.name}));
                 }
 
                 oldCovers.push(rawCover);
@@ -281,6 +282,10 @@ export function equals(a, b) {
             a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
-        return (a.artist.name === b.artist.name);
+        return a.artists.every(aIndividual => {
+            return b.artists.some(bIndividual => {
+                return aIndividual.name === bIndividual.name;
+            });
+        });
     }
 }

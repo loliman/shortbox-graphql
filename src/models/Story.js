@@ -72,13 +72,13 @@ export const typeDef = gql`
     number: Int!,
     parent: StoryInput,
     issue: IssueInput,
-    translator: IndividualInput,
-    writer: IndividualInput,
-    penciler: IndividualInput,
-    inker: IndividualInput,
-    colourist: IndividualInput,
-    letterer: IndividualInput,
-    editor: IndividualInput,
+    translators: [IndividualInput],
+    writers: [IndividualInput],
+    pencilers: [IndividualInput],
+    inkers: [IndividualInput],
+    colourists: [IndividualInput],
+    letterers: [IndividualInput],
+    editors: [IndividualInput],
     title: String,
     addinfo: String,
     exclusive: Boolean
@@ -233,23 +233,35 @@ export async function create(story, issue, transaction, us) {
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                if (story.writer.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'WRITER', transaction);
+                await asyncForEach(story.writers, async writer => {
+                    if(writer.name && writer.name.trim() !== '')
+                        await resStory.associateIndividual(writer.name.trim(), 'WRITER', transaction);
+                });
 
-                if (story.penciler.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'PENCILER', transaction);
+                await asyncForEach(story.pencilers, async penciler => {
+                    if(penciler.name && penciler.name.trim() !== '')
+                        await resStory.associateIndividual(penciler.name.trim(), 'PENCILER', transaction);
+                });
 
-                if (story.inker.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'COLOURIST', transaction);
+                await asyncForEach(story.inkers, async inker => {
+                    if(inker.name && inker.name.trim() !== '')
+                        await resStory.associateIndividual(inker.name.trim(), 'INKER', transaction);
+                });
 
-                if (story.colourist.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'WRITER', transaction);
+                await asyncForEach(story.colourists, async colourist => {
+                    if(colourist.name && colourist.name.trim() !== '')
+                        await resStory.associateIndividual(colourist.name.trim(), 'COLOURIST', transaction);
+                });
 
-                if (story.letterer.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'LETTERER', transaction);
+                await asyncForEach(story.letterers, async letterer => {
+                    if(letterer.name && letterer.name.trim() !== '')
+                        await resStory.associateIndividual(letterer.name.trim(), 'LETTERER', transaction);
+                });
 
-                if (story.editor.name.trim() !== '')
-                    await resStory.associateIndividual(story.writer.name.trim(), 'EDITOR', transaction);
+                await asyncForEach(story.editors, async editors => {
+                    if(editors.name && editors.name.trim() !== '')
+                        await resStory.associateIndividual(editors.name.trim(), 'EDITOR', transaction);
+                });
 
                 await resStory.save();
             } else {
@@ -273,8 +285,11 @@ export async function create(story, issue, transaction, us) {
                     fk_parent: oStory.id
                 }, {transaction: transaction});
 
-                if (story.translator.name.trim() !== '')
-                    await newStory.associateIndividual(story.translator.name.trim(), 'TRANSLATOR', transaction);
+                await asyncForEach(story.translators, async translator => {
+                    if(translator.name && translator.name.trim() !== '')
+                        await newStory.associateIndividual(translator.name.trim(), 'TRANSLATOR', transaction);
+                });
+
                 await newStory.setIssue(issue, {transaction: transaction});
                 await newStory.save({transaction: transaction});
             }
@@ -313,7 +328,7 @@ export async function getStories(issue, transaction) {
                         volume: rawSeries.volume,
                     };
 
-                    let translator = await models.Individual.findAll({
+                    let translators = await models.Individual.findAll({
                         include: [{
                             model: models.Story
                         }],
@@ -324,15 +339,14 @@ export async function getStories(issue, transaction) {
                         transaction
                     });
 
-                    if(translator && translator[0])
-                        rawStory.translator = {name: translator[0].name};
-                    else
-                        rawStory.translator = {name: ''};
+                    rawStory.translators = [];
+                    if(translators)
+                        translators.forEach(translator => rawStory.translators.push({name: translator.name}));
                 } else {
                     let individuals = ['COLOURIST', 'EDITOR', 'INKER', 'LETTERER', 'PENCILER', 'WRITER'];
 
                     await asyncForEach(individuals, async type => {
-                        let individual = await models.Individual.findAll({
+                        let individuals = await models.Individual.findAll({
                             include: [{
                                 model: models.Story
                             }],
@@ -343,14 +357,14 @@ export async function getStories(issue, transaction) {
                             transaction
                         });
 
-                        if(individual && individual[0])
-                            rawStory[type.toLowerCase()] = {name: individual[0].name};
-                        else
-                            rawStory[type.toLowerCase()]= {name: ''};
+                        rawStory[type.toLowerCase() + 's'] = [];
+                        if(individuals)
+                            individuals.forEach(
+                                individual => rawStory[type.toLowerCase() + 's'].push({name: individual.name})
+                            );
                     });
 
                 }
-                    console.log(rawStory);
                 oldStories.push(rawStory);
             });
 
@@ -369,21 +383,60 @@ export function equals(a, b) {
         return false;
 
     if(!a.exclusive) {
-        return (
+        let found = a.translators.every(aIndividual => {
+            return b.translators.some(bIndividual => {
+                return aIndividual.name === bIndividual.name;
+            });
+        });
+
+        return (found &&
           a.parent.number === b.number &&
           a.parent.issue.number === b.parent.issue.number &&
           a.parent.issue.series.title === b.parent.issue.series.title &&
-          a.parent.issue.series.volume === b.parent.issue.series.volume &&
-          a.translator.name === b.translator.name
+          a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
-        return (
-            a.colourist.name === b.colourist.name &&
-            a.editor.name === b.editor.name &&
-            a.inker.name === b.inker.name &&
-            a.penciler.name === b.penciler.name &&
-            a.writer.name === b.writer.name &&
-            a.letterer.name === b.letterer.name
-        );
+        let found = a.colourists.every(aIndividual => {
+            return b.colourists.some(bIndividual => {
+                return aIndividual.name === bIndividual.name;
+            });
+        });
+
+        if(!found)
+            return false;
+
+        found = a.editors.every(aIndividual => {
+            return b.editors.some(bIndividual => {
+                return aIndividual.name === bIndividual.name;
+            });
+        });
+
+        if(!found)
+            return false;
+
+        found = a.pencilers.every(aIndividual => {
+            return b.pencilers.some(bIndividual => {
+                return aIndividual.name === bIndividual.name;
+            });
+        });
+        if(!found)
+            return false;
+
+        found = a.writers.every(aIndividual => {
+            return b.writers.some(bIndividual => {
+                return aIndividual.name === bIndividual.name;
+            });
+        });
+
+        if(!found)
+            return false;
+
+        found = a.letterers.every(aIndividual => {
+            return b.letterers.some(bIndividual => {
+                return aIndividual.name === bIndividual.name;
+            });
+        });
+
+        return found;
     }
 }

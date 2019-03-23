@@ -159,7 +159,7 @@ export const typeDef = gql`
     releasedate: Date,
     price: String,
     currency: String,
-    editor: IndividualInput,
+    editors: [IndividualInput],
     addinfo: String,
     stories: [StoryInput],
     features: [FeatureInput],
@@ -344,8 +344,12 @@ export const resolvers = {
 
                 let us = item.series.publisher.us;
 
-                if (us && item.editor.name.trim() !== '') {
-                    await res.associateIndividual(item.editor.name.trim(), 'EDITOR', transaction);
+                if (us && item.editors.length > 0) {
+                    await asyncForEach(item.editors, async editor => {
+                        if(editor.name && editor.name.trim() !== '')
+                            await res.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                    });
+
                     await res.save({transaction: transaction});
                 }
 
@@ -460,9 +464,14 @@ export const resolvers = {
 
                 let us = item.series.publisher.us;
 
-                if (us && item.editor && item.editor.name.trim() !== '') {
+                if (us && item.editors.length > 0) {
                     await models.Issue_Individual.destroy({where: {fk_issue: res.id, type: 'EDITOR'}, transaction});
-                    await res.associateIndividual(item.editor.name.trim(), 'EDITOR', transaction);
+
+                    await asyncForEach(item.editors, async editor => {
+                        if(editor.name && editor.name.trim() !== '')
+                            await res.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                    });
+
                     await res.save({transaction: transaction});
                 }
 

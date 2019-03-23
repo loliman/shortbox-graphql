@@ -65,7 +65,7 @@ export const typeDef = gql`
     input FeatureInput {
         id: String,
         number: Int!,
-        writer: IndividualInput,
+        writers: [IndividualInput],
         title: String,
         addinfo: String
     }
@@ -109,8 +109,10 @@ export async function create(feature, issue, transaction) {
                 fk_issue: issue.id
             }, {transaction: transaction});
 
-            if (feature.writer.name.trim() !== '')
-                await resFeature.associateIndividual(feature.writer.name.trim(), 'WRITER', transaction);
+            await asyncForEach(feature.writers, async writer => {
+                if(writer.name && writer.name.trim() !== '')
+                    await resFeature.associateIndividual(writer.name.trim(), 'WRITER', transaction);
+            });
 
             await resFeature.save({transaction: transaction});
 
@@ -132,7 +134,7 @@ export async function getFeatures(issue, transaction) {
                 rawFeature.number = feature.number;
                 rawFeature.addinfo = feature.addinfo;
 
-                let writer = await models.Individual.findAll({
+                let writers = await models.Individual.findAll({
                     include: [{
                         model: models.Feature
                     }],
@@ -143,10 +145,9 @@ export async function getFeatures(issue, transaction) {
                     transaction
                 });
 
-                if(writer && writer[0])
-                    rawFeature.writer = {name: writer[0].name};
-                else
-                    rawFeature.writer = {name: ''};
+                rawFeature.writers = [];
+                if(writers)
+                    writers.forEach(writer => rawFeature.writers.push({name: writer.name}));
 
                 oldFeatures.push(rawFeature);
             });
@@ -159,6 +160,11 @@ export async function getFeatures(issue, transaction) {
 }
 
 export function equals(a, b) {
-    if(a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo || a.writer.name !== b.writer.name)
-        return false;
+    let found = a.artists.every(aIndividual => {
+        return b.artists.some(bIndividual => {
+            return aIndividual.name === bIndividual.name;
+        });
+    });
+
+    return (found && a.title === b.title && a.number === b.number && a.addinfo === b.addinfo);
 }
