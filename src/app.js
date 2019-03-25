@@ -1,8 +1,11 @@
 import sequelize from './core/database'
 import server from "./core/server";
 import fs from "fs";
-import {coverDir, wwwDir} from "./config/config";
+import {coverDir, migrateOnStartup, wwwDir} from "./config/config";
 import {cleanup} from './core/cleanup';
+import migrationDatabase from "./migration/core/database";
+import {migrate} from "./migration/core/migration";
+
 const shell = require('shelljs');
 
 async function start() {
@@ -37,6 +40,19 @@ async function start() {
     let {url} = await server.listen();
 
     console.log('🚀 Server is up and running at ' + url);
+
+    if (migrateOnStartup) {
+        await migrationDatabase.authenticate();
+        console.log('🚀 Migration Database is up and running');
+
+        await migrationDatabase.sync();
+        console.log('🚀 Migration Database is set up');
+
+        console.log('🚀 Starting migration...');
+        await migrate();
+        console.log('🚀 Migration done! See logfile for eventual errors.');
+    }
+
 
     console.log('🚀 All done, lets go!');
 }

@@ -314,53 +314,7 @@ export const resolvers = {
                 if (!loggedIn)
                     throw new Error("Sorry, you're not logged in");
 
-                let series = await models.Series.findOne({
-                    where: {
-                        title: item.series.title.trim(),
-                        volume: item.series.volume,
-                        '$Publisher.name$': item.series.publisher.name.trim()
-                    },
-                    include: [models.Publisher],
-                    transaction
-                });
-
-                let res = await models.Issue.create({
-                    title: item.title ? item.title.trim() : '',
-                    fk_series: series.id,
-                    number: item.number.trim(),
-                    format: item.format ? item.format.trim() : '',
-                    variant: item.variant ? item.variant.trim() : '',
-                    limitation: item.limitation,
-                    pages: item.pages,
-                    releasedate: item.releasedate,
-                    price: item.price && item.price.trim() !== '' ? item.price : 0,
-                    currency: item.currency ? item.currency.trim() : '',
-                    addinfo: item.addinfo
-                }, {transaction: transaction});
-
-                let coverUrl = '';
-                if (item.cover)
-                    coverUrl = await createCoverForIssue(item.cover, item.covers, res, transaction);
-
-                let us = item.series.publisher.us;
-
-                if (us && item.editors.length > 0) {
-                    await asyncForEach(item.editors, async editor => {
-                        if(editor.name && editor.name.trim() !== '')
-                            await res.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
-                    });
-
-                    await res.save({transaction: transaction});
-                }
-
-                if (item.stories)
-                    await asyncForEach(item.stories, async (story) => createStory(story, res, transaction, us));
-
-                if (item.features && !us)
-                    await asyncForEach(item.features, async feature => createFeature(feature, res, transaction));
-
-                if (item.covers)
-                    await asyncForEach(item.covers, async cover => createCover(cover, res, coverUrl, transaction, us));
+                let res = await create(item, transaction);
 
                 transaction.commit();
                 return res;
@@ -721,6 +675,64 @@ export const resolvers = {
         updatedAt: (parent) => parent.updatedAt
     }
 };
+
+export async function create(item, transaction) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let series = await models.Series.findOne({
+                where: {
+                    title: item.series.title.trim(),
+                    volume: item.series.volume,
+                    '$Publisher.name$': item.series.publisher.name.trim()
+                },
+                include: [models.Publisher],
+                transaction
+            });
+
+            let res = await models.Issue.create({
+                title: item.title ? item.title.trim() : '',
+                fk_series: series.id,
+                number: item.number.trim(),
+                format: item.format ? item.format.trim() : '',
+                variant: item.variant ? item.variant.trim() : '',
+                limitation: item.limitation,
+                pages: item.pages,
+                releasedate: item.releasedate,
+                price: item.price && item.price.trim() !== '' ? item.price : 0,
+                currency: item.currency ? item.currency.trim() : '',
+                addinfo: item.addinfo
+            }, {transaction: transaction});
+
+            let coverUrl = '';
+            if (item.cover)
+                coverUrl = await createCoverForIssue(item.cover, item.covers, res, transaction);
+
+            let us = item.series.publisher.us;
+
+            if (us && item.editors.length > 0) {
+                await asyncForEach(item.editors, async editor => {
+                    if (editor.name && editor.name.trim() !== '')
+                        await res.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                });
+
+                await res.save({transaction: transaction});
+            }
+
+            if (item.stories)
+                await asyncForEach(item.stories, async (story) => createStory(story, res, transaction, us));
+
+            if (item.features && !us)
+                await asyncForEach(item.features, async feature => createFeature(feature, res, transaction));
+
+            if (item.covers)
+                await asyncForEach(item.covers, async cover => createCover(cover, res, coverUrl, transaction, us));
+
+            resolve(res);
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
 
 export function findOrCrawlIssue(i, transaction) {
     return new Promise(async (resolve, reject) => {
