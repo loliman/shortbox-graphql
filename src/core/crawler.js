@@ -73,8 +73,7 @@ export async function crawlIssue(issue) {
             let $ = await rp(issueOptions);
 
             let infoBoxContent = $('.infobox').children();
-            let noPrice = infoBoxContent.eq(2).html().indexOf('Editor-in-Chief') !== -1;
-
+            let noPrice = $(infoBoxContent).eq(2).text().indexOf("Issue DetailsOriginal Price") === -1;
             infoBoxContent.each((i, c) => {
                 let s = i;
                 if (noPrice && i > 1)
@@ -124,28 +123,39 @@ export async function crawlIssue(issue) {
                         res.releasedate = dateFormat(Date.parse(releaseDate), "yyyy-mm-dd");
                         break;
                     case 2:
-                        let issueChildren = $(c).children()
-                            .first().children()
-                            .last().children()
-                            .first().children()
-                            .last().children();
-
-                        let price = issueChildren.last().text().trim();
-                        res.price = price;
-                        res.currency = 'USD';
                         break;
                     case 3:
-                        let issueIndividualChildren = $(c).children();
+                        res.editors = [];
+                        res.cover.artists = [];
 
-                        let editorInChiefChildren = issueIndividualChildren.first().children()
-                            .last().children();
-                        let editorInChief = editorInChiefChildren.first().text().trim();
-                        res.editor = {name: editorInChief};
+                        let editorElement;
+                        let artistElement;
+                        $(c).children().each((i, e) => {
+                            if ($(e).text().indexOf("Editor-in-Chief") !== -1)
+                                editorElement = e;
+                            else if ($(e).text().indexOf("Cover Artist") !== -1)
+                                artistElement = e;
+                        });
 
-                        let coverArtistChildren = issueIndividualChildren.last().children()
-                            .last().children();
-                        let coverArtist = coverArtistChildren.last().text().trim();
-                        res.cover.artist = {name: coverArtist};
+                        if (editorElement) {
+                            let editorsInChief = $(editorElement).children().last().children();
+                            editorsInChief.each((i, e) => {
+                                let editorInChief = $(e).text().trim();
+
+                                if (editorInChief !== '')
+                                    res.editors.push({name: editorInChief});
+                            });
+                        }
+
+                        if (artistElement) {
+                            let coverArtists = $(artistElement).children().last().children();
+                            coverArtists.each((i, e) => {
+                                let coverArtist = $(e).text().trim();
+
+                                if (coverArtist !== '')
+                                    res.cover.artists.push({name: coverArtist});
+                            });
+                        }
                         break;
                     default:
                         let story = {};

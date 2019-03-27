@@ -800,12 +800,14 @@ export function findOrCrawlIssue(i, transaction) {
                     format: 'Heft',
                     fk_series: series.id,
                     releasedate: crawledIssue.releasedate,
-                    price: crawledIssue.price ? crawledIssue.price : 0,
-                    currency: crawledIssue.currency ? crawledIssue.currency : 'USD',
+                    price: 0,
+                    currency: 'USD',
                     addinfo: ''
                 }, {transaction: transaction});
 
-                await issue.associateIndividual(crawledIssue.editor.name.trim(), 'EDITOR', transaction);
+                await asyncForEach(crawledIssue.editors, async (editor) => {
+                    await issue.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                });
                 await issue.save({transaction: transaction});
 
                 issueCreated = true;
@@ -818,7 +820,9 @@ export function findOrCrawlIssue(i, transaction) {
                     addinfo: ''
                 }, {transaction: transaction});
 
-                await newCover.associateIndividual(crawledIssue.cover.artist.name.trim(), 'ARTIST', transaction);
+                await asyncForEach(crawledIssue.cover.artists, async (artist) => {
+                    await newCover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
+                });
                 await newCover.setIssue(issue, {transaction: transaction});
                 await newCover.save({transaction: transaction});
 
