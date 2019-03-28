@@ -155,10 +155,10 @@ export const resolvers = {
 
                 let del = await series.delete(transaction);
 
-                transaction.commit();
+                await transaction.commit();
                 return del === 1;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         },
@@ -185,10 +185,10 @@ export const resolvers = {
                     fk_publisher: pub.id
                 }, {transaction: transaction});
 
-                transaction.commit();
+                await transaction.commit();
                 return res;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         },
@@ -230,10 +230,10 @@ export const resolvers = {
                 res.setPublisher(newPub, {transaction: transaction});
                 res = await res.save({transaction: transaction});
 
-                transaction.commit();
+                await transaction.commit();
                 return res;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         }

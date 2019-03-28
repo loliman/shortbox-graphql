@@ -1,7 +1,7 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import {asyncForEach, deleteFile, storeFile} from "../util/util";
+import {asyncForEach, deleteFile, naturalCompare, storeFile} from "../util/util";
 import {crawlIssue, crawlSeries} from "../core/crawler";
 import {coverDir} from "../config/config";
 import {create as createStory, equals as storyEquals, getStories} from "./Story";
@@ -30,7 +30,7 @@ class Issue extends Model {
                     where: {
                         name: name
                     },
-                    transaction
+                    transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Issue_Individual.create({fk_issue: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
                 });
@@ -212,15 +212,7 @@ export const resolvers = {
                 ]
             });
 
-            return res.sort((a, b) => {
-                if (a === b) {
-                    return 0;
-                }
-                if (typeof a === typeof b) {
-                    return a < b ? 1 : -1;
-                }
-                return typeof a < typeof b ? 1 : -1;
-            });
+            return res.sort((a, b) => naturalCompare(a.number, b.number));
         },
         lastEdited: async (_, {us}) => await models.Issue.findAll({
             where: {
@@ -300,10 +292,10 @@ export const resolvers = {
 
                 let del = await issue.delete(transaction);
 
-                transaction.commit();
+                await transaction.commit();
                 return del === 1;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         },
@@ -316,10 +308,10 @@ export const resolvers = {
 
                 let res = await create(item, transaction);
 
-                transaction.commit();
+                await transaction.commit();
                 return res;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         },
@@ -391,7 +383,7 @@ export const resolvers = {
                 res.limitation = item.limitation;
                 res.pages = item.pages;
                 res.releasedate = item.releasedate;
-                res.price = item.price && item.price.trim() !== '' ? item.price : 0;
+                res.price = item.price ? item.price : 0;
                 res.currency = item.currency ? item.currency.trim() : '';
                 res.addinfo = item.addinfo;
 
@@ -548,10 +540,10 @@ export const resolvers = {
 
                 await asyncForEach(newCovers, async cover => createCover(cover, res, coverUrl, transaction, us));
 
-                transaction.commit();
+                await transaction.commit();
                 return res;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         },
@@ -591,10 +583,10 @@ export const resolvers = {
                 res.verified = !res.verified;
                 res = await res.save({transaction: transaction});
 
-                transaction.commit();
+                await transaction.commit();
                 return res;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         }
@@ -695,10 +687,10 @@ export async function create(item, transaction) {
                 number: item.number.trim(),
                 format: item.format ? item.format.trim() : '',
                 variant: item.variant ? item.variant.trim() : '',
-                limitation: item.limitation,
-                pages: item.pages,
+                limitation: !isNaN(item.limitation) ? item.limitation : 0,
+                pages: !isNaN(item.pages) ? item.pages : 0,
                 releasedate: item.releasedate,
-                price: item.price && item.price.trim() !== '' ? item.price : 0,
+                price: !isNaN(item.price) ? item.price : 0,
                 currency: item.currency ? item.currency.trim() : '',
                 addinfo: item.addinfo
             }, {transaction: transaction});
@@ -776,16 +768,16 @@ export function findOrCrawlIssue(i, transaction) {
                     defaults: {
                         name: crawledSeries.publisher.name,
                         addinfo: '',
-                        original: true,
+                        original: 1,
                     },
-                    transaction
+                    transaction: transaction
                 });
 
                 series = await models.Series.create({
                     title: crawledSeries.title,
                     volume: crawledSeries.volume,
-                    startyear: crawledSeries.startyear,
-                    endyear: crawledSeries.endyear,
+                    startyear: !isNaN(crawledSeries.startyear) ? crawledSeries.startyear : 0,
+                    endyear: !isNaN(crawledSeries.endyear) ? crawledSeries.endyear : 0,
                     addinfo: '',
                     fk_publisher: publisher.id
                 }, {transaction: transaction});
@@ -800,6 +792,8 @@ export function findOrCrawlIssue(i, transaction) {
                     format: 'Heft',
                     fk_series: series.id,
                     releasedate: crawledIssue.releasedate,
+                    limitation: 0,
+                    pages: 0,
                     price: 0,
                     currency: 'USD',
                     addinfo: ''
@@ -807,8 +801,8 @@ export function findOrCrawlIssue(i, transaction) {
 
                 await asyncForEach(crawledIssue.editors, async (editor) => {
                     await issue.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                    await issue.save({transaction: transaction});
                 });
-                await issue.save({transaction: transaction});
 
                 issueCreated = true;
             }
@@ -822,6 +816,7 @@ export function findOrCrawlIssue(i, transaction) {
 
                 await asyncForEach(crawledIssue.cover.artists, async (artist) => {
                     await newCover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
+                    await newCover.save({transaction: transaction});
                 });
                 await newCover.setIssue(issue, {transaction: transaction});
                 await newCover.save({transaction: transaction});
@@ -833,12 +828,18 @@ export function findOrCrawlIssue(i, transaction) {
                         variant: crawledVariant.variant,
                         fk_series: series.id,
                         releasedate: crawledIssue.releasedate,
-                        price: crawledIssue.price ? crawledIssue.price : 0,
+                        limitation: 0,
+                        pages: 0,
+                        price: 0,
                         currency: crawledIssue.currency ? crawledIssue.currency : 'USD',
                         addinfo: ''
                     }, {transaction: transaction});
 
-                    await variant.associateIndividual(crawledIssue.editor.name.trim(), 'EDITOR', transaction);
+
+                    await asyncForEach(crawledIssue.editors, async (editor) => {
+                        await variant.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                    });
+                    await issue.save({transaction: transaction});
 
                     let newCover = await models.Cover.create({
                         url: crawledVariant.cover.url,
@@ -855,7 +856,7 @@ export function findOrCrawlIssue(i, transaction) {
                 await Promise.all(crawledIssue.stories.map(async (crawledStory) => {
                     let newStory = await models.Story.create({
                         title: crawledStory.title ? crawledStory.title : '',
-                        number: crawledStory.number,
+                        number: !isNaN(crawledStory.number) ? crawledStory.number : 1,
                         addinfo: ''
                     }, {transaction: transaction});
 

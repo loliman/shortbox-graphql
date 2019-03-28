@@ -205,11 +205,11 @@ async function run() {
         });
         console.log('Deleted ' + individualCount + ' individuals.');
 
-        transaction.commit();
+        await transaction.commit();
         console.log('Cleanup done.');
     } catch (e) {
         console.log(e);
-        transaction.rollback();
+        await transaction.rollback();
         console.log('Error during cleanup... rolling back.');
     }
 }

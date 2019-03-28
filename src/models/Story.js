@@ -21,7 +21,7 @@ class Story extends Model {
                     where: {
                         name: name
                     },
-                    transaction
+                    transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Story_Individual.create({fk_story: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
                 });
@@ -227,41 +227,47 @@ export async function create(story, issue, transaction, us) {
         try {
             if (story.exclusive || us) {
                 let resStory = await models.Story.create({
-                    number: story.number,
+                    number: !isNaN(story.number) ? story.number : 1,
                     title: story.title ? story.title.trim() : '',
                     addinfo: story.addinfo,
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                await asyncForEach(story.writers, async writer => {
-                    if(writer.name && writer.name.trim() !== '')
-                        await resStory.associateIndividual(writer.name.trim(), 'WRITER', transaction);
-                });
+                if(story.writers)
+                    await asyncForEach(story.writers, async writer => {
+                        if(writer.name && writer.name.trim() !== '')
+                            await resStory.associateIndividual(writer.name.trim(), 'WRITER', transaction);
+                    });
 
-                await asyncForEach(story.pencilers, async penciler => {
-                    if(penciler.name && penciler.name.trim() !== '')
-                        await resStory.associateIndividual(penciler.name.trim(), 'PENCILER', transaction);
-                });
+                if(story.pencilers)
+                    await asyncForEach(story.pencilers, async penciler => {
+                        if(penciler.name && penciler.name.trim() !== '')
+                            await resStory.associateIndividual(penciler.name.trim(), 'PENCILER', transaction);
+                    });
 
-                await asyncForEach(story.inkers, async inker => {
-                    if(inker.name && inker.name.trim() !== '')
-                        await resStory.associateIndividual(inker.name.trim(), 'INKER', transaction);
-                });
+                if(story.inkers)
+                    await asyncForEach(story.inkers, async inker => {
+                        if(inker.name && inker.name.trim() !== '')
+                            await resStory.associateIndividual(inker.name.trim(), 'INKER', transaction);
+                    });
 
-                await asyncForEach(story.colourists, async colourist => {
-                    if(colourist.name && colourist.name.trim() !== '')
-                        await resStory.associateIndividual(colourist.name.trim(), 'COLOURIST', transaction);
-                });
+                if(story.colourists)
+                    await asyncForEach(story.colourists, async colourist => {
+                        if(colourist.name && colourist.name.trim() !== '')
+                            await resStory.associateIndividual(colourist.name.trim(), 'COLOURIST', transaction);
+                    });
 
-                await asyncForEach(story.letterers, async letterer => {
-                    if(letterer.name && letterer.name.trim() !== '')
-                        await resStory.associateIndividual(letterer.name.trim(), 'LETTERER', transaction);
-                });
+                if(story.letteres)
+                    await asyncForEach(story.letterers, async letterer => {
+                        if(letterer.name && letterer.name.trim() !== '')
+                            await resStory.associateIndividual(letterer.name.trim(), 'LETTERER', transaction);
+                    });
 
-                await asyncForEach(story.editors, async editors => {
-                    if(editors.name && editors.name.trim() !== '')
-                        await resStory.associateIndividual(editors.name.trim(), 'EDITOR', transaction);
-                });
+                if(story.editors)
+                    await asyncForEach(story.editors, async editors => {
+                        if(editors.name && editors.name.trim() !== '')
+                            await resStory.associateIndividual(editors.name.trim(), 'EDITOR', transaction);
+                    });
 
                 await resStory.save();
             } else {
@@ -276,19 +282,20 @@ export async function create(story, issue, transaction, us) {
                 });
 
                 if (!oStory)
-                    throw new Error("Story not found");
+                    throw new Error("Story " + story.parent.number + " not found");
 
                 let newStory = await models.Story.create({
                     title: story.title && story.title.trim() ? story.title.trim() : '',
-                    number: story.number,
+                    number: !isNaN(story.number) ? story.number : 1,
                     addinfo: story.addinfo ? story.addinfo : '',
                     fk_parent: oStory.id
                 }, {transaction: transaction});
 
-                await asyncForEach(story.translators, async translator => {
-                    if(translator.name && translator.name.trim() !== '')
-                        await newStory.associateIndividual(translator.name.trim(), 'TRANSLATOR', transaction);
-                });
+                if(story.translators)
+                    await asyncForEach(story.translators, async translator => {
+                        if(translator.name && translator.name.trim() !== '')
+                            await newStory.associateIndividual(translator.name.trim(), 'TRANSLATOR', transaction);
+                    });
 
                 await newStory.setIssue(issue, {transaction: transaction});
                 await newStory.save({transaction: transaction});

@@ -4,7 +4,7 @@ class Series extends Model {
     static tableName = 'Series';
 
     static associate(models) {
-        Series.hasMany(models.Issue, {as: 'Issue', foreignKey: 'fk_series', onDelete: 'cascade'});
+        Series.hasMany(models.Issue, {foreignKey: 'fk_series', onDelete: 'cascade'});
 
         Series.belongsTo(models.Publisher, {foreignKey: 'fk_publisher'})
     }

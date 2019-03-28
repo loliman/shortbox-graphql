@@ -81,10 +81,10 @@ export const resolvers = {
                 if (res[0] === 0)
                     throw new Error();
 
-                transaction.commit();
+                await transaction.commit();
                 return {id: res[0], sessionid: sessionid};
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         },
@@ -101,10 +101,10 @@ export const resolvers = {
                     transaction
                 );
 
-                transaction.commit();
+                await transaction.commit();
                 return res[0] !== 0;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         }

@@ -33,7 +33,7 @@ async function start() {
 
     console.log('🚀 Starting cleanup process');
 
-    cleanup.start();
+    //cleanup.start();
 
     console.log('🚀 Cleanup process is running');
 
@@ -49,10 +49,13 @@ async function start() {
         console.log('🚀 Migration Database is set up');
 
         console.log('🚀 Starting migration...');
-        await migrate();
-        console.log('🚀 Migration done! See logfile for eventual errors.');
-    }
 
+        migrate()
+            .then(o => console.log('🚀 Migration done! See logfile for eventual errors.'))
+            .catch((e) => {
+                console.log('🚀 Migration failed! See logfile for errors.');
+            });
+    }
 
     console.log('🚀 All done, lets go!');
 }

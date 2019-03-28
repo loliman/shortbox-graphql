@@ -31,9 +31,20 @@ export async function crawlSeries(series) {
 
             if (splitted.length > 0) {
                 let years = splitted[0].split('-');
-                startyear = parseInt(years[0]);
+
+                try {
+                    startyear = !isNaN(years[0]) ? 0 : parseInt(years[0]);
+                } catch (e) {
+                    startyear = 0;
+                }
+
                 if (years.length === 2)
-                    endyear = parseInt((years[1]));
+                    try {
+                        endyear = !isNaN(years[1]) ? 0 : parseInt((years[1]));
+                    } catch (e) {
+                        endyear = 0;
+                    }
+
                 else
                     endyear = startyear;
             }
@@ -54,7 +65,7 @@ export async function crawlSeries(series) {
                 }
             });
         } catch (e) {
-            reject(new Error("Series not found"));
+            reject(new Error("Series " + series.title + " (Vol." + series.volume + ") not found"));
         }
     });
 }
@@ -69,7 +80,7 @@ export async function crawlIssue(issue) {
                 }
             };
 
-            let res = {stories: []};
+            let res = {stories: [], editors: []};
             let $ = await rp(issueOptions);
 
             let infoBoxContent = $('.infobox').children();
@@ -97,7 +108,7 @@ export async function crawlIssue(issue) {
                             .last().children()
                             .first().children();
 
-                        if (variantCoverChildren.length !== 0) {
+                        if (variantCoverChildren && variantCoverChildren.length !== 0) {
                             variantCoverChildren.each((i, cover) => {
                                 let variantChildren = $(cover).children().last();
                                 let variantName = variantChildren.text().replace(variantChildren.children().text(), '').trim();
@@ -114,7 +125,7 @@ export async function crawlIssue(issue) {
                             .last().children();
 
                         let releaseDate = '';
-                        if (dateChildren.length === 2) {
+                        if (dateChildren && dateChildren.length === 2) {
                             releaseDate = dateChildren.eq(0).text().trim() + ', ' + dateChildren.eq(1).text().trim();
                         } else {
                             releaseDate = dateChildren.eq(3).text().trim();
@@ -125,7 +136,6 @@ export async function crawlIssue(issue) {
                     case 2:
                         break;
                     case 3:
-                        res.editors = [];
                         res.cover.artists = [];
 
                         let editorElement;
@@ -200,7 +210,7 @@ export async function crawlIssue(issue) {
 
             resolve(res);
         } catch (e) {
-            reject(new Error("Issue not found"));
+            reject(new Error("Issue " + issue.series.title + " (Vol." + issue.series.volume + ") " + issue.number + " not found"));
         }
     });
 }

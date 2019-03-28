@@ -21,7 +21,7 @@ class Cover extends Model {
                     where: {
                         name: name
                     },
-                    transaction
+                    transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Cover_Individual.create({fk_cover: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
                 });
@@ -160,16 +160,17 @@ export async function create(cover, issue, coverUrl, transaction, us) {
         try {
             if (cover.exclusive || us) {
                 let resCover = await models.Cover.create({
-                    number: cover.number,
+                    number: !isNaN(cover.number) ? cover.number : 1,
                     url: cover.number === 0 ? coverUrl : '',
                     addinfo: cover.addinfo,
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                await asyncForEach(cover.artists, async artist => {
-                    if(artist.name && artist.name.trim() !== '')
-                        await resCover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
-                });
+                if(cover.artist)
+                    await asyncForEach(cover.artists, async artist => {
+                        if(artist.name && artist.name.trim() !== '')
+                            await resCover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
+                    });
 
                 await resCover.save();
             } else {
@@ -196,7 +197,7 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                 let oCover = await models.Cover.findOne({where: {fk_issue: oVariant.id}}, transaction);
                 let newCover = await models.Cover.create({
                     url: cover.number === 0 ? coverUrl : '',
-                    number: cover.number,
+                    number: !isNaN(cover.number) ? cover.number : 1,
                     addinfo: cover.addinfo,
                     fk_parent: oCover.id
                 }, {transaction: transaction});

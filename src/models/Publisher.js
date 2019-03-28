@@ -122,10 +122,10 @@ export const resolvers = {
 
                 let del = await pub.delete(transaction);
 
-                transaction.commit();
+                await transaction.commit();
                 return del === 1;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         },
@@ -142,10 +142,10 @@ export const resolvers = {
                     original: item.us
                 }, {transaction: transaction});
 
-                transaction.commit();
+                await transaction.commit();
                 return res;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         },
@@ -167,10 +167,10 @@ export const resolvers = {
                 res.addinfo = item.addinfo;
                 res = await res.save({transaction: transaction});
 
-                transaction.commit();
+                await transaction.commit();
                 return res;
             } catch (e) {
-                transaction.rollback();
+                await transaction.rollback();
                 throw e;
             }
         }

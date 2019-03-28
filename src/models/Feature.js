@@ -18,7 +18,7 @@ class Feature extends Model {
                     where: {
                         name: name
                     },
-                    transaction
+                    transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Feature_Individual.create({fk_feature: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
                 });
@@ -109,10 +109,11 @@ export async function create(feature, issue, transaction) {
                 fk_issue: issue.id
             }, {transaction: transaction});
 
-            await asyncForEach(feature.writers, async writer => {
-                if(writer.name && writer.name.trim() !== '')
-                    await resFeature.associateIndividual(writer.name.trim(), 'WRITER', transaction);
-            });
+            if(feature.writers)
+                await asyncForEach(feature.writers, async writer => {
+                    if(writer.name && writer.name.trim() !== '')
+                        await resFeature.associateIndividual(writer.name.trim(), 'WRITER', transaction);
+                });
 
             await resFeature.save({transaction: transaction});
 
@@ -131,7 +132,7 @@ export async function getFeatures(issue, transaction) {
             await asyncForEach(rawFeatures, async feature => {
                 let rawFeature = {};
                 rawFeature.title = feature.title;
-                rawFeature.number = feature.number;
+                rawFeature.number = !isNaN(feature.number) ? feature.number : 1;
                 rawFeature.addinfo = feature.addinfo;
 
                 let writers = await models.Individual.findAll({
