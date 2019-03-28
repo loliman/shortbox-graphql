@@ -84,127 +84,121 @@ export async function crawlIssue(issue) {
             let $ = await rp(issueOptions);
 
             let infoBoxContent = $('.infobox').children();
-            let noPrice = $(infoBoxContent).eq(2).text().indexOf("Issue DetailsOriginal Price") === -1;
             infoBoxContent.each((i, c) => {
-                let s = i;
-                if (noPrice && i > 1)
-                    s += 1;
+                let html = $(c).html();
 
-                switch (s) {
-                    case 0:
-                        let coverChildren = $(c).children()
-                            .last().children();
+                if (html.indexOf('templateimage') !== -1) {
+                    let coverChildren = $(c).children()
+                        .last().children();
 
-                        let coverUrl = $(c).children()
-                            .last().children()
-                            .first().children()
-                            .first().children().attr("href").trim();
+                    let coverUrl = $(c).children()
+                        .last().children()
+                        .first().children()
+                        .first().children().attr("href").trim();
 
-                        res.cover = {url: coverUrl};
-                        res.variants = [];
+                    res.cover = {url: coverUrl};
+                    res.variants = [];
 
-                        let variantCoverChildren = coverChildren.last().children()
-                            .first().children()
-                            .last().children()
-                            .first().children();
+                    let variantCoverChildren = coverChildren.last().children()
+                        .first().children()
+                        .last().children()
+                        .first().children();
 
-                        if (variantCoverChildren && variantCoverChildren.length !== 0) {
-                            variantCoverChildren.each((i, cover) => {
-                                let variantChildren = $(cover).children().last();
-                                let variantName = variantChildren.text().replace(variantChildren.children().text(), '').trim();
+                    if (variantCoverChildren && variantCoverChildren.length !== 0) {
+                        variantCoverChildren.each((i, cover) => {
+                            let variantChildren = $(cover).children().last();
+                            let variantName = variantChildren.text().replace(variantChildren.children().text(), '').trim();
 
-                                if (variantName !== '' && variantName.indexOf("Textless") === -1) {
-                                    let variantUrl = variantChildren.first().children().first().attr("href").trim();
-                                    res.variants.push({variant: variantName, cover: {url: variantUrl}});
-                                }
-                            });
-                        }
-                        break;
-                    case 1:
-                        let dateChildren = $(c).children()
-                            .last().children();
-
-                        let releaseDate = '';
-                        if (dateChildren && dateChildren.length === 2) {
-                            releaseDate = dateChildren.eq(0).text().trim() + ', ' + dateChildren.eq(1).text().trim();
-                        } else {
-                            releaseDate = dateChildren.eq(3).text().trim();
-                        }
-
-                        res.releasedate = dateFormat(Date.parse(releaseDate), "yyyy-mm-dd");
-                        break;
-                    case 2:
-                        break;
-                    case 3:
-                        res.cover.artists = [];
-
-                        let editorElement;
-                        let artistElement;
-                        $(c).children().each((i, e) => {
-                            if ($(e).text().indexOf("Editor-in-Chief") !== -1)
-                                editorElement = e;
-                            else if ($(e).text().indexOf("Cover Artist") !== -1)
-                                artistElement = e;
+                            if (variantName !== '' && variantName.indexOf("Textless") === -1) {
+                                let variantUrl = variantChildren.first().children().first().attr("href").trim();
+                                res.variants.push({variant: variantName, cover: {url: variantUrl}});
+                            }
                         });
+                    }
+                } else if (html.indexOf(' <div style="font-size:12px;text-align:center;line-height:2em;"><a') === 0) {
+                    let dateChildren = $(c).children()
+                        .last().children();
 
-                        if (editorElement) {
-                            let editorsInChief = $(editorElement).children().last().children();
-                            editorsInChief.each((i, e) => {
-                                let editorInChief = $(e).text().trim();
+                    let releaseDate = '';
+                    if (dateChildren && dateChildren.length === 2) {
+                        releaseDate = dateChildren.eq(0).text().trim() + ', ' + dateChildren.eq(1).text().trim();
+                    } else {
+                        releaseDate = dateChildren.eq(3).text().trim();
+                    }
 
-                                if (editorInChief !== '')
-                                    res.editors.push({name: editorInChief});
-                            });
-                        }
+                    res.releasedate = dateFormat(Date.parse(releaseDate), "yyyy-mm-dd");
+                } else if (html.indexOf('Editor-in-Chief') !== -1 || html.indexOf('Cover Artists') !== -1) {
+                    res.cover.artists = [];
 
-                        if (artistElement) {
-                            let coverArtists = $(artistElement).children().last().children();
-                            coverArtists.each((i, e) => {
-                                let coverArtist = $(e).text().trim();
+                    let editorElement;
+                    let artistElement;
+                    $(c).children().each((i, e) => {
+                        if ($(e).text().indexOf("Editor-in-Chief") !== -1)
+                            editorElement = e;
+                        else if ($(e).text().indexOf("Cover Artist") !== -1)
+                            artistElement = e;
+                    });
 
-                                if (coverArtist !== '')
-                                    res.cover.artists.push({name: coverArtist});
-                            });
-                        }
-                        break;
-                    default:
-                        let story = {};
-                        let storyChildren = $(c).children();
+                    if (editorElement) {
+                        let editorsInChief = $(editorElement).children().last().children();
+                        editorsInChief.each((i, e) => {
+                            let editorInChief = $(e).text().trim();
 
-                        if (storyChildren.first().html().indexOf('<tbody') === 0)
-                            storyChildren = storyChildren.first().children();
+                            if (editorInChief !== '')
+                                res.editors.push({name: editorInChief});
+                        });
+                    }
 
+                    if (artistElement) {
+                        let coverArtists = $(artistElement).children().last().children();
+                        coverArtists.each((i, e) => {
+                            let coverArtist = $(e).text().trim();
+
+                            if (coverArtist !== '')
+                                res.cover.artists.push({name: coverArtist});
+                        });
+                    }
+                } else if (html.indexOf('<tbody>') === 0 && html.indexOf('Issue Details') === -1) {
+                    let story = {};
+                    let storyChildren = $(c).children();
+
+                    if (storyChildren.first().html().indexOf('<tbody') === 0)
                         storyChildren = storyChildren.first().children();
 
-                        if (i !== infoBoxContent.length - 1) {
-                            let storyName = storyChildren.first().children()
-                                .last().children()
-                                .first().children()
-                                .first().children().text().trim();
+                    storyChildren = storyChildren.first().children();
 
-                            if(storyName.indexOf('"') === 0)
-                                storyName = storyName.substring(1, storyName.length-1);
+                    if (i !== infoBoxContent.length - 1) {
+                        let storyName = storyChildren.first().children()
+                            .last().children()
+                            .first().children()
+                            .first().children().text().trim();
 
-                            story.title = storyName;
-                            story.individuals = [];
+                        if (storyName.indexOf('"') === 0)
+                            storyName = storyName.substring(1, storyName.length - 1);
 
-                            let storyDetailsChildren = storyChildren.last().children()
-                                .first().children();
+                        story.title = storyName;
+                        story.individuals = [];
 
-                            storyDetailsChildren.each((i, c) => {
-                                let type = $(c).children().first().children().last().text().trim();
-                                let individuals = $(c).children().last().children();
-                                individuals.each((i, e) => {
-                                    let individual = $(e).text().trim();
+                        let storyDetailsChildren = storyChildren.last().children()
+                            .first().children();
 
-                                    if (individual !== '')
-                                        story.individuals.push({name: individual, type: type.toUpperCase().substring(0, type.length-1)});
-                                });
+                        storyDetailsChildren.each((i, c) => {
+                            let type = $(c).children().first().children().last().text().trim();
+                            let individuals = $(c).children().last().children();
+                            individuals.each((i, e) => {
+                                let individual = $(e).text().trim();
+
+                                if (individual !== '')
+                                    story.individuals.push({
+                                        name: individual,
+                                        type: type.toUpperCase().substring(0, type.length - 1)
+                                    });
                             });
+                        });
 
-                            story.number = res.stories.length + 1;
-                            res.stories.push(story);
-                        }
+                        story.number = res.stories.length + 1;
+                        res.stories.push(story);
+                    }
                 }
             });
 
