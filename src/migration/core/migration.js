@@ -30,17 +30,17 @@ async function migrateIssues() {
     return new Promise(async (resolve, reject) => {
         try {
             let issues = await migration.Issue.findAll({
-                where: {'$Series.original$': 0},
-                include: [migration.Series]
+                where: {originalissue: 0}
             });
+
+            //let issues = [];
+            //issues.push(await migration.Issue.findOne({where: {id: 2863}}));
 
             await asyncForEach(issues, async (issue, index, array) => {
                 let issueToCreate = {};
                 let variant = '';
 
                 try {
-                    console.log("Migrating issue " + (index+1) + " of " + array.length);
-
                     issueToCreate.title = issue.title;
                     issueToCreate.number = issue.number;
                     issueToCreate.format = issue.format;
@@ -79,6 +79,8 @@ async function migrateIssues() {
                         }
                     };
 
+                    console.log("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " (" + (index+1) + " of " + array.length + ")");
+
                     issueToCreate.stories = [];
                     let stories = await migration.Story.findAll({
                         include: [{
@@ -102,6 +104,9 @@ async function migrateIssues() {
                             }
                         });
 
+                        if(!parent)
+                            throw Error('No parent found for story ' + story.number  + " [ID#" + story.id + "]");
+                        
                         let parentIssue;
                         let parentIssues = await parent.getIssues();
                         await asyncForEach(parentIssues, async p => {
@@ -112,6 +117,12 @@ async function migrateIssues() {
                         let parentSeries = await migration.Series.findOne({
                             where: {id: parentIssue.fk_series}
                         });
+
+                        if(!parentIssue)
+                            throw Error('No issue found for parent ' + parentSeries.title + " (Vol." + parentSeries.volume + ") [ID#" + parentIssue.id + "]");
+
+                        if(parentIssue.number === '')
+                            throw Error('No issue number found for parent ' + parentSeries.title + " (Vol." + parentSeries.volume + ") [ID#" + parentIssue.id + "]");
 
                         let storyObj = {
                             number: issueToCreate.stories.length + 1,
@@ -148,8 +159,11 @@ async function migrateIssues() {
                         let transaction = await models.sequelize.transaction();
 
                         let res = await create(issueToCreate, transaction).catch(async (e) => {
-                            stream.write("Migrating issue " + issueToCreate.series.title + " Vol." + issueToCreate.series.volume + " #" + issueToCreate.number + variant + " unsuccessful\n");
-                            stream.write(e + "\n");
+                            if(e.stack.indexOf("Issue") !== -1) {
+                                stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful\n");
+                                stream.write(e.stack + "\n\n");
+                            }
+
                             await transaction.rollback();
                         });
 
@@ -157,8 +171,10 @@ async function migrateIssues() {
                             await transaction.commit();
                     }
                 } catch (e) {
-                    stream.write("Migrating issue " + issueToCreate.series.title + " Vol." + issueToCreate.series.volume + " #" + issueToCreate.number + variant + " unsuccessful\n");
-                    stream.write(e + "\n");
+                    if(e.stack.indexOf("Issue") !== -1) {
+                        stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful\n");
+                        stream.write(e.stack + "\n\n");
+                    }
                 }
             });
 

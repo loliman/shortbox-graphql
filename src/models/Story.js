@@ -2,7 +2,7 @@ import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
 import {findOrCrawlIssue} from "./Issue";
-import {asyncForEach} from "../util/util";
+import {asyncForEach, romanize} from "../util/util";
 
 class Story extends Model {
     static tableName = 'Story';
@@ -111,15 +111,36 @@ export const resolvers = {
         title: (parent) => parent.title,
         number: (parent) => parent.number,
         addinfo: (parent) => parent.addinfo,
-        issue: async (parent) => await models.Issue.findById(parent.fk_issue),
+        issue: async (parent) => {
+            let issue = await models.Issue.findById(parent.fk_issue);
+            return await models.Issue.findOne({
+                where: {fk_series: issue.fk_series, number: issue.number},
+                attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
+                    [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
+                    [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
+                    'number', 'fk_series']
+            });
+        },
         parent: async (parent) => await models.Story.findById(parent.fk_parent),
-        children: async (parent) => await models.Story.findAll({
-            where: {fk_parent: parent.id},
-            include: [models.Issue],
-            group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-            order: [[models.Issue, 'releasedate', 'ASC']]
-        }),
+        children: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Story.findAll({
+                where: {fk_parent: parent.id},
+                include: [{model: models.Issue,
+                    attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
+                        [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
+                        [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
+                        'number', 'fk_series']}],
+                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
+                order: [[models.Issue, 'releasedate', 'ASC']]
+            });
+        },
         onlyapp: async (parent) => {
+            if(parent.fk_parent === null)
+                return true;
+
             let stories = await models.Story.findAll({
                 where: {fk_parent: parent.fk_parent},
                 include: [models.Issue],
@@ -130,6 +151,9 @@ export const resolvers = {
             return stories.length === 1;
         },
         firstapp: async (parent) => {
+            if(parent.fk_parent === null)
+                return true;
+
             let stories = await models.Story.findAll({
                 where: {fk_parent: parent.fk_parent},
                 include: [models.Issue],
@@ -156,69 +180,104 @@ export const resolvers = {
         exclusive: async (parent) => {
             return parent.fk_parent === null;
         },
-        pencilers: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Story
-            }],
-            where: {
-                '$Stories->Story_Individual.fk_story$': parent.id,
-                '$Stories->Story_Individual.type$': 'PENCILER'
-            }
-        }),
-        writers: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Story
-            }],
-            where: {
-                '$Stories->Story_Individual.fk_story$': parent.id,
-                '$Stories->Story_Individual.type$': 'WRITER'
-            }
-        }),
-        inkers: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Story
-            }],
-            where: {
-                '$Stories->Story_Individual.fk_story$': parent.id,
-                '$Stories->Story_Individual.type$': 'INKER'
-            }
-        }),
-        colourists: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Story
-            }],
-            where: {
-                '$Stories->Story_Individual.fk_story$': parent.id,
-                '$Stories->Story_Individual.type$': 'COLOURIST'
-            }
-        }),
-        letterers: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Story
-            }],
-            where: {
-                '$Stories->Story_Individual.fk_story$': parent.id,
-                '$Stories->Story_Individual.type$': 'LETTERER'
-            }
-        }),
-        editors: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Story
-            }],
-            where: {
-                '$Stories->Story_Individual.fk_story$': parent.id,
-                '$Stories->Story_Individual.type$': 'EDITOR'
-            }
-        }),
-        translators: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Story
-            }],
-            where: {
-                '$Stories->Story_Individual.fk_story$': parent.id,
-                '$Stories->Story_Individual.type$': 'TRANSLATOR'
-            }
-        })
+        pencilers: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Individual.fk_story$': parent.id,
+                    '$Stories->Story_Individual.type$': 'PENCILER'
+                }
+            })
+        },
+        writers: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Individual.fk_story$': parent.id,
+                    '$Stories->Story_Individual.type$': 'WRITER'
+                }
+            })
+        },
+        inkers: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Individual.fk_story$': parent.id,
+                    '$Stories->Story_Individual.type$': 'INKER'
+                }
+            })
+        },
+        colourists: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Individual.fk_story$': parent.id,
+                    '$Stories->Story_Individual.type$': 'COLOURIST'
+                }
+            })
+        },
+        letterers: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Individual.fk_story$': parent.id,
+                    '$Stories->Story_Individual.type$': 'LETTERER'
+                }
+            })
+        },
+        editors: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Individual.fk_story$': parent.id,
+                    '$Stories->Story_Individual.type$': 'EDITOR'
+                }
+            })
+        },
+        translators: async (parent) => {
+            if(parent.fk_parent === null)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Individual.fk_story$': parent.id,
+                    '$Stories->Story_Individual.type$': 'TRANSLATOR'
+                }
+            })
+        }
     }
 };
 
@@ -282,7 +341,7 @@ export async function create(story, issue, transaction, us) {
                 });
 
                 if (!oStory)
-                    throw new Error("Story " + story.parent.number + " not found");
+                    throw new Error("Story " + story.parent.issue.series.title + " (Vol." + story.parent.issue.series.volume + ") " + story.parent.issue.number + " [" + romanize(story.parent.number) + "] not found");
 
                 let newStory = await models.Story.create({
                     title: story.title && story.title.trim() ? story.title.trim() : '',

@@ -195,12 +195,16 @@ export const resolvers = {
     Query: {
         issues: async (_, {series}) => {
             let res = await models.Issue.findAll({
+                attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
+                    [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
+                    [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
+                    'number', 'fk_series'],
                 where: {
                     '$Series.title$': series.title,
                     '$Series.volume$': series.volume,
                     '$Series->Publisher.name$': series.publisher.name
                 },
-                order: [['number', 'ASC']],
+                order: [['number', 'ASC'], ['variant', 'DESC'], ['title', 'DESC'], ['format', 'DESC']],
                 group: ['fk_series', 'number'],
                 include: [
                     {
@@ -227,7 +231,7 @@ export const resolvers = {
                 }
             ],
             order: [['updatedAt', 'DESC']],
-            limit: 25
+            limit: 50
         }),
         issue: async (_, {issue, edit}) => {
             let where = {
@@ -605,6 +609,9 @@ export const resolvers = {
         },
         variant: (parent) => parent.variant,
         features: async (parent) => {
+            if((await (await parent.getSeries()).getPublisher()).original)
+                return [];
+
             let features = await models.Feature.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]});
 
             if(features.length === 0 && !parent.edit) {
@@ -654,15 +661,20 @@ export const resolvers = {
         releasedate: (parent) => parent.releasedate,
         verified: (parent) => parent.verified,
         addinfo: (parent) => parent.addinfo,
-        editors: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Issue
-            }],
-            where: {
-                '$Issues->Issue_Individual.fk_issue$': parent.id,
-                '$Issues->Issue_Individual.type$': 'EDITOR'
-            }
-        }),
+        editors: async (parent) => {
+            if(!(await (await parent.getSeries()).getPublisher()).original)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Issue
+                }],
+                where: {
+                    '$Issues->Issue_Individual.fk_issue$': parent.id,
+                    '$Issues->Issue_Individual.type$': 'EDITOR'
+                }
+            })
+        },
         createdAt: (parent) => parent.createdAt,
         updatedAt: (parent) => parent.updatedAt
     }
@@ -784,6 +796,7 @@ export function findOrCrawlIssue(i, transaction) {
             }
 
             let crawledIssue;
+
             if(!issue) {
                 crawledIssue = await crawlIssue(i);
                 issue = await models.Issue.create({

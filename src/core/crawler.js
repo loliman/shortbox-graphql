@@ -4,9 +4,10 @@ const rp = require('request-promise');
 
 export async function crawlSeries(series) {
     return new Promise(async (resolve, reject) => {
+        let url = generateMarvelDbSeriesUrl(series);
         try {
             const seriesOptions = {
-                uri: generateMarvelDbSeriesUrl(series),
+                uri: url,
                 transform: function (body) {
                     return cheerio.load(body);
                 }
@@ -27,7 +28,7 @@ export async function crawlSeries(series) {
 
             let startyear = 0;
             let endyear = 0;
-            let publisher = 'Unknown';
+            let publisher = 'Marvel Comics';
 
             if (splitted.length > 0) {
                 let years = splitted[0].split('-');
@@ -65,22 +66,23 @@ export async function crawlSeries(series) {
                 }
             });
         } catch (e) {
-            reject(new Error("Series " + series.title + " (Vol." + series.volume + ") not found"));
+            reject(new Error("Series " + series.title + " (Vol." + series.volume + ") not found [" + url + "]"));
         }
     });
 }
 
 export async function crawlIssue(issue) {
     return new Promise(async (resolve, reject) => {
+        let url = generateMarvelDbIssueUrl(issue);
         try {
             const issueOptions = {
-                uri: generateMarvelDbIssueUrl(issue),
+                uri: url,
                 transform: function (body) {
                     return cheerio.load(body);
                 }
             };
 
-            let res = {stories: [], editors: []};
+            let res = {stories: [], editors: [], cover: {artists: []}, variants: []};
             let $ = await rp(issueOptions);
 
             let infoBoxContent = $('.infobox').children();
@@ -96,8 +98,7 @@ export async function crawlIssue(issue) {
                         .first().children()
                         .first().children().attr("href").trim();
 
-                    res.cover = {url: coverUrl};
-                    res.variants = [];
+                    res.cover.url = coverUrl;
 
                     let variantCoverChildren = coverChildren.last().children()
                         .first().children()
@@ -107,11 +108,14 @@ export async function crawlIssue(issue) {
                     if (variantCoverChildren && variantCoverChildren.length !== 0) {
                         variantCoverChildren.each((i, cover) => {
                             let variantChildren = $(cover).children().last();
-                            let variantName = variantChildren.text().replace(variantChildren.children().text(), '').trim();
+                            let variantName = variantChildren.text().substring(variantChildren.text().indexOf('>') + 1).trim();
 
                             if (variantName !== '' && variantName.indexOf("Textless") === -1) {
-                                let variantUrl = variantChildren.first().children().first().attr("href").trim();
-                                res.variants.push({variant: variantName, cover: {url: variantUrl}});
+                                let exists = res.variants.find(v => v.variant == variantName);
+                                if(!exists) {
+                                    let variantUrl = variantChildren.first().children().first().attr("href").trim();
+                                    res.variants.push({variant: variantName, cover: {url: variantUrl}});
+                                }
                             }
                         });
                     }
@@ -128,8 +132,6 @@ export async function crawlIssue(issue) {
 
                     res.releasedate = dateFormat(Date.parse(releaseDate), "yyyy-mm-dd");
                 } else if (html.indexOf('Editor-in-Chief') !== -1 || html.indexOf('Cover Artists') !== -1) {
-                    res.cover.artists = [];
-
                     let editorElement;
                     let artistElement;
                     $(c).children().each((i, e) => {
@@ -142,10 +144,14 @@ export async function crawlIssue(issue) {
                     if (editorElement) {
                         let editorsInChief = $(editorElement).children().last().children();
                         editorsInChief.each((i, e) => {
+
                             let editorInChief = $(e).text().trim();
 
-                            if (editorInChief !== '')
-                                res.editors.push({name: editorInChief});
+                            if (editorInChief !== '') {
+                                let exists = res.editors.find(v => v.name === editorInChief);
+                                if(!exists)
+                                    res.editors.push({name: editorInChief});
+                            }
                         });
                     }
 
@@ -154,8 +160,11 @@ export async function crawlIssue(issue) {
                         coverArtists.each((i, e) => {
                             let coverArtist = $(e).text().trim();
 
-                            if (coverArtist !== '')
-                                res.cover.artists.push({name: coverArtist});
+                            if (coverArtist !== '') {
+                                let exists = res.cover.artists.find(v => v.name === coverArtist);
+                                if (!exists)
+                                    res.cover.artists.push({name: coverArtist});
+                            }
                         });
                     }
                 } else if (html.indexOf('<tbody>') === 0 && html.indexOf('Issue Details') === -1) {
@@ -188,11 +197,16 @@ export async function crawlIssue(issue) {
                             individuals.each((i, e) => {
                                 let individual = $(e).text().trim();
 
-                                if (individual !== '')
-                                    story.individuals.push({
-                                        name: individual,
-                                        type: type.toUpperCase().substring(0, type.length - 1)
-                                    });
+                                if (individual !== '') {
+                                    let exists = story.individuals.find(v => (v.name === individual && v.type === type.toUpperCase().substring(0, type.length - 1)));
+
+                                    if(!exists) {
+                                        story.individuals.push({
+                                            name: individual,
+                                            type: type.toUpperCase().substring(0, type.length - 1)
+                                        });
+                                    }
+                                }
                             });
                         });
 
@@ -204,17 +218,17 @@ export async function crawlIssue(issue) {
 
             resolve(res);
         } catch (e) {
-            reject(new Error("Issue " + issue.series.title + " (Vol." + issue.series.volume + ") " + issue.number + " not found"));
+            reject(new Error("Issue " + issue.series.title + " (Vol." + issue.series.volume + ") " + issue.number + " not found [" + url + "]"));
         }
     });
 }
 
 function generateMarvelDbSeriesUrl(series) {
-    let url = "https://marvel.fandom.com/wiki/" + series.title + "_Vol_" + series.volume;
+    let url = "https://marvel.fandom.com/wiki/" + encodeURIComponent(series.title) + "_Vol_" + series.volume;
     return url.replace(new RegExp(" ", 'g'), "_");
 }
 
 function generateMarvelDbIssueUrl(issue) {
-    let url = "https://marvel.fandom.com/wiki/" + issue.series.title + "_Vol_" + issue.series.volume + "_" + issue.number;
+    let url = "https://marvel.fandom.com/wiki/" + encodeURIComponent(issue.series.title) + "_Vol_" + issue.series.volume + "_" + issue.number;
     return url.replace(new RegExp(" ", 'g'), "_");
 }

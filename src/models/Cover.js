@@ -99,13 +99,21 @@ export const resolvers = {
         number: (parent) => parent.number,
         parent: async (parent) => await models.Cover.findById(parent.fk_parent),
         issue: async (parent) => await models.Issue.findById(parent.fk_issue),
-        children: async (parent) => await models.Cover.findAll({
-            where: {fk_parent: parent.id},
-            include: [models.Issue],
-            group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-            order: [[models.Issue, 'releasedate', 'ASC']]
-        }),
+        children: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Cover.findAll({
+                where: {fk_parent: parent.id},
+                include: [models.Issue],
+                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
+                order: [[models.Issue, 'releasedate', 'ASC']]
+            })
+        },
         onlyapp: async (parent) => {
+            if(parent.fk_parent === null)
+                return true;
+
             let covers = await models.Cover.findAll({
                 where: {fk_parent: parent.fk_parent},
                 include: [models.Issue],
@@ -116,6 +124,9 @@ export const resolvers = {
             return covers.length === 1;
         },
         firstapp: async (parent) => {
+            if(parent.fk_parent === null)
+                return true;
+
             let cover = await models.Cover.findAll({
                 where: {fk_parent: parent.fk_parent},
                 include: [models.Issue],
@@ -143,15 +154,20 @@ export const resolvers = {
             return parent.fk_parent === null;
         },
         addinfo: (parent) => parent.addinfo,
-        artists: async (parent) => await models.Individual.findAll({
-            include: [{
-                model: models.Cover
-            }],
-            where: {
-                '$Covers->Cover_Individual.fk_cover$': parent.id,
-                '$Covers->Cover_Individual.type$': 'ARTIST'
-            }
-        })
+        artists: async (parent) => {
+            if(parent.fk_parent !== null)
+                return [];
+
+            return await models.Individual.findAll({
+                include: [{
+                    model: models.Cover
+                }],
+                where: {
+                    '$Covers->Cover_Individual.fk_cover$': parent.id,
+                    '$Covers->Cover_Individual.type$': 'ARTIST'
+                }
+            })
+        }
     }
 };
 
@@ -192,7 +208,7 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                 });
 
                 if (!oVariant)
-                    throw new Error("Variant not found");
+                    throw new Error("Variant " + cover.parent.issue.series.title + " (Vol." + cover.parent.issue.series.volume + ") " + cover.parent.issue.number + " [" + cover.parent.issue.variant + "] not found");
 
                 let oCover = await models.Cover.findOne({where: {fk_issue: oVariant.id}}, transaction);
                 let newCover = await models.Cover.create({
