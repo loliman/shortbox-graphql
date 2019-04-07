@@ -604,7 +604,7 @@ export const resolvers = {
         variants: async (parent) => {
             return await models.Issue.findAll({
                 where: {fk_series: parent.fk_series, number: parent.number},
-                order: [['releasedate', 'ASC'], ['createdAt', 'ASC'], ['variant', 'ASC']]
+                order: [['variant', 'ASC'], ['title', 'ASC'], ['format', 'ASC'], ['releasedate', 'ASC']]
             })
         },
         variant: (parent) => parent.variant,
