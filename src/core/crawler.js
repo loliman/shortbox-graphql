@@ -61,7 +61,7 @@ export async function crawlSeries(series) {
                 addinfo: '',
                 publisher: {
                     name: publisher,
-                    original: true,
+                    original: 1,
                     addinfo: ''
                 }
             });
@@ -87,7 +87,7 @@ export async function crawlIssue(issue) {
 
             let infoBoxContent = $('.infobox').children();
             infoBoxContent.each((i, c) => {
-                let html = $(c).html();
+                let html = $(c).html().trim();
 
                 if (html.indexOf('templateimage') !== -1) {
                     let coverChildren = $(c).children()
@@ -119,7 +119,7 @@ export async function crawlIssue(issue) {
                             }
                         });
                     }
-                } else if (html.indexOf(' <div style="font-size:12px;text-align:center;line-height:2em;"><a') === 0) {
+                } else if (html.indexOf('<div style="font-size:12px;text-align:center;line-height:2em;"><') === 0) {
                     let dateChildren = $(c).children()
                         .last().children();
 

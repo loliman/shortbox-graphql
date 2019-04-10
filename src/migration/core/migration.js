@@ -159,10 +159,8 @@ async function migrateIssues() {
                         let transaction = await models.sequelize.transaction();
 
                         let res = await create(issueToCreate, transaction).catch(async (e) => {
-                            if(e.stack.indexOf("Issue") !== -1) {
-                                stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful\n");
-                                stream.write(e.stack + "\n\n");
-                            }
+                            stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful ");
+                            stream.write("[ERROR: " + e + "]\n");
 
                             await transaction.rollback();
                         });
@@ -171,10 +169,8 @@ async function migrateIssues() {
                             await transaction.commit();
                     }
                 } catch (e) {
-                    if(e.stack.indexOf("Issue") !== -1) {
-                        stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful\n");
-                        stream.write(e.stack + "\n\n");
-                    }
+                    stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful ");
+                    stream.write("[ERROR: " + e + "]\n");
                 }
             });
 
