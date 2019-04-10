@@ -629,12 +629,17 @@ export const resolvers = {
             let stories = await models.Story.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]});
 
             if(stories.length === 0 && !parent.edit) {
-                let issue = await models.Issue.findOne({
+                let issues = await models.Issue.findAll({
                     where: {fk_series: parent.fk_series, number: parent.number},
-                    order: [['releasedate', 'ASC'], ['createdAt', 'ASC'], ['variant', 'ASC']]
+                    order: [['createdAt', 'ASC']]
                 });
 
-                stories = await models.Story.findAll({where: {fk_issue: issue.id}, order: [['number', 'ASC']]});
+                await asyncForEach(issues, async issue => {
+                    let issueStories = await models.Story.findAll({where: {fk_issue: issue.id}, order: [['number', 'ASC']]});
+
+                    if(issueStories.length > 0 && stories.length === 0)
+                        stories = issueStories;
+                });
             }
 
             return stories;
@@ -642,14 +647,17 @@ export const resolvers = {
         covers: async (parent) => {
             let covers = await models.Cover.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]});
 
-            if(covers.length === 0 && !parent.edit && !(await (await parent.getSeries()).getPublisher()).original) {
-                let issue = await models.Issue.findOne({
-                    where: {fk_series: parent.fk_series, number: parent.number},
-                    order: [['releasedate', 'ASC'], ['createdAt', 'ASC'], ['variant', 'ASC']]
-                });
+            let issues = await models.Issue.findAll({
+                where: {fk_series: parent.fk_series, number: parent.number},
+                order: [['createdAt', 'ASC']]
+            });
 
-                covers = await models.Cover.findAll({where: {fk_issue: issue.id}, order: [['number', 'ASC']]});
-            }
+            await asyncForEach(issues, async issue => {
+                let issueCovers = await models.Cover.findAll({where: {fk_issue: issue.id}, order: [['number', 'ASC']]});
+
+                if(issueCovers.length > 0 && covers.length === 0)
+                    covers = issueStories;
+            });
 
             return covers;
         },
