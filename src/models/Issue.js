@@ -565,10 +565,10 @@ export const resolvers = {
                     '$Series->Publisher.name$': item.series.publisher.name.trim()
                 };
 
-                if (item.format.trim())
+                if (item.format)
                     where.format = item.format.trim();
 
-                if (item.variant.trim())
+                if (item.variant)
                     where.variant = item.variant.trim();
 
                 let res = await models.Issue.findOne({

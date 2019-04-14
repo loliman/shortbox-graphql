@@ -3,8 +3,34 @@ import models from "../../models";
 import {asyncForEach} from "../../util/util";
 import fs from 'fs';
 import {create} from "../../models/Issue";
+import {crawlSeries} from "../../core/crawler";
 
 var stream;
+
+export async function fixUsSeries() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let series = await models.Series.findAll({
+                where: {startyear: 0}
+            });
+
+            await asyncForEach(series, async (s) => {
+                let crawledSeries = await crawlSeries(s);
+
+                s.startyear = crawledSeries.startyear;
+                s.endyear = crawledSeries.endyear;
+
+                await s.save();
+            });
+
+            resolve(true);
+        } catch (e) {
+            console.log(e);
+            //Don't reject, errors are okay
+            resolve(false);
+        }
+    });
+}
 
 export async function migrate() {
     return new Promise(async (resolve, reject) => {

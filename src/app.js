@@ -4,7 +4,7 @@ import fs from "fs";
 import {coverDir, migrateOnStartup, wwwDir} from "./config/config";
 import {cleanup} from './core/cleanup';
 import migrationDatabase from "./migration/core/database";
-import {migrate} from "./migration/core/migration";
+import {fixUsSeries, migrate} from "./migration/core/migration";
 
 const shell = require('shelljs');
 
@@ -33,13 +33,15 @@ async function start() {
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting cleanup process");
 
-    //cleanup.start();
+    cleanup.start();
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Cleanup process is running");
 
     let {url} = await server.listen();
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Server is up and running at " + url);
+
+    fixUsSeries();
 
     if (migrateOnStartup) {
         await migrationDatabase.authenticate();

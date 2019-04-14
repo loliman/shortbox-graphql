@@ -65,7 +65,7 @@ async function run() {
                 });
 
                 if(del) {
-                    let stories = await models.Cover.findAll({where: {fk_issue: variant.id}, transaction});
+                    let stories = await models.Story.findAll({where: {fk_issue: variant.id}, transaction});
 
                     await asyncForEach(stories, async (story) => {
                         if(del) {

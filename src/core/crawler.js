@@ -22,10 +22,9 @@ export async function crawlSeries(series) {
                 .first();
 
             let text = messageBox.text().substring();
-            text = text.substring(text.indexOf('('), text.indexOf('.')).trim().replace('published by ', '');
+            text = text.substring(text.indexOf('('), text.lastIndexOf('.')).trim().replace('published by ', '');
             text = text.substring(1, text.length - 1);
             let splitted = text.split(')');
-
             let startyear = 0;
             let endyear = 0;
             let publisher = 'Marvel Comics';
@@ -34,18 +33,17 @@ export async function crawlSeries(series) {
                 let years = splitted[0].split('-');
 
                 try {
-                    startyear = !isNaN(years[0]) ? 0 : parseInt(years[0]);
+                    startyear = years[0] === '' || isNaN(years[0]) ? 0 : parseInt(years[0]);
                 } catch (e) {
                     startyear = 0;
                 }
 
                 if (years.length === 2)
                     try {
-                        endyear = !isNaN(years[1]) ? 0 : parseInt((years[1]));
+                        endyear = years[1] === '' || isNaN(years[1]) ? 0 : parseInt((years[1]));
                     } catch (e) {
                         endyear = 0;
                     }
-
                 else
                     endyear = startyear;
             }
