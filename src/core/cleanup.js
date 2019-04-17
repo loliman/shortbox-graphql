@@ -5,7 +5,7 @@ let CronJob = require('cron').CronJob;
 
 //Job will on every full hour
 export const cleanup = new CronJob({
-    cronTime: '0 */1 * * *',
+    cronTime: '0 3 * * *',
     onTick: () => {
         run();
     },
