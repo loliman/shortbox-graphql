@@ -15,11 +15,11 @@ export const cleanup = new CronJob({
 async function run() {
     const transaction = await models.sequelize.transaction();
 
-    console.log('Starting cleanup...');
+    console.log("[" + (new Date()).toUTCString() + "] Starting cleanup...");
     try {
         let issues = await models.Issue.findAll({
             where: {
-                '$Series->Publisher.original$': true
+                '$Series->Publisher.original$': 1
             },
             group: ['fk_series', 'number'],
             include: [
@@ -65,7 +65,7 @@ async function run() {
                 });
 
                 if(del) {
-                    let stories = await models.Cover.findAll({where: {fk_issue: variant.id}, transaction});
+                    let stories = await models.Story.findAll({where: {fk_issue: variant.id}, transaction});
 
                     await asyncForEach(stories, async (story) => {
                         if(del) {
@@ -91,8 +91,8 @@ async function run() {
                     });
                 });
         });
-        console.log('Deleted ' + coverCount + ' covers.');
-        console.log('Deleted ' + storyCount + ' stories.');
+        console.log("[" + (new Date()).toUTCString() + "] Deleted " + coverCount + " covers.");
+        console.log("[" + (new Date()).toUTCString() + "] Deleted " + storyCount + " stories.");
 
         //Remove all US Issues without content
         let issueCount = 0;
@@ -133,12 +133,12 @@ async function run() {
                     issueCount++;
                 });
         });
-        console.log('Deleted ' + issueCount + ' issues.');
+        console.log("[" + (new Date()).toUTCString() + "] Deleted " + issueCount + " issues.");
 
         //Remove all US Series without issues
         let series = await models.Series.findAll({
             where: {
-                '$Publisher.original$': true
+                '$Publisher.original$': 1
             },
             include: [models.Publisher],
             transaction
@@ -154,12 +154,12 @@ async function run() {
                 seriesCount++;
             }
         });
-        console.log('Deleted ' + seriesCount + ' series.');
+        console.log("[" + (new Date()).toUTCString() + "] Deleted " + seriesCount + " series.");
 
         //Remove all US publishers without series
         let publishers = await models.Publisher.findAll({
             where: {
-                original: true
+                original: 1
             },
             transaction
         });
@@ -174,7 +174,7 @@ async function run() {
                 publisherCount++;
             }
         });
-        console.log('Deleted ' + publisherCount + ' publishers.');
+        console.log("[" + (new Date()).toUTCString() + "] Deleted " + publisherCount + " publishers.");
 
         //Remove all Individuals without content
         let individuals = await models.Individual.findAll({transaction});
@@ -203,13 +203,13 @@ async function run() {
                 individualCount++;
             }
         });
-        console.log('Deleted ' + individualCount + ' individuals.');
+        console.log("[" + (new Date()).toUTCString() + "] Deleted " + individualCount + " individuals.");
 
         await transaction.commit();
-        console.log('Cleanup done.');
+        console.log("[" + (new Date()).toUTCString() + "] Cleanup done.");
     } catch (e) {
         console.log(e);
         await transaction.rollback();
-        console.log('Error during cleanup... rolling back.');
+        console.log("[" + (new Date()).toUTCString() + "] Error during cleanup... rolling back.");
     }
 }

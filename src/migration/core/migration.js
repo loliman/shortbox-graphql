@@ -3,8 +3,34 @@ import models from "../../models";
 import {asyncForEach} from "../../util/util";
 import fs from 'fs';
 import {create} from "../../models/Issue";
+import {crawlSeries} from "../../core/crawler";
 
 var stream;
+
+export async function fixUsSeries() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let series = await models.Series.findAll({
+                where: {startyear: 0}
+            });
+
+            await asyncForEach(series, async (s) => {
+                let crawledSeries = await crawlSeries(s);
+
+                s.startyear = crawledSeries.startyear;
+                s.endyear = crawledSeries.endyear;
+
+                await s.save();
+            });
+
+            resolve(true);
+        } catch (e) {
+            console.log(e);
+            //Don't reject, errors are okay
+            resolve(false);
+        }
+    });
+}
 
 export async function migrate() {
     return new Promise(async (resolve, reject) => {
@@ -159,10 +185,8 @@ async function migrateIssues() {
                         let transaction = await models.sequelize.transaction();
 
                         let res = await create(issueToCreate, transaction).catch(async (e) => {
-                            if(e.stack.indexOf("Issue") !== -1) {
-                                stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful\n");
-                                stream.write(e.stack + "\n\n");
-                            }
+                            stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful ");
+                            stream.write("[ERROR: " + e + "]\n");
 
                             await transaction.rollback();
                         });
@@ -171,10 +195,8 @@ async function migrateIssues() {
                             await transaction.commit();
                     }
                 } catch (e) {
-                    if(e.stack.indexOf("Issue") !== -1) {
-                        stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful\n");
-                        stream.write(e.stack + "\n\n");
-                    }
+                    stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful ");
+                    stream.write("[ERROR: " + e + "]\n");
                 }
             });
 

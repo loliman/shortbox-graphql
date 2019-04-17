@@ -22,10 +22,9 @@ export async function crawlSeries(series) {
                 .first();
 
             let text = messageBox.text().substring();
-            text = text.substring(text.indexOf('('), text.indexOf('.')).trim().replace('published by ', '');
+            text = text.substring(text.indexOf('('), text.lastIndexOf('.')).trim().replace('published by ', '');
             text = text.substring(1, text.length - 1);
             let splitted = text.split(')');
-
             let startyear = 0;
             let endyear = 0;
             let publisher = 'Marvel Comics';
@@ -34,18 +33,17 @@ export async function crawlSeries(series) {
                 let years = splitted[0].split('-');
 
                 try {
-                    startyear = !isNaN(years[0]) ? 0 : parseInt(years[0]);
+                    startyear = years[0] === '' || isNaN(years[0]) ? 0 : parseInt(years[0]);
                 } catch (e) {
                     startyear = 0;
                 }
 
                 if (years.length === 2)
                     try {
-                        endyear = !isNaN(years[1]) ? 0 : parseInt((years[1]));
+                        endyear = years[1] === '' || isNaN(years[1]) ? 0 : parseInt((years[1]));
                     } catch (e) {
                         endyear = 0;
                     }
-
                 else
                     endyear = startyear;
             }
@@ -61,7 +59,7 @@ export async function crawlSeries(series) {
                 addinfo: '',
                 publisher: {
                     name: publisher,
-                    original: true,
+                    original: 1,
                     addinfo: ''
                 }
             });
@@ -87,7 +85,7 @@ export async function crawlIssue(issue) {
 
             let infoBoxContent = $('.infobox').children();
             infoBoxContent.each((i, c) => {
-                let html = $(c).html();
+                let html = $(c).html().trim();
 
                 if (html.indexOf('templateimage') !== -1) {
                     let coverChildren = $(c).children()
@@ -119,7 +117,7 @@ export async function crawlIssue(issue) {
                             }
                         });
                     }
-                } else if (html.indexOf(' <div style="font-size:12px;text-align:center;line-height:2em;"><a') === 0) {
+                } else if (html.indexOf('<div style="font-size:12px;text-align:center;line-height:2em;"><') === 0) {
                     let dateChildren = $(c).children()
                         .last().children();
 

@@ -4,13 +4,13 @@ import fs from "fs";
 import {coverDir, migrateOnStartup, wwwDir} from "./config/config";
 import {cleanup} from './core/cleanup';
 import migrationDatabase from "./migration/core/database";
-import {migrate} from "./migration/core/migration";
+import {fixUsSeries, migrate} from "./migration/core/migration";
 
 const shell = require('shelljs');
 
 async function start() {
     await sequelize.authenticate();
-    console.log('🚀 Database is up and running');
+    console.log("[" + (new Date()).toUTCString() + "] 🚀 Database is up and running");
 
     await sequelize.sync();
 
@@ -24,40 +24,42 @@ async function start() {
         //might be gone already, that's fine!
     }
 
-    console.log('🚀 Database is set up');
+    console.log("[" + (new Date()).toUTCString() + "] 🚀 Database is set up");
 
     if (!fs.existsSync(wwwDir + '/' + coverDir))
         shell.mkdir('-p', wwwDir + '/' + coverDir);
 
-    console.log('🚀 Coverdir is set up at ' + wwwDir + '/' + coverDir);
+    console.log("[" + (new Date()).toUTCString() + "] 🚀 Coverdir is set up at " + wwwDir + "/" + coverDir);
 
-    console.log('🚀 Starting cleanup process');
+    console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting cleanup process");
 
-    //cleanup.start();
+    cleanup.start();
 
-    console.log('🚀 Cleanup process is running');
+    console.log("[" + (new Date()).toUTCString() + "] 🚀 Cleanup process is running");
 
     let {url} = await server.listen();
 
-    console.log('🚀 Server is up and running at ' + url);
+    console.log("[" + (new Date()).toUTCString() + "] 🚀 Server is up and running at " + url);
+
+    fixUsSeries();
 
     if (migrateOnStartup) {
         await migrationDatabase.authenticate();
-        console.log('🚀 Migration Database is up and running');
+        console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration Database is up and running");
 
         await migrationDatabase.sync();
-        console.log('🚀 Migration Database is set up');
+        console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration Database is set up");
 
-        console.log('🚀 Starting migration...');
+        console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting migration...");
 
         migrate()
-            .then(o => console.log('🚀 Migration done! See logfile for eventual errors.'))
+            .then(o => console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration done! See logfile for eventual errors."))
             .catch((e) => {
-                console.log('🚀 Migration failed! See logfile for errors.');
+                console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration failed! See logfile for errors.");
             });
     }
 
-    console.log('🚀 All done, lets go!');
+    console.log("[" + (new Date()).toUTCString() + "] 🚀 All done, lets go!");
 }
 
 start();
