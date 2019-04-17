@@ -270,7 +270,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Sorry, you're not logged in");
+                    throw new Error("Du bist nicht eingeloggt.");
 
                 let series = await models.Series.findOne({
                     where: {title: item.series.title.trim(), volume: item.series.volume, '$Publisher.name$': item.series.publisher.name.trim()},
@@ -308,7 +308,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Sorry, you're not logged in");
+                    throw new Error("Du bist nicht eingeloggt.");
 
                 let res = await create(item, transaction);
 
@@ -324,7 +324,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Sorry, you're not logged in");
+                    throw new Error("Du bist nicht eingeloggt.");
 
                 let oldPub = await models.Publisher.findOne({
                     where: {
@@ -556,7 +556,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Sorry, you're not logged in");
+                    throw new Error("Du bist nicht eingeloggt.");
 
                 let where = {
                     number: item.number.trim(),

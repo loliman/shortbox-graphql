@@ -66,7 +66,7 @@ export async function crawlSeries(series) {
                 }
             });
         } catch (e) {
-            reject(new Error("Series " + series.title + " (Vol." + series.volume + ") not found [" + url + "]"));
+            reject(new Error("Serie " + series.title + " (Vol." + series.volume + ") nicht gefunden [" + url + "]"));
         }
     });
 }
@@ -218,7 +218,7 @@ export async function crawlIssue(issue) {
 
             resolve(res);
         } catch (e) {
-            reject(new Error("Issue " + issue.series.title + " (Vol." + issue.series.volume + ") " + issue.number + " not found [" + url + "]"));
+            reject(new Error("Ausgabe " + issue.series.title + " (Vol." + issue.series.volume + ") " + issue.number + " nicht gefunden [" + url + "]"));
         }
     });
 }

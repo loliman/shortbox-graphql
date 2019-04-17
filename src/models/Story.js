@@ -341,7 +341,7 @@ export async function create(story, issue, transaction, us) {
                 });
 
                 if (!oStory)
-                    throw new Error("Story " + story.parent.issue.series.title + " (Vol." + story.parent.issue.series.volume + ") " + story.parent.issue.number + " [" + romanize(story.parent.number) + "] not found");
+                    throw new Error("Geschichte " + story.parent.issue.series.title + " (Vol." + story.parent.issue.series.volume + ") " + story.parent.issue.number + " [" + romanize(story.parent.number) + "] nicht gefunden");
 
                 let newStory = await models.Story.create({
                     title: story.title && story.title.trim() ? story.title.trim() : '',

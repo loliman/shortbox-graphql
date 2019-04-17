@@ -208,7 +208,7 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                 });
 
                 if (!oVariant)
-                    throw new Error("Variant " + cover.parent.issue.series.title + " (Vol." + cover.parent.issue.series.volume + ") " + cover.parent.issue.number + " [" + cover.parent.issue.variant + "] not found");
+                    throw new Error("Variant " + cover.parent.issue.series.title + " (Vol." + cover.parent.issue.series.volume + ") " + cover.parent.issue.number + " [" + cover.parent.issue.variant + "] nicht gefunden");
 
                 let oCover = await models.Cover.findOne({where: {fk_issue: oVariant.id}}, transaction);
                 let newCover = await models.Cover.create({
