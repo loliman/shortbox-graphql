@@ -4,7 +4,9 @@ export const db = 'shortbox';
 export const dbUser = 'root';
 export const dbPassword = 'admin';
 
-export const migrateOnStartup = true;
+export const fixOnStartup = false;
+export const migrateOnStartup = false;
+export const afterFirstMigration = true;
 export const migration_db = 'shortbox';
 export const migration_dbUser = 'root';
 export const migration_dbPassword = 'admin';

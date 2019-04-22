@@ -270,7 +270,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt.");
+                    throw new Error("Du bist nicht eingeloggt");
 
                 let series = await models.Series.findOne({
                     where: {title: item.series.title.trim(), volume: item.series.volume, '$Publisher.name$': item.series.publisher.name.trim()},
@@ -308,7 +308,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt.");
+                    throw new Error("Du bist nicht eingeloggt");
 
                 let res = await create(item, transaction);
 
@@ -324,7 +324,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt.");
+                    throw new Error("Du bist nicht eingeloggt");
 
                 let oldPub = await models.Publisher.findOne({
                     where: {
@@ -387,7 +387,7 @@ export const resolvers = {
                 res.limitation = item.limitation;
                 res.pages = item.pages;
                 res.releasedate = item.releasedate;
-                res.price = item.price ? item.price : 0;
+                res.price = !isNaN(item.price) && item.price !== '' ? item.price : '0';
                 res.currency = item.currency ? item.currency.trim() : '';
                 res.addinfo = item.addinfo;
 
@@ -556,7 +556,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt.");
+                    throw new Error("Du bist nicht eingeloggt");
 
                 let where = {
                     number: item.number.trim(),
@@ -710,7 +710,7 @@ export async function create(item, transaction) {
                 limitation: !isNaN(item.limitation) ? item.limitation : 0,
                 pages: !isNaN(item.pages) ? item.pages : 0,
                 releasedate: item.releasedate,
-                price: !isNaN(item.price) ? item.price : 0,
+                price: !isNaN(item.price) && item.price !== '' ? item.price : '0',
                 currency: item.currency ? item.currency.trim() : '',
                 addinfo: item.addinfo
             }, {transaction: transaction});

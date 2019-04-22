@@ -1,9 +1,10 @@
 import migration from "../models";
 import models from "../../models";
-import {asyncForEach} from "../../util/util";
+import {asyncForEach, romanize} from "../../util/util";
 import fs from 'fs';
 import {create} from "../../models/Issue";
-import {crawlSeries} from "../../core/crawler";
+import {crawlIssue, crawlSeries} from "../../core/crawler";
+import {afterFirstMigration} from "../../config/config";
 
 var stream;
 
@@ -14,7 +15,9 @@ export async function fixUsSeries() {
                 where: {startyear: 0}
             });
 
-            await asyncForEach(series, async (s) => {
+            await asyncForEach(series, async (s, i, a) => {
+                console.log("[" + (new Date()).toUTCString() + "] Fixing series " + (i+1) + " of " + a.length);
+
                 let crawledSeries = await crawlSeries(s);
 
                 s.startyear = crawledSeries.startyear;
@@ -23,6 +26,85 @@ export async function fixUsSeries() {
                 await s.save();
             });
 
+            console.log("[" + (new Date()).toUTCString() + "] Done fixing series.");
+            resolve(true);
+        } catch (e) {
+            console.log(e);
+            //Don't reject, errors are okay
+            resolve(false);
+        }
+    });
+}
+
+export async function fixUsComics() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let issues = await models.Issue.findAll({
+                where: {
+                    '$Series->Publisher.original$': 1
+                },
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            });
+
+            await asyncForEach(issues, async (i, idx, a) => {
+                try {
+                    console.log("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx+1) + " of " + a.length);
+
+                    i.series = await models.Series.findOne({where: {id: i.fk_series}});
+
+                    let crawledIssue = await crawlIssue(i).catch(() => {/*ignore errors while crawling*/});
+
+                    let stories = await models.Story.findAll({
+                        where: {fk_issue: i.id}
+                    });
+
+                    if(stories.length > 0 && crawledIssue.stories.length !== stories.length) {
+                        let failed = false;
+
+                        for(let i = 0; i < stories.length; i++) {
+                            if (stories[i].title !== crawledIssue.stories[i].title) {
+                                console.log("[" + (new Date()).toUTCString() + "] " + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number +
+                                    " is missing story as story in between [" + romanize(i + 1) + "]");
+
+                                failed = true;
+                            }
+                        }
+
+                        if(!failed) {
+                            await Promise.all(crawledIssue.stories.map(async (crawledStory) => {
+                                if(stories.length >= crawledStory.number)
+                                    return;
+
+                                let newStory = await models.Story.create({
+                                    title: crawledStory.title ? crawledStory.title : '',
+                                    number: !isNaN(crawledStory.number) ? crawledStory.number : 1,
+                                    addinfo: ''
+                                });
+
+                                await asyncForEach(crawledStory.individuals, async (individual) => {
+                                    await newStory.associateIndividual(individual.name.trim(), individual.type, null);
+                                });
+
+                                await newStory.setIssue(i);
+                                await newStory.save();
+
+                                return newStory;
+                            }));
+                        }
+                    }
+                } catch (e) {
+                    /*ignore errors while crawling*/
+                }
+            });
+
+            console.log("[" + (new Date()).toUTCString() + "] Done fixing issues.");
             resolve(true);
         } catch (e) {
             console.log(e);
@@ -89,13 +171,31 @@ async function migrateIssues() {
                     if (variant !== "")
                         variant += "]";
 
-                    let series = await migration.Series.findOne({
-                        where: {id: issue.fk_series}
-                    });
+                    let series;
+                    let publisher;
+                    if(afterFirstMigration) {
+                        series = await models.Series.findOne({
+                            where: {id: issue.fk_series}
+                        });
 
-                    let publisher = await migration.Publisher.findOne({
-                        where: {id: series.fk_publisher}
-                    });
+                        if(!series)
+                            return;
+
+                        publisher = await models.Publisher.findOne({
+                            where: {id: series.fk_publisher}
+                        });
+
+                        if(!publisher)
+                            return;
+                    } else {
+                        series = await migration.Series.findOne({
+                            where: {id: issue.fk_series}
+                        });
+
+                        publisher = await migration.Publisher.findOne({
+                            where: {id: series.fk_publisher}
+                        });
+                    }
 
                     issueToCreate.series = {
                         title: series.title,
@@ -173,8 +273,30 @@ async function migrateIssues() {
                         number: issueToCreate.number
                     };
 
-                    if (issueToCreate.format)
-                        where.format = issueToCreate.format;
+                    if(afterFirstMigration) {
+                        switch (issueToCreate.format) {
+                            case "Heft/Variant":
+                                where.format = "Heft";
+                                break;
+                            case "Softcover/Variant":
+                                where.format = "Softcover";
+                                break;
+                            case "Hardcover/Variant":
+                                where.format = "Hardcover";
+                                break;
+                            case "Softcover/Album":
+                                where.format = "Album";
+                                break;
+                            case "Hardcover/Album":
+                                where.format = "Album Hardcover";
+                                break;
+                            default:
+                                where.format = issueToCreate.format;
+                        }
+                    } else {
+                        if (issueToCreate.format)
+                            where.format = issueToCreate.format;
+                    }
 
                     if (issueToCreate.variant)
                         where.variant = issueToCreate.variant;
@@ -195,6 +317,7 @@ async function migrateIssues() {
                             await transaction.commit();
                     }
                 } catch (e) {
+                    console.log(e);
                     stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful ");
                     stream.write("[ERROR: " + e + "]\n");
                 }
@@ -202,6 +325,7 @@ async function migrateIssues() {
 
             resolve(true);
         } catch (e) {
+            console.log(e);
             resolve(false);
         }
     });

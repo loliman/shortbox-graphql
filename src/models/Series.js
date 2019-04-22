@@ -138,7 +138,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt.");
+                    throw new Error("Du bist nicht eingeloggt");
 
                 let pub = await models.Publisher.findOne({
                     where: {
@@ -167,7 +167,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt.");
+                    throw new Error("Du bist nicht eingeloggt");
 
                 let pub = await models.Publisher.findOne({
                     where: {
@@ -197,7 +197,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt.");
+                    throw new Error("Du bist nicht eingeloggt");
 
                 let oldPub = await models.Publisher.findOne({
                     where: {

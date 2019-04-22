@@ -12,7 +12,7 @@ export const cleanup = new CronJob({
     start: false
 });
 
-async function run() {
+export async function run() {
     const transaction = await models.sequelize.transaction();
 
     console.log("[" + (new Date()).toUTCString() + "] Starting cleanup...");

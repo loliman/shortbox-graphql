@@ -165,7 +165,7 @@ export async function crawlIssue(issue) {
                             }
                         });
                     }
-                } else if (html.indexOf('<tbody>') === 0 && html.indexOf('Issue Details') === -1) {
+                } else if ((html.indexOf('<table ') === 0 || html.indexOf('<tbody>') === 0) && html.indexOf('Issue Details') === -1) {
                     let story = {};
                     let storyChildren = $(c).children();
 

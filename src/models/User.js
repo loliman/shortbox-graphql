@@ -64,7 +64,7 @@ export const resolvers = {
 
             try {
                 if (loggedIn)
-                    throw new Error("Du bist bereits eingeloggt.");
+                    throw new Error("Du bist bereits eingeloggt");
 
                 var sessionid = "";
                 var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?%.,;:-_&$(){}[]";
@@ -93,7 +93,7 @@ export const resolvers = {
 
             try {
                 if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt.");
+                    throw new Error("Du bist nicht eingeloggt");
 
                 let res = await models.User.update(
                     {sessionid: null},
