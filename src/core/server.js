@@ -1,4 +1,4 @@
-import {ApolloServer} from 'apollo-server';
+import {ApolloServer, AuthenticationError} from 'apollo-server';
 import {merge} from 'lodash';
 import models from '../models';
 import {createContext, EXPECTED_OPTIONS_KEY} from 'dataloader-sequelize';
@@ -31,6 +31,8 @@ const server = new ApolloServer({
             let user = await models.User.count({where: {id: userid, sessionid: sessionid}});
             if (user === 1)
                 loggedIn = true;
+            else
+                throw new AuthenticationError("Ungültige Session");
         }
 
         const dataloader = createContext(models.sequelize);
