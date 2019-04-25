@@ -1,0 +1,10 @@
+{
+	"apps": [{
+		"name": "shortbox",
+		"script": "src/app.js",
+		"exec_interpreter": "babel-node",
+		"env": {
+			"NODE_ENV": "production"
+		}
+	}]
+}
