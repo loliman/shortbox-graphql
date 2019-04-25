@@ -196,12 +196,12 @@ export async function crawlIssue(issue) {
                                 let individual = $(e).text().trim();
 
                                 if (individual !== '') {
-                                    let exists = story.individuals.find(v => (v.name === individual && v.type === type.toUpperCase().substring(0, type.length - 1)));
+                                    let exists = story.individuals.find(v => (v.name === individual && v.type === type.toUpperCase()));
 
                                     if(!exists) {
                                         story.individuals.push({
                                             name: individual,
-                                            type: type.toUpperCase().substring(0, type.length - 1)
+                                            type: type.toUpperCase()
                                         });
                                     }
                                 }
