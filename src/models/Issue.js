@@ -468,7 +468,7 @@ export const resolvers = {
                 if (item.stories) {
                     let stories = [];
                     await asyncForEach(newStories, async (story) => {
-                        if(!story.exclusive && story.parent.number === 0) {
+                        if(story.parent && story.parent.number === 0) {
                             let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
                             let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
 
@@ -779,7 +779,7 @@ export async function create(item, transaction) {
             if (item.stories) {
                 let stories = [];
                 await asyncForEach(item.stories, async (story) => {
-                    if(!story.exclusive && story.parent.number === 0) {
+                    if(story.parent && story.parent.number === 0) {
                         let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
                         let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
 
