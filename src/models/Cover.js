@@ -182,13 +182,13 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                if(cover.artist)
+                if(cover.artists)
                     await asyncForEach(cover.artists, async artist => {
                         if(artist.name && artist.name.trim() !== '')
                             await resCover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
                     });
 
-                await resCover.save();
+                await resCover.save({transaction: transaction});
             } else {
                 let resIssue = await findOrCrawlIssue(cover.parent.issue, transaction);
 
@@ -238,6 +238,7 @@ export async function getCovers(issue, transaction) {
                 let rawCover = {};
                 rawCover.number = cover.number;
                 rawCover.addinfo = cover.addinfo;
+                rawCover.url = cover.url;
 
                 rawCover.exclusive = cover.fk_parent === null;
 
@@ -299,6 +300,9 @@ export function equals(a, b) {
             a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
+        if(a.artists.length !== b.artists.length)
+            return false;
+
         return a.artists.every(aIndividual => {
             return b.artists.some(bIndividual => {
                 return aIndividual.name === bIndividual.name;

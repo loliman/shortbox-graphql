@@ -161,6 +161,9 @@ export async function getFeatures(issue, transaction) {
 }
 
 export function equals(a, b) {
+    if(a.writers.length !== b.writers.length)
+        return false;
+
     let found = a.writers.every(aIndividual => {
         return b.writers.some(bIndividual => {
             return aIndividual.name === bIndividual.name;

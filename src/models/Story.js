@@ -328,7 +328,7 @@ export async function create(story, issue, transaction, us) {
                             await resStory.associateIndividual(editors.name.trim(), 'EDITOR', transaction);
                     });
 
-                await resStory.save();
+                await resStory.save({transaction: transaction});
             } else {
                 let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
 
@@ -449,6 +449,9 @@ export function equals(a, b) {
         return false;
 
     if(!a.exclusive) {
+        if(a.translators.length !== b.translators.length)
+            return false;
+
         let found = a.translators.every(aIndividual => {
             return b.translators.some(bIndividual => {
                 return aIndividual.name === bIndividual.name;
@@ -462,6 +465,9 @@ export function equals(a, b) {
           a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
+        if(a.colourists.length !== b.colourists.length)
+            return false;
+
         let found = a.colourists.every(aIndividual => {
             return b.colourists.some(bIndividual => {
                 return aIndividual.name === bIndividual.name;
@@ -469,6 +475,9 @@ export function equals(a, b) {
         });
 
         if(!found)
+            return false;
+
+        if(a.editors.length !== b.editors.length)
             return false;
 
         found = a.editors.every(aIndividual => {
@@ -480,12 +489,18 @@ export function equals(a, b) {
         if(!found)
             return false;
 
+        if(a.pencilers.length !== b.pencilers.length)
+            return false;
+
         found = a.pencilers.every(aIndividual => {
             return b.pencilers.some(bIndividual => {
                 return aIndividual.name === bIndividual.name;
             });
         });
         if(!found)
+            return false;
+
+        if(a.writers.length !== b.writers.length)
             return false;
 
         found = a.writers.every(aIndividual => {
@@ -495,6 +510,9 @@ export function equals(a, b) {
         });
 
         if(!found)
+            return false;
+
+        if(a.letterers.length !== b.letterers.length)
             return false;
 
         found = a.letterers.every(aIndividual => {

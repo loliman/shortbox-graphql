@@ -394,6 +394,7 @@ export const resolvers = {
                 res = await res.save({transaction: transaction});
 
                 let cover = await models.Cover.findOne({where: {fk_issue: res.id, number: 0}, transaction});
+
                 let coverUrl = '';
 
                 if(item.cover === '') { //Cover has been deleted
@@ -464,7 +465,30 @@ export const resolvers = {
                     return !found;
                 });
 
-                await asyncForEach(newStories, async (story) => createStory(story, res, transaction, us));
+                if (item.stories) {
+                    let stories = [];
+                    await asyncForEach(newStories, async (story) => {
+                        if(story.parent.number === 0) {
+                            let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
+                            let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
+
+                            for(let i = 0; i < oStories.length; i++) {
+                                stories.push({
+                                    number: stories.length+1,
+                                    parent: {number: i+1, issue: story.parent.issue},
+                                    translators: story.translators,
+                                    addinfo: '',
+                                    exclusive: false
+                                });
+                            }
+                        } else {
+                            story.number = stories.length+1;
+                            stories.push(story);
+                        }
+                    });
+
+                    await asyncForEach(stories, async (story) => await createStory(story, res, transaction, us));
+                }
 
                 if(!us) {
                     let oldFeatures = await getFeatures(res, transaction);
@@ -497,7 +521,7 @@ export const resolvers = {
                         return !found;
                     });
 
-                    await asyncForEach(newFeatures, async feature => createFeature(feature, res, transaction));
+                    await asyncForEach(newFeatures, async feature => await createFeature(feature, res, transaction));
                 }
 
                 let oldCovers = await getCovers(res, transaction);
@@ -508,6 +532,10 @@ export const resolvers = {
                         if(!found)
                             found = coverEquals(o, n);
                     });
+
+                    if(o.number === 0 && coverUrl !== '')
+                        found = true;
+
                     return !found;
                 });
 
@@ -542,7 +570,25 @@ export const resolvers = {
                     return !found;
                 });
 
-                await asyncForEach(newCovers, async cover => createCover(cover, res, coverUrl, transaction, us));
+                let url;
+                newCovers.forEach(cover => {
+                    if(cover.number === 0)
+                        url = '';
+                });
+
+                if(url === '') {
+                    deletedCovers.forEach(cover => {
+                        if (cover.number === 0)
+                            url = cover.url;
+                    });
+                }
+
+                await asyncForEach(newCovers, async cover => {
+                    if(url && url !== '' && cover.number === 0)
+                        coverUrl = url;
+
+                    await createCover(cover, res, coverUrl, transaction, us);
+                });
 
                 await transaction.commit();
                 return res;
@@ -730,14 +776,36 @@ export async function create(item, transaction) {
                 await res.save({transaction: transaction});
             }
 
-            if (item.stories)
-                await asyncForEach(item.stories, async (story) => createStory(story, res, transaction, us));
+            if (item.stories) {
+                let stories = [];
+                await asyncForEach(item.stories, async (story) => {
+                    if(story.parent.number === 0) {
+                        let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
+                        let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
+
+                        for(let i = 0; i < oStories.length; i++) {
+                            stories.push({
+                                number: stories.length+1,
+                                parent: {number: i+1, issue: story.parent.issue},
+                                translators: story.translators,
+                                addinfo: '',
+                                exclusive: false
+                            });
+                        }
+                    } else {
+                        story.number = stories.length+1;
+                        stories.push(story);
+                    }
+                });
+
+                await asyncForEach(stories, async (story) => await createStory(story, res, transaction, us));
+            }
 
             if (item.features && !us)
-                await asyncForEach(item.features, async feature => createFeature(feature, res, transaction));
+                await asyncForEach(item.features, async feature => await createFeature(feature, res, transaction));
 
             if (item.covers)
-                await asyncForEach(item.covers, async cover => createCover(cover, res, coverUrl, transaction, us));
+                await asyncForEach(item.covers, async cover => await createCover(cover, res, coverUrl, transaction, us));
 
             resolve(res);
         } catch (e) {
@@ -856,11 +924,10 @@ export function findOrCrawlIssue(i, transaction) {
                         addinfo: ''
                     }, {transaction: transaction});
 
-
                     await asyncForEach(crawledIssue.editors, async (editor) => {
                         await variant.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
                     });
-                    await issue.save({transaction: transaction});
+                    await variant.save({transaction: transaction});
 
                     let newCover = await models.Cover.create({
                         url: crawledVariant.cover.url,

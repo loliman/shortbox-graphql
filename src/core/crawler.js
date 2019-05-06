@@ -48,7 +48,7 @@ export async function crawlSeries(series) {
                     endyear = startyear;
             }
 
-            if (splitted.length > 1)
+            if (splitted.length > 1 && splitted[1].indexOf("something that is not") === -1)
                 publisher = splitted[1].substring(2).trim();
 
             resolve({
@@ -105,14 +105,17 @@ export async function crawlIssue(issue) {
 
                     if (variantCoverChildren && variantCoverChildren.length !== 0) {
                         variantCoverChildren.each((i, cover) => {
-                            let variantChildren = $(cover).children().last();
-                            let variantName = variantChildren.text().substring(variantChildren.text().indexOf('>') + 1).trim();
+                            let variantName = $(cover).text().substring($(cover).text().indexOf('>') + 1).trim();
 
                             if (variantName !== '' && variantName.indexOf("Textless") === -1) {
                                 let exists = res.variants.find(v => v.variant == variantName);
                                 if(!exists) {
-                                    let variantUrl = variantChildren.first().children().first().attr("href").trim();
-                                    res.variants.push({variant: variantName, cover: {url: variantUrl}});
+                                    let variantUrl = $(cover).children().first().attr("href").trim();
+
+                                    if(variantUrl) {
+                                        variantUrl = variantUrl.trim();
+                                        res.variants.push({variant: variantName, cover: {url: variantUrl}});
+                                    }
                                 }
                             }
                         });

@@ -41,7 +41,8 @@ export async function fixUsComics() {
         try {
             let issues = await models.Issue.findAll({
                 where: {
-                    '$Series->Publisher.original$': 1
+                    '$Series->Publisher.original$': 1,
+                    variant: ''
                 },
                 include: [
                     {
@@ -60,6 +61,48 @@ export async function fixUsComics() {
                     i.series = await models.Series.findOne({where: {id: i.fk_series}});
 
                     let crawledIssue = await crawlIssue(i).catch(() => {/*ignore errors while crawling*/});
+
+                    await asyncForEach(crawledIssue.variants, async variant => {
+                        let res = await models.Issue.findAll({
+                            where: {
+                                fk_series: i.fk_series,
+                                number: i.number,
+                                variant: variant.variant,
+                            }
+                        });
+
+                        if(!res) {
+                            console.log("[" + (new Date()).toUTCString() + "] " + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number +
+                                " is missing variant " + variant.variant);
+
+                            let newVariant = await models.Issue.create({title: '',
+                                number: i.number,
+                                format: 'Heft',
+                                variant: variant.variant,
+                                fk_series: i.fk_series,
+                                releasedate: i.releasedate,
+                                limitation: 0,
+                                pages: 0,
+                                price: 0,
+                                currency: i.currency ? i.currency : 'USD',
+                                addinfo: ''
+                            }, {transaction: transaction});
+
+                            await asyncForEach(crawledIssue.editors, async (editor) => {
+                                await newVariant.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                            });
+                            await newVariant.save({transaction: transaction});
+
+                            let newCover = await models.Cover.create({
+                                url: crawledVariant.cover.url,
+                                number: 0,
+                                addinfo: ''
+                            }, {transaction: transaction});
+
+                            await newCover.setIssue(newVariant, {transaction: transaction});
+                            await newCover.save({transaction: transaction});
+                        }
+                    });
 
                     let stories = await models.Story.findAll({
                         where: {fk_issue: i.id}
