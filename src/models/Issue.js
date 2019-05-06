@@ -379,6 +379,10 @@ export const resolvers = {
                     transaction
                 });
 
+                let releasedate = item.releasedate;
+                if(parseInt(releasedate.toLocaleString().substring(0, 4)) < newSeries.startyear)
+                    releasedate.setFullYear(newSeries.startyear);
+
                 res.title = item.title ? item.title.trim() : '';
                 res.number = item.number.trim();
                 res.setSeries(newSeries, {transaction: transaction});
@@ -386,7 +390,7 @@ export const resolvers = {
                 res.variant = item.variant ? item.variant.trim() : '';
                 res.limitation = item.limitation;
                 res.pages = item.pages;
-                res.releasedate = item.releasedate;
+                res.releasedate = releasedate;
                 res.price = !isNaN(item.price) && item.price !== '' ? item.price : '0';
                 res.currency = item.currency ? item.currency.trim() : '';
                 res.addinfo = item.addinfo;
@@ -747,6 +751,10 @@ export async function create(item, transaction) {
                 transaction
             });
 
+            let releasedate = item.releasedate;
+            if(parseInt(releasedate.toLocaleString().substring(0, 4)) < series.startyear)
+                releasedate.setFullYear(series.startyear);
+
             let res = await models.Issue.create({
                 title: item.title ? item.title.trim() : '',
                 fk_series: series.id,
@@ -755,7 +763,7 @@ export async function create(item, transaction) {
                 variant: item.variant ? item.variant.trim() : '',
                 limitation: !isNaN(item.limitation) ? item.limitation : 0,
                 pages: !isNaN(item.pages) ? item.pages : 0,
-                releasedate: item.releasedate,
+                releasedate: releasedate,
                 price: !isNaN(item.price) && item.price !== '' ? item.price : '0',
                 currency: item.currency ? item.currency.trim() : '',
                 addinfo: item.addinfo
