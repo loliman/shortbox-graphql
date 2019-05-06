@@ -316,7 +316,7 @@ export async function create(story, issue, transaction, us) {
                             await resStory.associateIndividual(colourist.name.trim(), 'COLOURIST', transaction);
                     });
 
-                if(story.letteres)
+                if(story.letterers)
                     await asyncForEach(story.letterers, async letterer => {
                         if(letterer.name && letterer.name.trim() !== '')
                             await resStory.associateIndividual(letterer.name.trim(), 'LETTERER', transaction);
