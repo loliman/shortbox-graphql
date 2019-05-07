@@ -371,7 +371,12 @@ export async function getStories(issue, transaction) {
     return new Promise(async (resolve, reject) => {
         try {
             let oldStories = [];
-            let rawStories = await models.Story.findAll({where: {fk_issue: issue.id}, transaction});
+            let rawStories = await models.Story.findAll({
+                where: {fk_issue: issue.id},
+                order: [['number', 'ASC']],
+                transaction
+            });
+
             await asyncForEach(rawStories, async story => {
                 let rawStory = {};
                 rawStory.title = story.title;

@@ -447,7 +447,6 @@ export const resolvers = {
                             throw Error('You must not delete original stories with children');
                     });
 
-
                 await asyncForEach(deletedStories, async story => {
                     let resStory = await models.Story.findOne({
                         where: {
@@ -486,7 +485,6 @@ export const resolvers = {
                                 });
                             }
                         } else {
-                            story.number = stories.length+1;
                             stories.push(story);
                         }
                     });
