@@ -386,7 +386,7 @@ export const resolvers = {
                 res.title = item.title ? item.title.trim() : '';
                 res.number = item.number.trim();
                 res.setSeries(newSeries, {transaction: transaction});
-                res.format = item.format ? item.format.trim() : '';
+                res.format = item.format ? item.format.trim() : 'Heft';
                 res.variant = item.variant ? item.variant.trim() : '';
                 res.limitation = item.limitation;
                 res.pages = item.pages;
