@@ -182,8 +182,8 @@ export const resolvers = {
             let onlytb = false;
             let storiesTb = await models.Story.findAll({
                 where: {
-                    fk_parent: parent.fk_parent,
-                    '$Issues->Series.title$': {[Op.like]: '%Taschenbuch%'},
+                    fk_parent: parent.fk_parent ? parent.fk_parent : parent.id,
+                    '$Issue->Series.title$': {[Sequelize.Op.like]: '%Taschenbuch%'},
                 },
                 include: [
                     {
@@ -196,9 +196,9 @@ export const resolvers = {
                 order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
             });
 
-            if (storiesTb) {
+            if (storiesTb.length > 0) {
                 let stories = await models.Story.findAll({
-                    where: {fk_parent: parent.fk_parent},
+                    where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
                     include: [models.Issue],
                     group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
                     order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
