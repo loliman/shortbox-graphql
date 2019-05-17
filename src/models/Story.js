@@ -197,14 +197,24 @@ export const resolvers = {
             });
 
             if (storiesTb.length > 0) {
-                let stories = await models.Story.findAll({
-                    where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
-                    include: [models.Issue],
-                    group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                    order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
-                });
+                let isTbStory;
+                if(parent.fk_parent) {
+                    storiesTb.forEach(story => {
+                        if(story.id === parent.id)
+                            isTbStory = true;
+                    });
+                }
 
-                onlytb = stories.length === storiesTb.length + (parent.fk_parent ? 1 : 0);
+                if(!isTbStory) {
+                    let stories = await models.Story.findAll({
+                        where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
+                        include: [models.Issue],
+                        group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
+                        order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
+                    });
+
+                    onlytb = stories.length === storiesTb.length + (parent.fk_parent ? 1 : 0);
+                }
             }
 
             return onlytb;
