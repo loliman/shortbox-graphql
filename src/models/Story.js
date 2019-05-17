@@ -204,7 +204,7 @@ export const resolvers = {
                     order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
                 });
 
-                onlytb = stories.length === storiesTb.length + (parent.fk_parent === null ? 0 : 1);
+                onlytb = stories.length === storiesTb.length + (parent.fk_parent ? 1 : 0);
             }
 
             return onlytb;
