@@ -94,6 +94,7 @@ export const typeDef = gql`
     children: [Story],
     onlyapp: Boolean, 
     firstapp: Boolean,
+    onlytb: Boolean,
     exclusive: Boolean,
     pencilers: [Individual],
     writers: [Individual],
@@ -176,6 +177,40 @@ export const resolvers = {
             }
 
             return firstapp;
+        },
+        onlytb: async (parent) => {
+            if (parent.fk_parent === null)
+                return true;
+
+            let onlytb = false;
+            let storiesTb = await models.Story.findAll({
+                where: {
+                    fk_parent: parent.fk_parent,
+                    '$Issues->Series.title$': {[Op.like]: '%Taschenbuch%'},
+                },
+                include: [
+                    {
+                        model: models.Issue,
+                        include: [
+                            models.Series
+                        ]
+                    }],
+                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
+                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
+            });
+
+            if (storiesTb) {
+                let stories = await models.Story.findAll({
+                    where: {fk_parent: parent.fk_parent},
+                    include: [models.Issue],
+                    group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
+                    order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
+                });
+
+                onlytb = stories.length === storiesTb.length + 1;
+            }
+
+            return onlytb;
         },
         exclusive: async (parent) => {
             return parent.fk_parent === null;
