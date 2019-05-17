@@ -183,14 +183,11 @@ export const resolvers = {
             let storiesTb = await models.Story.findAll({
                 where: {
                     fk_parent: parent.fk_parent ? parent.fk_parent : parent.id,
-                    '$Issue->Series.title$': {[Sequelize.Op.like]: '%Taschenbuch%'},
+                    '$Issue.format$': 'Taschenbuch',
                 },
                 include: [
                     {
-                        model: models.Issue,
-                        include: [
-                            models.Series
-                        ]
+                        model: models.Issue
                     }],
                 group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
                 order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
