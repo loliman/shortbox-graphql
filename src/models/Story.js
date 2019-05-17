@@ -179,9 +179,6 @@ export const resolvers = {
             return firstapp;
         },
         onlytb: async (parent) => {
-            if (parent.fk_parent === null)
-                return true;
-
             let onlytb = false;
             let storiesTb = await models.Story.findAll({
                 where: {
@@ -207,7 +204,7 @@ export const resolvers = {
                     order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
                 });
 
-                onlytb = stories.length === storiesTb.length + 1;
+                onlytb = stories.length === storiesTb.length + (parent.fk_parent === null ? 0 : 1);
             }
 
             return onlytb;
