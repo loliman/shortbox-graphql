@@ -60,3 +60,90 @@ export function romanize(num) {
         roman = (key[+digits.pop() + (i * 10)] || "") + roman;
     return Array(+digits.join("") + 1).join("M") + roman;
 }
+
+export async function generateUrl(item, us) {
+    let url = (us ? "/us/" : "/de/");
+
+    if (item.name)
+        return url + encodeURIComponent(item.name);
+
+    if (item.volume) {
+        let publisher = await item.getPublisher();
+
+        return url
+            + encodeURIComponent(publisher.name.replace(/%/g, '%25'))
+            + "/"
+            + encodeURIComponent(item.title.replace(/%/g, '%25') + "_Vol_" + item.volume);
+    }
+
+    let series = await item.getSeries();
+    let publisher = await series.getPublisher();
+
+    if (!item.variant || item.variant === "")
+        return url
+            + encodeURIComponent(publisher.name.replace(/%/g, '%25'))
+            + "/"
+            + encodeURIComponent(series.title.replace(/%/g, '%25') + "_Vol_" + series.volume)
+            + "/"
+            + encodeURIComponent(item.number.replace(/%/g, '%25'))
+            + (item.format ? ("/" + encodeURIComponent(item.format)) : "");
+
+    return url
+        + encodeURIComponent(publisher.name.replace(/%/g, '%25'))
+        + "/"
+        + encodeURIComponent(series.title.replace(/%/g, '%25') + "_Vol_" + series.volume)
+        + "/"
+        + encodeURIComponent(item.number.replace(/%/g, '%25'))
+        + "/"
+        + encodeURIComponent(item.format + "_" + item.variant);
+}
+
+export async function generateLabel(item) {
+    if (!item)
+        return '';
+
+    if (item.name)
+        return item.name;
+
+    if (item.volume) {
+        let year;
+        let publisher = await item.getPublisher();
+
+        if (item.startyear)
+            if (item.startyear === item.endyear)
+                year = ' (' + item.startyear + ')';
+            else
+                year = ' (' + item.startyear + ' - ' + ((!item.endyear || item.endyear === 0) ? '...' : item.endyear) + ')';
+
+        return item.title + (publisher ? ' (Vol. ' + romanize(item.volume) + ')' : '') + (year ? year : "") + ' (' + publisher.name + ')';
+    }
+
+    if (item.number) {
+        let year;
+
+        let series = await item.getSeries();
+        let publisher = await series.getPublisher();
+
+        if (series.startyear)
+            if (series.startyear === series.endyear)
+                year = ' (' + series.startyear + ')';
+            else
+                year = ' (' + series.startyear + ' - ' + ((!series.endyear || series.endyear === 0) ? '...' : series.endyear) + ')';
+
+        let title = series.title + ' (' + publisher.name + ') ' + (publisher ? '(Vol. ' + romanize(series.volume) + ')' : '') + (year ? year : "");
+
+        let format = '';
+        if (item.format !== '' || item.variant != '') {
+            format = ' (';
+            if (item.format !== '')
+                format += item.format;
+            if (item.format !== '' && item.variant !== '')
+                format += '/';
+            if (item.variant !== '')
+                format += item.variant;
+            format += ')';
+        }
+
+        return title + ' #' + item.number + format;
+    }
+}
