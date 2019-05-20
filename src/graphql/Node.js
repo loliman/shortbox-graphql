@@ -69,6 +69,7 @@ export const resolvers = {
                 where: {
                     '$Series->Publisher.original$': us ? 1 : 0
                 },
+                group: ['fk_series', 'number'],
                 having: {
                     concatinated: {[Sequelize.Op.like]: pattern}
                 },
