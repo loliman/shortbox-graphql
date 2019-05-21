@@ -66,8 +66,6 @@ export const resolvers = {
             if (res.length < 25) {
                 let issues = await models.Issue.findAll({
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
-                        [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
-                        [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
                         [Sequelize.fn("concat", Sequelize.col('Series.title'), ' (Vol.', Sequelize.col('Series.volume'), ') #', Sequelize.col('number'), ' (', Sequelize.col('format'), ')'), 'concatinated'],
                         'id', 'number', 'fk_series'],
                     where: {
