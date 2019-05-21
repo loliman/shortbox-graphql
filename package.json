@@ -20,6 +20,7 @@
     "graphql-relay": "^0.5.5",
     "graphql-sequelize": "^9.3.4",
     "graphql-upload": "^8.0.4",
+    "match-sorter": "^3.0.0",
     "mysql2": "^1.6.5",
     "request": "^2.88.0",
     "request-promise": "^4.2.4",
