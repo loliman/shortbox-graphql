@@ -67,11 +67,11 @@ export const resolvers = {
                 let issues = await models.Issue.findAll({
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
                         [Sequelize.fn("concat", Sequelize.col('Series.title'), ' (Vol.', Sequelize.col('Series.volume'), ') #', Sequelize.col('number'), ' (', Sequelize.col('format'), ')'), 'concatinated'],
-                        'id', 'number', 'fk_series'],
+                        'id', 'number', 'fk_series', 'format', 'variant'],
                     where: {
                         '$Series->Publisher.original$': us ? 1 : 0
                     },
-                    group: ['fk_series', 'number'],
+                    group: ['fk_series', 'number', 'format', 'variant'],
                     having: {
                         concatinated: {[Sequelize.Op.like]: pattern}
                     },
