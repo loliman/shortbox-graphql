@@ -7,6 +7,7 @@ import {coverDir} from "../config/config";
 import {create as createStory, equals as storyEquals, getStories} from "./Story";
 import {create as createCover, equals as coverEquals, getCovers} from "./Cover";
 import {create as createFeature, equals as featureEquals, getFeatures} from "./Feature";
+import {createFilterQuery} from "../graphql/Filter";
 
 class Issue extends Model {
     static tableName = 'Issue';
@@ -193,30 +194,42 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        issues: async (_, {series}) => {
-            let res = await models.Issue.findAll({
-                attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
-                    [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
-                    [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
-                    'number', 'fk_series'],
-                where: {
-                    '$Series.title$': series.title,
-                    '$Series.volume$': series.volume,
-                    '$Series->Publisher.name$': series.publisher.name
-                },
-                order: [['number', 'ASC'], ['variant', 'DESC'], ['title', 'DESC'], ['format', 'DESC']],
-                group: ['fk_series', 'number'],
-                include: [
-                    {
-                        model: models.Series,
-                        include: [
-                            models.Publisher
-                        ]
-                    }
-                ]
-            });
+        issues: async (_, {series, filter}) => {
+            if(!filter) {
+                let res = await models.Issue.findAll({
+                    attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
+                        [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
+                        [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
+                        'number', 'fk_series'],
+                    where: {
+                        '$Series.title$': series.title,
+                        '$Series.volume$': series.volume,
+                        '$Series->Publisher.name$': series.publisher.name
+                    },
+                    order: [['number', 'ASC'], ['variant', 'DESC'], ['title', 'DESC'], ['format', 'DESC']],
+                    group: ['fk_series', 'number'],
+                    include: [
+                        {
+                            model: models.Series,
+                            include: [
+                                models.Publisher
+                            ]
+                        }
+                    ]
+                });
 
-            return res.sort((a, b) => naturalCompare(a.number, b.number));
+                return res.sort((a, b) => naturalCompare(a.number, b.number));
+            } else {
+                let rawQuery = createFilterQuery(series, filter);
+                let res = await models.sequelize.query(rawQuery);
+                let issues = [];
+                res[0].forEach(i => issues.push({
+                    number: i.issuenumber,
+                    fk_series: i.seriesid,
+                    format: i.issueformat,
+                    variant: i.issuevariant}));
+                return issues.sort((a, b) => naturalCompare(a.number, b.number));
+            }
         },
         lastEdited: async (_, {us}) => await models.Issue.findAll({
             where: {

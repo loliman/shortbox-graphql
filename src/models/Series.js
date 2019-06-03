@@ -2,6 +2,7 @@ import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
 import {asyncForEach} from "../util/util";
+import {createFilterQuery} from "../graphql/Filter";
 
 class Series extends Model {
     static tableName = 'Series';
@@ -112,19 +113,36 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        series: (_, {publisher}) => {
-            let options = {
-                order: [['title', 'ASC'], ['volume', 'ASC']],
-                include: [models.Publisher],
-            };
+        series: async (_, {publisher, filter}) => {
+            if(!filter) {
+                let options = {
+                    order: [['title', 'ASC'], ['volume', 'ASC']],
+                    include: [models.Publisher],
+                };
 
-            if (publisher.name !== "*")
-                options.where = {'$Publisher.name$': publisher.name};
+                if (publisher.name !== "*")
+                    options.where = {'$Publisher.name$': publisher.name};
 
-            if (publisher.us !== undefined)
-                options.where = {'$Publisher.original$': publisher.us ? 1 : 0};
+                if (publisher.us !== undefined)
+                    options.where = {'$Publisher.original$': publisher.us ? 1 : 0};
 
-            return models.Series.findAll(options);
+                return await models.Series.findAll(options);
+            } else {
+                let rawQuery = createFilterQuery(publisher, filter);
+                let res = await models.sequelize.query(rawQuery);
+                let series = [];
+                res[0].forEach(s => {
+                    series.push({
+                        title: s.seriestitle,
+                        volume: s.seriesvolume,
+                        startyear: s.seriesstartyear,
+                        endyear: s.seriesendyear,
+                        fk_publisher: s.publisherid
+                    });
+                });
+
+                return series;
+            }
         },
         seriesd: (_, {series}) =>
             models.Series.findOne({

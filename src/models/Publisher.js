@@ -2,6 +2,7 @@ import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
 import {asyncForEach} from "../util/util";
+import {createFilterQuery} from "../graphql/Filter";
 
 class Publisher extends Model {
     static tableName = 'Publisher';
@@ -98,12 +99,21 @@ export const typeDef = gql`
 export const resolvers = {
     Query: {
         publishers: async (_, {us, filter}) => {
-            console.log(filter);
-
-            return await models.Publisher.findAll({
-                where: {original: (us ? 1 : 0)},
-                order: [['name', 'ASC']]
-            });
+            if(!filter) {
+                return await models.Publisher.findAll({
+                    where: {original: (us ? 1 : 0)},
+                    order: [['name', 'ASC']]
+                });
+            } else {
+                let rawQuery = createFilterQuery(us, filter);
+                let res = await models.sequelize.query(rawQuery);
+                let publishers = [];
+                res[0].forEach(p => publishers.push({
+                    name: p.publishername,
+                    us: us
+                }));
+                return publishers;
+            }
         },
         publisher: (_, {publisher}) => models.Publisher.findOne({
             where: {
