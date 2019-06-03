@@ -85,7 +85,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    series(publisher: PublisherInput!): [Series],
+    series(publisher: PublisherInput!, filter: Filter): [Series],
     seriesd(series: SeriesInput!): Series
   }
   

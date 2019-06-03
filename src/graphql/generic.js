@@ -14,6 +14,39 @@ export const typeDef = gql`
   type Query {
     _empty: String
   }
+  
+  input DateFilter {
+    date: Date,
+    compare: String
+  }
+  
+  input NumberFilter {
+    number: String,
+    compare: String
+  }
+  
+  input Filter {
+    us: Boolean,
+    formats: [String],
+    withVariants: Boolean,
+    releasedates: [DateFilter],
+    publishers: [PublisherInput],
+    series: [SeriesInput],
+    numbers: [NumberFilter],
+    authors: [IndividualInput],
+    artists: [IndividualInput],
+    inkers: [IndividualInput],
+    colourists: [IndividualInput],
+    letteres: [IndividualInput],
+    editors: [IndividualInput],
+    translators: [IndividualInput],
+    firstPrint: Boolean,
+    onlyPrint: Boolean,
+    otherTb: Boolean,
+    exclusive: Boolean,
+    onlyTb: Boolean,
+    noPrint: Boolean
+  }
 `;
 
 export const resolvers = {

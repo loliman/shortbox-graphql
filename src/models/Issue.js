@@ -141,7 +141,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    issues(series: SeriesInput!): [Issue], 
+    issues(series: SeriesInput!, filter: Filter): [Issue], 
     lastEdited(us: Boolean): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }

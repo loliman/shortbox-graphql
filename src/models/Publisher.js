@@ -75,7 +75,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    publishers(us: Boolean!): [Publisher],
+    publishers(us: Boolean!, filter: Filter): [Publisher],
     publisher(publisher: PublisherInput!): Publisher
   }
   
@@ -97,10 +97,14 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        publishers: (_, {us}) => models.Publisher.findAll({
-            where: {original: (us ? 1 : 0)},
-            order: [['name', 'ASC']]
-        }),
+        publishers: async (_, {us, filter}) => {
+            console.log(filter);
+
+            return await models.Publisher.findAll({
+                where: {original: (us ? 1 : 0)},
+                order: [['name', 'ASC']]
+            });
+        },
         publisher: (_, {publisher}) => models.Publisher.findOne({
             where: {
                 name: publisher.name
