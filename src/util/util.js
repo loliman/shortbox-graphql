@@ -107,7 +107,7 @@ export async function generateLabel(item) {
 
     if (item.volume) {
         let year;
-        let publisher = await item.getPublisher();
+        let publisher = item.publisher ? item.publisher : await item.getPublisher();
 
         if (item.startyear)
             if (item.startyear === item.endyear)
@@ -121,8 +121,8 @@ export async function generateLabel(item) {
     if (item.number) {
         let year;
 
-        let series = await item.getSeries();
-        let publisher = await series.getPublisher();
+        let series = item.series ? item.series : await item.getSeries();
+        let publisher = series.publisher ? series.publisher : await series.getPublisher();
 
         if (series.startyear)
             if (series.startyear === series.endyear)

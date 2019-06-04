@@ -1,5 +1,6 @@
 import {gql} from 'apollo-server';
 import models from "../models";
+import {asyncForEach, generateLabel, naturalCompare} from "../util/util";
 
 var dateFormat = require('dateformat');
 
@@ -50,7 +51,63 @@ export const resolvers = {
         export: async (_, {filter}) => {
             let rawQuery = createFilterQuery(filter.us, filter, true);
             let res = await models.sequelize.query(rawQuery);
-            return "Export! :)";
+
+            let response = {};
+            //"publishername, seriestitle, seriesvolume, seriesstartyear, seriesendyear, issuenumber"
+            await asyncForEach(res[0], async r => {
+                let publisher = {
+                    name: r.publishername
+                };
+                let series = {
+                    title: r.seriestitle,
+                    volume: r.seriesvolume,
+                    startyear: r.seriesstartyear,
+                    endyear: r.seriesendyear,
+                    publisher: publisher
+                };
+                let issue = {
+                    number: r.issuenumber,
+                    series: series
+                };
+
+                let publisherLabel = await generateLabel(publisher);
+                let seriesLabel = await generateLabel(series);
+
+                if(publisherLabel in response) {
+                    if(seriesLabel in response[publisherLabel])
+                        response[publisherLabel][seriesLabel].push(issue);
+                    else {
+                        response[publisherLabel][seriesLabel] = [];
+                        response[publisherLabel][seriesLabel].push(issue);
+                    }
+                } else {
+                    response[publisherLabel] = {};
+                    response[publisherLabel][seriesLabel] = [];
+                    response[publisherLabel][seriesLabel].push(issue);
+                }
+            });
+
+            Object.keys(response).sort(function(a, b) {
+                a = a[1];
+                b = b[1];
+
+                return a < b ? -1 : (a > b ? 1 : 0);
+            });
+
+            Object.keys(response).forEach(p => Object.keys(p).sort(function(a, b) {
+                a = a[1];
+                b = b[1];
+
+                return a < b ? -1 : (a > b ? 1 : 0);
+            }));
+
+            Object.keys(response).forEach(p => Object.keys(p).forEach(s => Object.keys(s).sort((a, b) => {
+                console.log(a);
+                console.log(b);
+                naturalCompare(a.number, b.number);
+            })));
+
+            return JSON.stringify(response);
         }
     }
 };
@@ -232,7 +289,7 @@ export function createFilterQuery(selected, filter, print) {
 
     let columns = "";
     if (print)
-        columns = "publishername,seriestitle, seriesvolume, seriesstartyear, seriesendyear, issuenumber";
+        columns = "publishername, seriestitle, seriesvolume, seriesstartyear, seriesendyear, issuenumber";
     else if (selected.publisher)
         columns = "issuenumber, issueformat, issuevariant, seriesid";
     else if(selected.name)
@@ -242,7 +299,7 @@ export function createFilterQuery(selected, filter, print) {
 
     let groupby = "";
     if (print)
-        groupby = "issuenumber";
+        groupby = "issuenumber, seriestitle, seriesvolume, publishername";
     else if (selected.publisher)
         groupby = "issuenumber";
     else if(selected.name)
