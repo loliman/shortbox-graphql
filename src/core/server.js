@@ -4,7 +4,7 @@ import models from '../models';
 import {createContext, EXPECTED_OPTIONS_KEY} from 'dataloader-sequelize';
 import {resolver} from 'graphql-sequelize';
 import {resolvers as NodeResolvers, typeDef as NodeTypeDefs} from '../graphql/Node';
-import {typeDef as FilterTypeDefs} from '../graphql/Filter';
+import {resolvers as FilterResolvers, typeDef as FilterTypeDefs} from '../graphql/Filter';
 import {resolvers as CoverResolvers, typeDef as CoverTypeDefs} from '../models/Cover';
 import {resolvers as FeatureResolvers, typeDef as FeatureTypeDefs} from '../models/Feature';
 import {resolvers as IndividualResolvers, typeDef as IndividualTypeDefs} from '../models/Individual';
@@ -21,7 +21,7 @@ const server = new ApolloServer({
     typeDefs: [ScalarTypeDefs, NodeTypeDefs, FilterTypeDefs, PublisherTypeDefs, UserTypeDefs,
         CoverTypeDefs, FeatureTypeDefs, IndividualTypeDefs,
         IssueTypeDefs, SeriesTypeDefs, StoryTypeDefs],
-    resolvers: merge(ScalarResolvers, NodeResolvers, PublisherResolvers, UserResolvers,
+    resolvers: merge(ScalarResolvers, NodeResolvers, FilterResolvers, PublisherResolvers, UserResolvers,
         CoverResolvers, FeatureResolvers, IndividualResolvers,
         IssueResolvers, SeriesResolvers, StoryResolvers),
     context: async ({req}) => {
