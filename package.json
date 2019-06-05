@@ -8,26 +8,26 @@
   },
   "keywords": [],
   "dependencies": {
-    "apollo-server": "^2.4.8",
+    "apollo-server": "^2.6.1",
     "babel-cli": "^6.26.0",
     "babel-preset-env": "^1.7.0",
     "babel-preset-stage-2": "^6.24.1",
-    "cheerio": "^1.0.0-rc.2",
-    "cron": "^1.7.0",
-    "dataloader-sequelize": "^1.7.9",
+    "cheerio": "^1.0.0-rc.3",
+    "cron": "^1.7.1",
+    "dataloader-sequelize": "^1.7.10",
     "dateformat": "^3.0.3",
-    "graphql": "^14.1.1",
+    "graphql": "^14.3.1",
     "graphql-relay": "^0.5.5",
-    "graphql-sequelize": "^9.3.4",
-    "graphql-upload": "^8.0.4",
-    "match-sorter": "^3.0.0",
+    "graphql-sequelize": "^9.3.6",
+    "graphql-upload": "^8.0.6",
+    "match-sorter": "^3.0.1",
     "mysql2": "^1.6.5",
     "request": "^2.88.0",
     "request-promise": "^4.2.4",
-    "sequelize": "^4.43.0",
+    "sequelize": "^4.44.0",
     "shelljs": "^0.8.3"
   },
   "devDependencies": {
-    "nodemon": "^1.18.10"
+    "nodemon": "^1.19.1"
   }
 }

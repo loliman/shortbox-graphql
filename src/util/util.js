@@ -107,7 +107,7 @@ export async function generateLabel(item) {
 
     if (item.volume) {
         let year;
-        let publisher = item.publisher ? item.publisher : await item.getPublisher();
+        let publisher = item.publisher === null || item.publisher ? item.publisher : await item.getPublisher();
 
         if (item.startyear)
             if (item.startyear === item.endyear)
@@ -115,7 +115,7 @@ export async function generateLabel(item) {
             else
                 year = ' (' + item.startyear + ' - ' + ((!item.endyear || item.endyear === 0) ? '...' : item.endyear) + ')';
 
-        return item.title + (publisher ? ' (Vol. ' + romanize(item.volume) + ')' : '') + (year ? year : "") + ' (' + publisher.name + ')';
+        return item.title + ' (Vol. ' + romanize(item.volume) + ')' + (year ? year : "") + (publisher ? ' (' + publisher.name + ')' : '');
     }
 
     if (item.number) {

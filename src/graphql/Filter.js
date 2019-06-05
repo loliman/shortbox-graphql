@@ -63,7 +63,7 @@ export const resolvers = {
                     volume: r.seriesvolume,
                     startyear: r.seriesstartyear,
                     endyear: r.seriesendyear,
-                    publisher: publisher
+                    publisher: null
                 };
                 let issue = {
                     number: r.issuenumber,
@@ -87,30 +87,155 @@ export const resolvers = {
                 }
             });
 
-            Object.keys(response).sort(function(a, b) {
-                a = a[1];
-                b = b[1];
+            let sortedResponse = Object.keys(response).map(key => {
+                let p = response[key];
+                return [key, Object.keys(p).map(key => {
+                    let s = p[key];
+                    return [key, Object.keys(s).map(key => {
+                        let i = s[key];
+                        i.series = undefined;
+                        return i;
+                    }).sort((a, b) => naturalCompare(a.number, b.number))];
+                }).sort()];
+            }).sort();
 
-                return a < b ? -1 : (a > b ? 1 : 0);
+            let responseString = "";
+
+            sortedResponse.forEach(p => {
+                responseString += p[0] + "\n";
+                p[1].forEach(s => {
+                    responseString += "\t" + s[0] + "\n";
+                    s[1].forEach(i => {
+                        responseString += "\t\t#" + i.number + "\n";
+                    })
+                });
+                responseString += "\n";
             });
 
-            Object.keys(response).forEach(p => Object.keys(p).sort(function(a, b) {
-                a = a[1];
-                b = b[1];
-
-                return a < b ? -1 : (a > b ? 1 : 0);
-            }));
-
-            Object.keys(response).forEach(p => Object.keys(p).forEach(s => Object.keys(s).sort((a, b) => {
-                console.log(a);
-                console.log(b);
-                naturalCompare(a.number, b.number);
-            })));
-
-            return JSON.stringify(response);
+            return JSON.stringify(await convertFilterToString(filter) + responseString);
         }
     }
 };
+
+async function convertFilterToString(filter) {
+    let s = "Aktive Filter\n";
+
+    s += "\t" + (filter.us ? "Original Ausgaben" : "Deutsche Ausgaben") + "\n";
+
+    if (filter.story)
+        s += "\tnach Geschichte\n";
+    if (filter.cover)
+        s += "\tnach Cover\n";
+    if (filter.feature)
+        s += "\tnach sonstigen Inhalten\n";
+
+    s += "\tDetails\n";
+
+    if (filter.formats) {
+        s += "\t\tFormat: ";
+        filter.formats.forEach(f => s += f + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.withVariants)
+        s += "\t\tmit Varianten\n";
+
+    if (filter.releasedates) {
+        s += "\t\tErscheinungsdatum: ";
+        filter.releasedates.forEach(r => s += dateFormat(new Date(r.date), "dd.mm.yyyy") + " " + r.compare + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (!filter.formats && !filter.withVariants && !filter.releasedates)
+        s += "\t\t-\n";
+
+    s += "\tEnthält\n";
+    if (filter.firstPrint)
+        s += "\t\tErstausgabe\n";
+    if (filter.onlyPrint)
+        s += "\t\tEinzige Ausgabe\n";
+    if (filter.otherTb)
+        s += "\t\tSonst nur in TB\n";
+    if (filter.exclusive)
+        s += "\t\tExclusiv\n";
+    if (filter.onlyTb)
+        s += "\t\tNur in TB\n";
+    if (filter.noPrint)
+        s += "\t\tNicht auf deutsch erschienen\n";
+
+    if (filter.publishers) {
+        s += "\t\tVerlag: ";
+        filter.publishers.forEach(p => s += p.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.series) {
+        s += "\t\tSerie: ";
+        await asyncForEach(filter.series, async n => {
+            s += await generateLabel(n) + ", ";
+        });
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.numbers) {
+        s += "\t\tNummer: ";
+        filter.numbers.forEach(n => s += n.number + " " + n.compare + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (!filter.firstPrint && !filter.onlyPrint && !filter.otherTb && !filter.exclusive && !filter.onlyTb && !filter.noPrint)
+        s += "\t\t-\n";
+
+    s += "\tMitwirkende\n";
+
+    if (filter.writers) {
+        s += "\t\tAutor: ";
+        filter.writers.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.artists) {
+        s += "\t\tZeichner: ";
+        filter.artists.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.inkers) {
+        s += "\t\tInker: ";
+        filter.inkers.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.colourists) {
+        s += "\t\tKolorist: ";
+        filter.colourists.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.letterers) {
+        s += "\t\tLetterer: ";
+        filter.letterers.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.editors) {
+        s += "\t\tEditor: ";
+        filter.editors.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.translators) {
+        s += "\t\tÜbersetzer: ";
+        filter.translators.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+
+    if (!filter.writers && !filter.artists && !filter.inkers && !filter.colourists && !filter.letterers && !filter.editors && !filter.translators)
+        s += "\t\t-\n";
+
+    return s + "\n\n";
+}
 
 export function createFilterQuery(selected, filter, print) {
     let typeTable = filter.story ? "Story" : filter.cover ? "Cover" : "Feature";
@@ -131,12 +256,16 @@ export function createFilterQuery(selected, filter, print) {
     if(us && filter.translators)
         throw new Error("Kombination nicht erlaubt");
 
-    if ((filter.cover ? 1 : 0) + (filter.writers ? 1 : 0) + (filter.inkers ? 1 : 0) + (filter.colourists ? 1 : 0) + (filter.letterers ? 1 : 0) + (filter.editors ? 1 : 0) + (filter.translators ? 1 : 0) > 1)
-        throw new Error("Kombination nicht erlaubt");
+    if (filter.cover) {
+        if ((filter.cover ? 1 : 0) + (filter.writers ? 1 : 0) + (filter.inkers ? 1 : 0) + (filter.colourists ? 1 : 0) + (filter.letterers ? 1 : 0) + (filter.editors ? 1 : 0) + (filter.translators ? 1 : 0) > 1)
+            throw new Error("Kombination nicht erlaubt");
+    }
 
-    if ((filter.feature ? 1 : 0) + (filter.firstPrint ? 1 : 0) + (filter.onlyPrint ? 1 : 0) + (filter.otherTb ? 1 : 0) + (filter.exclusive ? 1 : 0) + (filter.publishers ? 1 : 0)
-        + (filter.series ? 1 : 0) + (filter.pencilers ? 1 : 0) + (filter.inkers ? 1 : 0) + (filter.colourists ? 1 : 0) + (filter.letterers ? 1 : 0) + (filter.editors ? 1 : 0) + (filter.translators ? 1 : 0) > 1)
-        throw new Error("Kombination nicht erlaubt");
+    if (filter.feature) {
+        if ((filter.feature ? 1 : 0) + (filter.firstPrint ? 1 : 0) + (filter.onlyPrint ? 1 : 0) + (filter.otherTb ? 1 : 0) + (filter.exclusive ? 1 : 0) + (filter.publishers ? 1 : 0)
+            + (filter.series ? 1 : 0) + (filter.pencilers ? 1 : 0) + (filter.inkers ? 1 : 0) + (filter.colourists ? 1 : 0) + (filter.letterers ? 1 : 0) + (filter.editors ? 1 : 0) + (filter.translators ? 1 : 0) > 1)
+            throw new Error("Kombination nicht erlaubt");
+    }
 
     let where = "";
 
@@ -155,76 +284,99 @@ export function createFilterQuery(selected, filter, print) {
     }
 
     if(filter.withVariants)
-        where += (where === "" ? "WHERE " : " AND ") + "l1.issuevariant IS NOT NULL AND l1.issuevariant != '' ";
+        where += " AND " + "l1.issuevariant IS NOT NULL AND l1.issuevariant != '' ";
+
+    let joinwhere = "";
 
     if(filter.publishers && filter.publishers.length > 0) {
         let publishers = "";
         filter.publishers.map(publisher => publishers += "'" + publisher.name + "', ");
         publishers = publishers.substring(0, publishers.length - 2);
-        where += (where === "" ? "WHERE " : " AND ") + "l1.joinpublishername IN (" + publishers + ") ";
+        joinwhere += " AND " + "pjoin.name IN (" + publishers + ") ";
     }
 
     if(filter.series && filter.series.length > 0) {
         let series = "";
-        filter.series.map(s => series += ("(l1.joinseriestitle = '" + s.title + "' AND l1.joinseriesvolume = " + s.volume + ") AND "));
+        filter.series.map(s => series += ("(sjoin.title = '" + s.title + "' AND sjoin.volume = " + s.volume + " AND pjoin.name = '" + s.publisher.name + "') AND "));
         series = series.substring(0, series.length-5);
-        where += (where === "" ? "WHERE " : " AND ") + series + " ";
+        joinwhere += " AND " + series + " ";
     }
 
     if(filter.numbers && filter.numbers.length > 0) {
         let numbers = "";
-        filter.numbers.map(number => numbers += ("'" + number.number + "' " + number.compare + " l1.joinissuenumber AND "));
+        filter.numbers.map(number => numbers += ("'" + number.number + "' " + number.compare + " ijoin.number AND "));
         numbers = numbers.substring(0, numbers.length-5);
-        where += (where === "" ? "WHERE " : " AND ") + numbers + " ";
+        joinwhere += " AND " + numbers + " ";
     }
 
     if(filter.writers && filter.writers.length > 0) {
         let writers = "";
         filter.writers.map(writer => writers += "'" + writer.name + "', ");
         writers = writers.substring(0, writers.length-2);
-        where += (where === "" ? "WHERE " : " AND ") + "(l1." + (!us ? "join" : "") + "individualname IN (" + writers + ") AND l1." + (!us ? "join" : "") + "individualtype = 'WRITER') ";
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + writers + ") AND l1.individualtype = 'WRITER') ";
+        else
+            joinwhere += " AND " + "(ivjoin.name IN (" + writers + ") AND sijoin.type = 'WRITER') ";
     }
 
     if(filter.artists && filter.artists.length > 0) {
         let artists = "";
         filter.artists.map(artist => artists += "'" + artist.name + "', ");
         artists = artists.substring(0, artists.length-2);
-        where += (where === "" ? "WHERE " : " AND ") + "(l1." + (!us ? "join" : "") + "individualname IN (" + artists + ") AND l1." + (!us ? "join" : "") + "individualtype = 'ARTIST') ";
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + artists + ") AND l1.individualtype = 'ARTIST') ";
+        else
+            joinwhere += " AND " + "(ivjoin.name IN (" + artists + ") AND sijoin.type = 'ARTIST') ";
     }
 
     if (filter.letterers && filter.letterers.length > 0) {
         let letterers = "";
         filter.letterers.map(letterer => letterers += "'" + letterer.name + "', ");
         letterers = letterers.substring(0, letterers.length - 2);
-        where += (where === "" ? "WHERE " : " AND ") + "(l1." + (!us ? "join" : "") + "individualname IN (" + letterers + ") AND l1." + (!us ? "join" : "") + "individualtype = 'LETTERER') ";
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + letterers + ") AND l1.individualtype = 'LETTERER') ";
+        else
+            joinwhere += " AND " + "(ivjoin.name IN (" + letterers + ") AND sijoin.type = 'LETTERER') ";
     }
 
     if(filter.inkers && filter.inkers.length > 0) {
         let inkers = "";
         filter.inkers.map(inker => inkers += "'" + inker.name + "', ");
         inkers = inkers.substring(0, inkers.length-2);
-        where += (where === "" ? "WHERE " : " AND ") + "(l1." + (!us ? "join" : "") + "individualname IN (" + inkers + ") AND l1." + (!us ? "join" : "") + "individualtype = 'INKER') ";
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + inkers + ") AND l1.individualtype = 'INKER') ";
+        else
+            joinwhere += " AND " + "(ivjoin.name IN (" + inkers + ") AND sijoin.type = 'INKER') ";
     }
 
     if(filter.colourists && filter.colourists.length > 0) {
         let colourists = "";
         filter.colourists.map(colourist => colourists += "'" + colourist.name + "', ");
         colourists = colourists.substring(0, colourists.length-2);
-        where += (where === "" ? "WHERE " : " AND ") + "(l1." + (!us ? "join" : "") + "individualname IN (" + colourists + ") AND l1." + (!us ? "join" : "") + "individualtype = 'COLOURIST') ";
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + colourists + ") AND l1.individualtype = 'COLOURIST') ";
+        else
+            joinwhere += " AND " + "(ivjoin.name AND sijoin.type = 'COLOURIST') ";
     }
 
     if(filter.editors && filter.editors.length > 0) {
         let editors = "";
         filter.editors.map(editor => editors += "'" + editor.name + "', ");
         editors = editors.substring(0, editors.length-2);
-        where += (where === "" ? "WHERE " : " AND ") + "(l1." + (!us ? "join" : "") + "individualname IN (" + editors + ") AND l1." + (!us ? "join" : "") + "individualtype = 'EDITOR') ";
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + editors + ") AND l1.individualtype = 'EDITOR') ";
+        else
+            joinwhere += " AND " + "(ivjoin.name IN (" + editors + ") AND sijoin.type = 'EDITOR') ";
     }
 
     if(filter.translators && filter.translators.length > 0) {
         let translators = "";
         filter.translators.map(translator => translators += "'" + translator.name + "', ");
         translators = translators.substring(0, translators.length-2);
-        where += (where === "" ? "WHERE " : " AND ") + "(l1.joinindividualname IN (" + translators + ") AND l1.joinindividualtype = 'TRANSLATOR') ";
+        if (us)
+            joinwhere += " AND " + "(ivjoin.name IN (" + translators + ") AND sijoin.type = 'TRANSLATOR') ";
+        else
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + translators + ") AND l1.individualtype = 'TRANSLATOR') ";
     }
 
     if(selected.publisher)
@@ -240,8 +392,34 @@ export function createFilterQuery(selected, filter, print) {
             "        ( " +
             "          i.variant IS NULL OR i.variant = '' " +
             "        ) " +
-            "        GROUP BY st.id " +
-            "        HAVING count(*) = 1 AND ijoin.format = 'Taschenbuch' ";
+            "        AND i.id in " +
+            "        ( " +
+            "            SELECT id FROM ( " +
+            "                   SELECT    i.id          AS id " +
+            "                   FROM      publisher p " +
+            "                       LEFT JOIN series s " +
+            "                       ON        s.fk_publisher = p.id " +
+            "                       AND       p.original = 1" +
+            "                       LEFT JOIN issue i " +
+            "                       ON        i.fk_series = s.id " +
+            "                       LEFT JOIN " + typeTable + " st " +
+            "                       ON        st.fk_issue = i.id " +
+            "                       LEFT JOIN " + typeTable + " stjoin " +
+            "                       ON        stjoin.fk_parent = st.id" +
+            "                       LEFT JOIN " + typeTable + "_individual sijoin " +
+            "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
+            "                       LEFT JOIN individual ivjoin " +
+            "                       ON        ivjoin.id = sijoin.fk_individual " +
+            "                       LEFT JOIN issue ijoin " +
+            "                       ON        ijoin.id = stjoin.fk_issue " +
+            "                       LEFT JOIN series sjoin " +
+            "                       ON        sjoin.id = ijoin.fk_series " +
+            "                       LEFT JOIN publisher pjoin " +
+            "                       ON        pjoin.id = sjoin.fk_publisher " +
+            "                   WHERE     p.original = 1 " +
+            "                   " + joinwhere + " " +
+            "                   GROUP BY st.id " +
+            "                   HAVING count(*) = 1 AND ijoin.format = 'Taschenbuch') a) ";
     if(filter.noPrint)
         includeFilter =
             "        AND stjoin.id IS NULL " +
@@ -251,34 +429,101 @@ export function createFilterQuery(selected, filter, print) {
             "        ) ";
     if(filter.firstPrint)
         includeFilter =
-            "        AND stjoin.id IS NOT NULL " +
-            "        AND concat (stjoin.id, '#', i.releasedate) IN " +
+            "        AND st.id IS NOT NULL " +
+            "        AND concat (stjoin.id, '#', i.releasedate) in " +
             "        ( " +
-            "            SELECT    concat (stjoin.id, '#', min(i.releasedate)) " +
-            "            FROM      publisher p " +
-            "            LEFT JOIN series s " +
-            "            ON        s.fk_publisher = p.id " +
-            "            AND       p.original = 0 " +
-            "            LEFT JOIN issue i " +
-            "            ON        i.fk_series = s.id " +
-            "            LEFT JOIN story st " +
-            "            ON        st.fk_issue = i.id " +
-            "            LEFT JOIN story stjoin " +
-            "            ON        st.fk_parent = stjoin.id " +
-            "            WHERE     p.original = 0 " +
-            "            AND       stjoin.id IS NOT NULL " +
-            "            GROUP BY  stjoin.id) ";
+            "            SELECT firstprint FROM ( " +
+            "                   SELECT    concat(stjoin.id, '#', min(i.releasedate)) as firstprint " +
+            "                   FROM      publisher p " +
+            "                       LEFT JOIN series s " +
+            "                       ON        s.fk_publisher = p.id " +
+            "                       AND       p.original = 0" +
+            "                       LEFT JOIN issue i " +
+            "                       ON        i.fk_series = s.id " +
+            "                       LEFT JOIN " + typeTable + " st " +
+            "                       ON        st.fk_issue = i.id " +
+            "                       LEFT JOIN " + typeTable + " stjoin " +
+            "                       ON        stjoin.id = st.fk_parent" +
+            "                       LEFT JOIN " + typeTable + "_individual sijoin " +
+            "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
+            "                       LEFT JOIN individual ivjoin " +
+            "                       ON        ivjoin.id = sijoin.fk_individual " +
+            "                       LEFT JOIN issue ijoin " +
+            "                       ON        ijoin.id = stjoin.fk_issue " +
+            "                       LEFT JOIN series sjoin " +
+            "                       ON        sjoin.id = ijoin.fk_series " +
+            "                       LEFT JOIN publisher pjoin " +
+            "                       ON        pjoin.id = sjoin.fk_publisher " +
+            "                   WHERE     p.original = 0 " +
+            "                   " + joinwhere + " " +
+            "                   AND       stjoin.id IS NOT NULL " +
+            "                   GROUP BY  stjoin.id) a) ";
     if(filter.onlyPrint)
         includeFilter =
             "        AND st.id IS NOT NULL " +
-            "        GROUP BY st.fk_parent " +
-            "        HAVING count(*) = 1 ";
+            "        AND i.id in " +
+            "        ( " +
+            "            SELECT id FROM ( " +
+            "                   SELECT    i.id          AS id " +
+            "                   FROM      publisher p " +
+            "                       LEFT JOIN series s " +
+            "                       ON        s.fk_publisher = p.id " +
+            "                       AND       p.original = 0" +
+            "                       LEFT JOIN issue i " +
+            "                       ON        i.fk_series = s.id " +
+            "                       LEFT JOIN " + typeTable + " st " +
+            "                       ON        st.fk_issue = i.id " +
+            "                       LEFT JOIN " + typeTable + " stjoin " +
+            "                       ON        stjoin.id = st.fk_parent" +
+            "                       LEFT JOIN " + typeTable + "_individual sijoin " +
+            "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
+            "                       LEFT JOIN individual ivjoin " +
+            "                       ON        ivjoin.id = sijoin.fk_individual " +
+            "                       LEFT JOIN issue ijoin " +
+            "                       ON        ijoin.id = stjoin.fk_issue " +
+            "                       LEFT JOIN series sjoin " +
+            "                       ON        sjoin.id = ijoin.fk_series " +
+            "                       LEFT JOIN publisher pjoin " +
+            "                       ON        pjoin.id = sjoin.fk_publisher " +
+            "                   WHERE     p.original = 0 " +
+            "                   " + joinwhere + " " +
+            "                   AND       stjoin.id IS NOT NULL " +
+            "                   GROUP BY  st.fk_parent " +
+            "                   HAVING count(distinct concat(s.id, '#', i.number)) = 1) a) ";
+
     if(filter.otherTb)
         includeFilter =
             "        AND st.id IS NOT NULL " +
-            "        GROUP BY stjoin.id " +
-            "        HAVING count(DISTINCT i.id) - count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) = 1 " +
-            "        AND count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) > 0 ";
+            "        AND i.id in " +
+            "        ( " +
+            "            SELECT id FROM ( " +
+            "                   SELECT    i.id          AS id " +
+            "                   FROM      publisher p " +
+            "                       LEFT JOIN series s " +
+            "                       ON        s.fk_publisher = p.id " +
+            "                       AND       p.original = 0" +
+            "                       LEFT JOIN issue i " +
+            "                       ON        i.fk_series = s.id " +
+            "                       LEFT JOIN " + typeTable + " st " +
+            "                       ON        st.fk_issue = i.id " +
+            "                       LEFT JOIN " + typeTable + " stjoin " +
+            "                       ON        stjoin.id = st.fk_parent" +
+            "                       LEFT JOIN " + typeTable + "_individual sijoin " +
+            "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
+            "                       LEFT JOIN individual ivjoin " +
+            "                       ON        ivjoin.id = sijoin.fk_individual " +
+            "                       LEFT JOIN issue ijoin " +
+            "                       ON        ijoin.id = stjoin.fk_issue " +
+            "                       LEFT JOIN series sjoin " +
+            "                       ON        sjoin.id = ijoin.fk_series " +
+            "                       LEFT JOIN publisher pjoin " +
+            "                       ON        pjoin.id = sjoin.fk_publisher " +
+            "                   WHERE     p.original = 0 " +
+            "                   " + joinwhere + " " +
+            "                   AND       stjoin.id IS NOT NULL " +
+            "                   GROUP BY  st.fk_parent " +
+            "                   HAVING count(DISTINCT i.id) - count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) = 1 " +
+            "                       AND count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) > 0) a WHERE issueformat != 'Taschenbuch' ) ";
     if(filter.exclusive)
         includeFilter =
             "        AND " +
@@ -323,14 +568,7 @@ export function createFilterQuery(selected, filter, print) {
         "                             i.variant     AS issuevariant, " +
         "                             i.releasedate AS issuereleasedate, " +
         "                             iv.name       AS individualname, " +
-        "                             si.type       AS individualtype, " +
-        "                             pjoin.name    AS joinpublishername, " +
-        "                             sjoin.title   AS joinseriestitle, " +
-        "                             sjoin.volume  AS joinseriesvolume, " +
-        "                             ijoin.number  AS joinissuenumber, " +
-        "                             ijoin.format  AS joinissueformat, " +
-        "                             ivjoin.name   AS joinindividualname, " +
-        "                             sijoin.type   AS joinindividualtype " +
+        "                             si.type       AS individualtype " +
         "                   FROM      publisher p " +
         "                   LEFT JOIN series s " +
         "                   ON        s.fk_publisher = p.id " +
@@ -345,22 +583,14 @@ export function createFilterQuery(selected, filter, print) {
         "                   ON        iv.id = si.fk_individual " +
         (!filter.feature ?
             "                   LEFT JOIN " + typeTable + " stjoin " +
-            "                   ON        " + (!us ? "stjoin.id = st.fk_parent" : "stjoin.fk_parent = st.id") +
-            "                   LEFT JOIN " + typeTable + "_individual sijoin " +
-            "                   ON        sijoin.fk_" + typeTable + " = stjoin.id " +
-            "                   LEFT JOIN individual ivjoin " +
-            "                   ON        ivjoin.id = sijoin.fk_individual " +
-            "                   LEFT JOIN issue ijoin " +
-            "                   ON        ijoin.id = stjoin.fk_issue " +
-            "                   LEFT JOIN series sjoin " +
-            "                   ON        sjoin.id = ijoin.fk_series " +
-            "                   LEFT JOIN publisher pjoin " +
-            "                   ON        pjoin.id = sjoin.fk_publisher " : "") +
+            "                   ON        " + (!us ? "stjoin.id = st.fk_parent" : "stjoin.fk_parent = st.id") : "") +
         "                   WHERE     p.original = " + (us ? "1" : "0") +
         "                   " + includeFilter + " " +
         "         ) l1 " +
         " " + where + " " +
         "GROUP BY " + groupby + ";";
+
+    console.log(rawQuery);
 
     return rawQuery;
 }
