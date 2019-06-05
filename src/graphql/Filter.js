@@ -12,7 +12,8 @@ export const typeDef = gql`
   
   input NumberFilter {
     number: String,
-    compare: String
+    compare: String,
+    variant: String
   }
   
   input Filter {
@@ -122,13 +123,6 @@ async function convertFilterToString(filter) {
 
     s += "\t" + (filter.us ? "Original Ausgaben" : "Deutsche Ausgaben") + "\n";
 
-    if (filter.story)
-        s += "\tnach Geschichte\n";
-    if (filter.cover)
-        s += "\tnach Cover\n";
-    if (filter.feature)
-        s += "\tnach sonstigen Inhalten\n";
-
     s += "\tDetails\n";
 
     if (filter.formats) {
@@ -148,6 +142,13 @@ async function convertFilterToString(filter) {
 
     if (!filter.formats && !filter.withVariants && !filter.releasedates)
         s += "\t\t-\n";
+
+    if (filter.story)
+        s += "\tFiltern nach Geschichte\n";
+    if (filter.cover)
+        s += "\tFiltern nach Cover\n";
+    if (filter.feature)
+        s += "\tFiltern nach sonstigen Inhalten\n";
 
     s += "\tEnthält\n";
     if (filter.firstPrint)
@@ -179,7 +180,7 @@ async function convertFilterToString(filter) {
 
     if (filter.numbers) {
         s += "\t\tNummer: ";
-        filter.numbers.forEach(n => s += n.number + " " + n.compare + ", ");
+        filter.numbers.forEach(n => s += n.number + " " + n.compare + (n.variant !== '' ? " [" + n.variant + "]" : "") + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
@@ -284,7 +285,7 @@ export function createFilterQuery(selected, filter, print) {
     }
 
     if(filter.withVariants)
-        where += " AND " + "l1.issuevariant IS NOT NULL AND l1.issuevariant != '' ";
+        where += (where === "" ? "WHERE " : " AND ") + "l1.issuevariant IS NOT NULL AND l1.issuevariant != '' ";
 
     let joinwhere = "";
 
@@ -304,7 +305,7 @@ export function createFilterQuery(selected, filter, print) {
 
     if(filter.numbers && filter.numbers.length > 0) {
         let numbers = "";
-        filter.numbers.map(number => numbers += ("'" + number.number + "' " + number.compare + " ijoin.number AND "));
+        filter.numbers.map(number => numbers += ("'" + number.number + "' " + number.compare + " ijoin.number AND ijoin.variant LIKE '%" + number.variant + "%' "));
         numbers = numbers.substring(0, numbers.length-5);
         joinwhere += " AND " + numbers + " ";
     }
@@ -386,6 +387,30 @@ export function createFilterQuery(selected, filter, print) {
 
     let includeFilter = "";
 
+    let filterInclude =
+        "                   FROM      publisher p " +
+        "                       LEFT JOIN series s " +
+        "                       ON        s.fk_publisher = p.id " +
+        "                       AND       p.original = " + (us ? 1 : 0) +
+        "                       LEFT JOIN issue i " +
+        "                       ON        i.fk_series = s.id " +
+        "                       LEFT JOIN " + typeTable + " st " +
+        "                       ON        st.fk_issue = i.id " +
+        "                       LEFT JOIN " + typeTable + " stjoin " +
+        "                       ON        " + (us ? "stjoin.fk_parent = st.id" : "stjoin.id = st.fk_parent") +
+        "                       LEFT JOIN " + typeTable + "_individual sijoin " +
+        "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
+        "                       LEFT JOIN individual ivjoin " +
+        "                       ON        ivjoin.id = sijoin.fk_individual " +
+        "                       LEFT JOIN issue ijoin " +
+        "                       ON        ijoin.id = stjoin.fk_issue " +
+        "                       LEFT JOIN series sjoin " +
+        "                       ON        sjoin.id = ijoin.fk_series " +
+        "                       LEFT JOIN publisher pjoin " +
+        "                       ON        pjoin.id = sjoin.fk_publisher " +
+        "                   WHERE     p.original = " + (us ? 1 : 0) +
+        "                   " + joinwhere + " ";
+
     if(filter.onlyTb)
         includeFilter =
             "        AND " +
@@ -395,38 +420,25 @@ export function createFilterQuery(selected, filter, print) {
             "        AND i.id in " +
             "        ( " +
             "            SELECT id FROM ( " +
-            "                   SELECT    i.id          AS id " +
-            "                   FROM      publisher p " +
-            "                       LEFT JOIN series s " +
-            "                       ON        s.fk_publisher = p.id " +
-            "                       AND       p.original = 1" +
-            "                       LEFT JOIN issue i " +
-            "                       ON        i.fk_series = s.id " +
-            "                       LEFT JOIN " + typeTable + " st " +
-            "                       ON        st.fk_issue = i.id " +
-            "                       LEFT JOIN " + typeTable + " stjoin " +
-            "                       ON        stjoin.fk_parent = st.id" +
-            "                       LEFT JOIN " + typeTable + "_individual sijoin " +
-            "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
-            "                       LEFT JOIN individual ivjoin " +
-            "                       ON        ivjoin.id = sijoin.fk_individual " +
-            "                       LEFT JOIN issue ijoin " +
-            "                       ON        ijoin.id = stjoin.fk_issue " +
-            "                       LEFT JOIN series sjoin " +
-            "                       ON        sjoin.id = ijoin.fk_series " +
-            "                       LEFT JOIN publisher pjoin " +
-            "                       ON        pjoin.id = sjoin.fk_publisher " +
-            "                   WHERE     p.original = 1 " +
-            "                   " + joinwhere + " " +
+            "                   SELECT    i.id          AS id, ijoin.format " +
+            "                   " + filterInclude +
             "                   GROUP BY st.id " +
             "                   HAVING count(*) = 1 AND ijoin.format = 'Taschenbuch') a) ";
+
     if(filter.noPrint)
         includeFilter =
             "        AND stjoin.id IS NULL " +
             "        AND " +
             "        ( " +
             "          i.variant IS NULL OR i.variant = '' " +
-            "        ) ";
+            "        ) "+
+            "        AND i.id in " +
+            "        ( " +
+            "            SELECT id FROM ( " +
+            "                   SELECT    i.id          AS id, ijoin.format " +
+            "                   " + filterInclude +
+            "                   ) a) ";
+
     if(filter.firstPrint)
         includeFilter =
             "        AND st.id IS NOT NULL " +
@@ -434,30 +446,10 @@ export function createFilterQuery(selected, filter, print) {
             "        ( " +
             "            SELECT firstprint FROM ( " +
             "                   SELECT    concat(stjoin.id, '#', min(i.releasedate)) as firstprint " +
-            "                   FROM      publisher p " +
-            "                       LEFT JOIN series s " +
-            "                       ON        s.fk_publisher = p.id " +
-            "                       AND       p.original = 0" +
-            "                       LEFT JOIN issue i " +
-            "                       ON        i.fk_series = s.id " +
-            "                       LEFT JOIN " + typeTable + " st " +
-            "                       ON        st.fk_issue = i.id " +
-            "                       LEFT JOIN " + typeTable + " stjoin " +
-            "                       ON        stjoin.id = st.fk_parent" +
-            "                       LEFT JOIN " + typeTable + "_individual sijoin " +
-            "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
-            "                       LEFT JOIN individual ivjoin " +
-            "                       ON        ivjoin.id = sijoin.fk_individual " +
-            "                       LEFT JOIN issue ijoin " +
-            "                       ON        ijoin.id = stjoin.fk_issue " +
-            "                       LEFT JOIN series sjoin " +
-            "                       ON        sjoin.id = ijoin.fk_series " +
-            "                       LEFT JOIN publisher pjoin " +
-            "                       ON        pjoin.id = sjoin.fk_publisher " +
-            "                   WHERE     p.original = 0 " +
-            "                   " + joinwhere + " " +
+            "                   " + filterInclude +
             "                   AND       stjoin.id IS NOT NULL " +
             "                   GROUP BY  stjoin.id) a) ";
+
     if(filter.onlyPrint)
         includeFilter =
             "        AND st.id IS NOT NULL " +
@@ -465,28 +457,7 @@ export function createFilterQuery(selected, filter, print) {
             "        ( " +
             "            SELECT id FROM ( " +
             "                   SELECT    i.id          AS id " +
-            "                   FROM      publisher p " +
-            "                       LEFT JOIN series s " +
-            "                       ON        s.fk_publisher = p.id " +
-            "                       AND       p.original = 0" +
-            "                       LEFT JOIN issue i " +
-            "                       ON        i.fk_series = s.id " +
-            "                       LEFT JOIN " + typeTable + " st " +
-            "                       ON        st.fk_issue = i.id " +
-            "                       LEFT JOIN " + typeTable + " stjoin " +
-            "                       ON        stjoin.id = st.fk_parent" +
-            "                       LEFT JOIN " + typeTable + "_individual sijoin " +
-            "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
-            "                       LEFT JOIN individual ivjoin " +
-            "                       ON        ivjoin.id = sijoin.fk_individual " +
-            "                       LEFT JOIN issue ijoin " +
-            "                       ON        ijoin.id = stjoin.fk_issue " +
-            "                       LEFT JOIN series sjoin " +
-            "                       ON        sjoin.id = ijoin.fk_series " +
-            "                       LEFT JOIN publisher pjoin " +
-            "                       ON        pjoin.id = sjoin.fk_publisher " +
-            "                   WHERE     p.original = 0 " +
-            "                   " + joinwhere + " " +
+            "                   " + filterInclude +
             "                   AND       stjoin.id IS NOT NULL " +
             "                   GROUP BY  st.fk_parent " +
             "                   HAVING count(distinct concat(s.id, '#', i.number)) = 1) a) ";
@@ -498,39 +469,28 @@ export function createFilterQuery(selected, filter, print) {
             "        ( " +
             "            SELECT id FROM ( " +
             "                   SELECT    i.id          AS id " +
-            "                   FROM      publisher p " +
-            "                       LEFT JOIN series s " +
-            "                       ON        s.fk_publisher = p.id " +
-            "                       AND       p.original = 0" +
-            "                       LEFT JOIN issue i " +
-            "                       ON        i.fk_series = s.id " +
-            "                       LEFT JOIN " + typeTable + " st " +
-            "                       ON        st.fk_issue = i.id " +
-            "                       LEFT JOIN " + typeTable + " stjoin " +
-            "                       ON        stjoin.id = st.fk_parent" +
-            "                       LEFT JOIN " + typeTable + "_individual sijoin " +
-            "                       ON        sijoin.fk_" + typeTable + " = stjoin.id " +
-            "                       LEFT JOIN individual ivjoin " +
-            "                       ON        ivjoin.id = sijoin.fk_individual " +
-            "                       LEFT JOIN issue ijoin " +
-            "                       ON        ijoin.id = stjoin.fk_issue " +
-            "                       LEFT JOIN series sjoin " +
-            "                       ON        sjoin.id = ijoin.fk_series " +
-            "                       LEFT JOIN publisher pjoin " +
-            "                       ON        pjoin.id = sjoin.fk_publisher " +
-            "                   WHERE     p.original = 0 " +
-            "                   " + joinwhere + " " +
+            "                   " + filterInclude +
             "                   AND       stjoin.id IS NOT NULL " +
             "                   GROUP BY  st.fk_parent " +
             "                   HAVING count(DISTINCT i.id) - count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) = 1 " +
-            "                       AND count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) > 0) a WHERE issueformat != 'Taschenbuch' ) ";
+            "                       AND count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) > 0) a WHERE i.format != 'Taschenbuch' ) ";
+
     if(filter.exclusive)
         includeFilter =
             "        AND " +
             "        ( " +
             "          st.id IS NOT NULL " +
             "          AND st.fk_parent IS NULL " +
-            "        ) ";
+            "        )" +
+            "        AND i.id in " +
+            "        ( " +
+            "            SELECT id FROM ( " +
+            "                   SELECT    i.id          AS id " +
+            "                   " + filterInclude +
+            "            ) a) ";
+
+    if(includeFilter === '')
+        includeFilter = '';
 
     let columns = "";
     if (print)
