@@ -490,7 +490,13 @@ export function createFilterQuery(selected, filter, print) {
             "            ) a) ";
 
     if(includeFilter === '')
-        includeFilter = '';
+        includeFilter =
+            "        AND i.id in " +
+            "        ( " +
+            "            SELECT id FROM ( " +
+            "                   SELECT    i.id          AS id " +
+            "                   " + filterInclude +
+            "            ) a) ";
 
     let columns = "";
     if (print)
@@ -549,8 +555,6 @@ export function createFilterQuery(selected, filter, print) {
         "         ) l1 " +
         " " + where + " " +
         "GROUP BY " + groupby + ";";
-
-    console.log(rawQuery);
 
     return rawQuery;
 }
