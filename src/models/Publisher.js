@@ -1,7 +1,7 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import {asyncForEach} from "../util/util";
+import {asyncForEach, naturalCompare} from "../util/util";
 import {createFilterQuery} from "../graphql/Filter";
 
 class Publisher extends Model {
@@ -55,6 +55,16 @@ export default (sequelize) => {
             type: Sequelize.STRING,
             allowNull: false,
             defaultValue: ''
+        },
+        startyear: {
+            type: Sequelize.INTEGER,
+            allowNull: false,
+            defaultValue: 0
+        },
+        endyear: {
+            type: Sequelize.INTEGER,
+            allowNull: true,
+            defaultValue: 0
         }
     }, {
         indexes: [{
@@ -84,7 +94,9 @@ export const typeDef = gql`
     id: String,
     name: String,
     us: Boolean,
-    addinfo: String
+    addinfo: String,
+    startyear: Int,
+    endyear: Int
   }
     
   type Publisher {
@@ -92,6 +104,14 @@ export const typeDef = gql`
     name: String,
     series: [Series],
     us: Boolean,
+    seriesCount: Int,
+    issueCount: Int,
+    firstIssue: Issue,
+    lastEdited: [Issue],
+    lastIssue: Issue,
+    startyear: Int,
+    endyear: Int,
+    active: Boolean,
     addinfo: String
   }
 `;
@@ -153,7 +173,9 @@ export const resolvers = {
                 let res = await models.Publisher.create({
                     name: item.name.trim(),
                     addinfo: item.addinfo,
-                    original: item.us
+                    original: item.us,
+                    startyear: item.startyear,
+                    endyear: item.endyear
                 }, {transaction: transaction});
 
                 await transaction.commit();
@@ -179,6 +201,8 @@ export const resolvers = {
 
                 res.name = item.name.trim();
                 res.addinfo = item.addinfo;
+                res.startyear = item.startyear;
+                res.endyear = item.endyear;
                 res = await res.save({transaction: transaction});
 
                 await transaction.commit();
@@ -193,6 +217,81 @@ export const resolvers = {
         id: (parent) => parent.id,
         name: (parent) => parent.name,
         us: (parent) => parent.original,
-        addinfo: (parent) => parent.addinfo
+        seriesCount: async (parent) => await models.Series.count({where: {fk_publisher: parent.id}}),
+        issueCount: async (parent) => {
+            let res = await models.Issue.findAll({
+                where: {
+                    '$Series->Publisher.id$': parent.id
+                },
+                group: ['fk_series', 'number'],
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            });
+
+            return res ? res.length : 0;
+        },
+        firstIssue: async (parent) => {
+            let res = await models.Issue.findAll({
+                where: {
+                    '$Series->Publisher.id$': parent.id
+                },
+                group: ['fk_series', 'number'],
+                order: [['releasedate', 'ASC'], ['format', 'ASC']],
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            });
+
+            return res && res.length > 0 ? res[0] : null;
+        },
+        lastIssue: async (parent) => {
+            let res = await models.Issue.findAll({
+                where: {
+                    '$Series->Publisher.id$': parent.id
+                },
+                group: ['fk_series', 'number'],
+                order: [['releasedate', 'DESC'], ['format', 'ASC']],
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            });
+
+            return res && res.length > 0 ? res[0] : null;
+        },
+        startyear: (parent) => parent.startyear,
+        endyear: (parent) => parent.endyear,
+        active: (parent) => !(parent.startyear && parent.endyear),
+        addinfo: (parent) => parent.addinfo,
+        lastEdited: async (parent) => await models.Issue.findAll({
+            where: {
+                '$Series->Publisher.id$': parent.id
+            },
+            include: [
+                {
+                    model: models.Series,
+                    include: [
+                        models.Publisher
+                    ]
+                }
+            ],
+            order: [['updatedAt', 'DESC']],
+            limit: 25
+        }),
     }
 };

@@ -106,6 +106,11 @@ export const typeDef = gql`
     startyear: Int,
     endyear: Int,
     volume: Int,
+    issueCount: Int,
+    firstIssue: Issue,
+    lastIssue: Issue,
+    lastEdited: [Issue],
+    active: Boolean,
     addinfo: String,
     publisher: Publisher
   }
@@ -263,6 +268,66 @@ export const resolvers = {
         endyear: (parent) => parent.endyear,
         volume: (parent) => parent.volume,
         addinfo: (parent) => parent.addinfo,
+        issueCount: async (parent) => {
+            let res = await models.Issue.findAll({
+                where: {
+                    '$Series.id$': parent.id
+                },
+                include: [
+                    {
+                        model: models.Series
+                    }
+                ],
+                group: ['number']
+            });
+
+            return res ? res.length : 0;
+        },
+        firstIssue: async (parent) => {
+            let res = await models.Issue.findAll({
+                where: {
+                    '$Series.id$': parent.id
+                },
+                include: [
+                    {
+                        model: models.Series
+                    }
+                ],
+                group: ['number'],
+                order: [['releasedate', 'ASC'], ['format', 'ASC']]
+            });
+
+            return res && res.length > 0 ? res[0] : null;
+        },
+        lastIssue: async (parent) => {
+            let res = await models.Issue.findAll({
+                where: {
+                    '$Series.id$': parent.id
+                },
+                include: [
+                    {
+                        model: models.Series
+                    }
+                ],
+                group: ['number'],
+                order: [['releasedate', 'DESC'], ['format', 'ASC']]
+            });
+
+            return res && res.length > 0 ? res[0] : null;
+        },
+        active: (parent) => !(parent.startyear && parent.endyear),
         publisher: async (parent) => await models.Publisher.findById(parent.fk_publisher),
+        lastEdited: async (parent) => await models.Issue.findAll({
+            where: {
+                '$Series.id$': parent.id
+            },
+            include: [
+                {
+                    model: models.Series
+                }
+            ],
+            order: [['updatedAt', 'DESC']],
+            limit: 25
+        }),
     }
 };
