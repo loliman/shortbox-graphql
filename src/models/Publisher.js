@@ -242,7 +242,7 @@ export const resolvers = {
                     '$Series->Publisher.id$': parent.id
                 },
                 group: ['fk_series', 'number'],
-                order: [['releasedate', 'ASC'], ['format', 'ASC']],
+                order: [['releasedate', 'ASC'], ['number', 'ASC'], ['format', 'ASC']],
                 include: [
                     {
                         model: models.Series,
@@ -261,7 +261,7 @@ export const resolvers = {
                     '$Series->Publisher.id$': parent.id
                 },
                 group: ['fk_series', 'number'],
-                order: [['releasedate', 'DESC'], ['format', 'ASC']],
+                order: [['releasedate', 'DESC'], ['number', 'DESC'], ['format', 'DESC']],
                 include: [
                     {
                         model: models.Series,

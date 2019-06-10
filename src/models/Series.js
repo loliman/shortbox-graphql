@@ -294,7 +294,7 @@ export const resolvers = {
                     }
                 ],
                 group: ['number'],
-                order: [['releasedate', 'ASC'], ['format', 'ASC']]
+                order: [['releasedate', 'ASC'], ['number', 'ASC'], ['format', 'ASC']]
             });
 
             return res && res.length > 0 ? res[0] : null;
@@ -310,7 +310,7 @@ export const resolvers = {
                     }
                 ],
                 group: ['number'],
-                order: [['releasedate', 'DESC'], ['format', 'ASC']]
+                order: [['releasedate', 'DESC'], ['number', 'DESC'], ['format', 'DESC']]
             });
 
             return res && res.length > 0 ? res[0] : null;
