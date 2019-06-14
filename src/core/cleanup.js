@@ -205,6 +205,20 @@ export async function run() {
         });
         console.log("[" + (new Date()).toUTCString() + "] Deleted " + individualCount + " individuals.");
 
+        //Remove all arcs without content
+        let arcs = await models.Arc.findAll({transaction});
+        let arcCount = 0;
+        await asyncForEach(arcs, async (arc) => {
+            let c = await models.Issue_Arc.count({where: {fk_arc: arc.id}, transaction});
+            let del = c === 0;
+
+            if(del) {
+                await arc.destroy({transaction});
+                arcCount++;
+            }
+        });
+        console.log("[" + (new Date()).toUTCString() + "] Deleted " + arcCount + " arcs.");
+
         await transaction.commit();
         console.log("[" + (new Date()).toUTCString() + "] Cleanup done.");
     } catch (e) {

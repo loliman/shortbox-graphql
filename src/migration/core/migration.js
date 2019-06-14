@@ -3,6 +3,7 @@ import models from "../../models";
 import {asyncForEach, romanize} from "../../util/util";
 import fs from 'fs';
 import {create} from "../../models/Issue";
+import {create as createArc} from "../../models/Arc";
 import {crawlIssue, crawlSeries} from "../../core/crawler";
 import {afterFirstMigration} from "../../config/config";
 
@@ -86,23 +87,33 @@ export async function fixUsComics() {
                                 price: 0,
                                 currency: i.currency ? i.currency : 'USD',
                                 addinfo: ''
-                            }, {transaction: transaction});
+                            });
 
                             await asyncForEach(crawledIssue.editors, async (editor) => {
-                                await newVariant.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                                await newVariant.associateIndividual(editor.name.trim(), 'EDITOR');
                             });
-                            await newVariant.save({transaction: transaction});
+                            await newVariant.save();
 
                             let newCover = await models.Cover.create({
                                 url: crawledVariant.cover.url,
                                 number: 0,
                                 addinfo: ''
-                            }, {transaction: transaction});
+                            });
 
-                            await newCover.setIssue(newVariant, {transaction: transaction});
-                            await newCover.save({transaction: transaction});
+                            await newCover.setIssue(newVariant);
+                            await newCover.save();
                         }
                     });
+
+                    if(crawledIssue.arcs && crawledIssue.arcs.length > 0) {
+                        await asyncForEach(crawledIssue.arcs, async arc => {
+                            try {
+                                await createArc(arc, i);
+                            } catch (e) {
+                                //ignore, might already exist
+                            }
+                        });
+                    }
 
                     let stories = await models.Story.findAll({
                         where: {fk_issue: i.id}

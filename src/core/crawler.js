@@ -88,10 +88,26 @@ export async function crawlIssue(issue) {
                 let html = $(c).html().trim();
 
                 if (html.indexOf('templateimage') !== -1) {
-                    let coverChildren = $(c).children()
+                    let children = $(c).children();
+
+                    res.arcs = [];
+                    children.each((i, c) => {
+                        let text = $(c).text();
+                        if(text.trim() !== '' && i !== children.length-1) {
+                            text = text.replace("Part of the '", "");
+                            let title = text.substring(0, text.lastIndexOf("'"));
+                            let type = text.substring(text.lastIndexOf("'") + 1);
+                            type = type.replace(/ /g, "");
+                            type = type.toUpperCase();
+
+                            res.arcs.push({title: title.trim(), type: type.trim()});
+                        }
+                    });
+
+                    let coverChildren = children
                         .last().children();
 
-                    let coverUrl = $(c).children()
+                    let coverUrl = children
                         .last().children()
                         .first().children()
                         .first().children().attr("href").trim();

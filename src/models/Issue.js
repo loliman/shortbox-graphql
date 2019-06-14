@@ -7,6 +7,7 @@ import {coverDir} from "../config/config";
 import {create as createStory, equals as storyEquals, getStories} from "./Story";
 import {create as createCover, equals as coverEquals, getCovers} from "./Cover";
 import {create as createFeature, equals as featureEquals, getFeatures} from "./Feature";
+import {create as createArc} from "./Arc";
 import {createFilterQuery} from "../graphql/Filter";
 
 class Issue extends Model {
@@ -22,6 +23,7 @@ class Issue extends Model {
 
         Issue.belongsTo(models.Series, {foreignKey: 'fk_series'});
         Issue.belongsToMany(models.Individual, {through: models.Issue_Individual, foreignKey: 'fk_issue'});
+        Issue.belongsToMany(models.Arc, {through: models.Issue_Arc, foreignKey: 'fk_issue'});
     }
 
     async associateIndividual(name, type, transaction) {
@@ -164,7 +166,8 @@ export const typeDef = gql`
     addinfo: String,
     stories: [StoryInput],
     features: [FeatureInput],
-    covers: [CoverInput]
+    covers: [CoverInput],
+    arcs: [ArcInput]
   }
   
   type Issue {
@@ -179,6 +182,7 @@ export const typeDef = gql`
     series: Series,
     pages: Int,
     releasedate: Date,
+    arcs: [Arc,]
     features: [Feature],
     stories: [Story],
     covers: [Cover],
@@ -438,6 +442,16 @@ export const resolvers = {
                     await asyncForEach(item.editors, async editor => {
                         if(editor.name && editor.name.trim() !== '')
                             await res.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                    });
+
+                    await res.save({transaction: transaction});
+                }
+
+                if(us && item.arcs && item.arcs.length > 0) {
+                    await models.Issue_Arc.destroy({where: {fk_issue: res.id}, transaction});
+
+                    await asyncForEach(item.arcs, async (arc) => {
+                        await createArc(arc, item, transaction);
                     });
 
                     await res.save({transaction: transaction});
@@ -730,6 +744,19 @@ export const resolvers = {
         releasedate: (parent) => parent.releasedate,
         verified: (parent) => parent.verified,
         addinfo: (parent) => parent.addinfo,
+        arcs: async (parent) => {
+            if(!(await (await parent.getSeries()).getPublisher()).original)
+                return [];
+
+            return await models.Arc.findAll({
+                include: [{
+                    model: models.Issue
+                }],
+                where: {
+                    '$Issues->Issue_Arc.fk_issue$': parent.id
+                }
+            })
+        },
         editors: async (parent) => {
             if(!(await (await parent.getSeries()).getPublisher()).original)
                 return [];
@@ -910,6 +937,10 @@ export function findOrCrawlIssue(i, transaction) {
                 await asyncForEach(crawledIssue.editors, async (editor) => {
                     await issue.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
                     await issue.save({transaction: transaction});
+                });
+
+                await asyncForEach(crawledIssue.arcs, async (arc) => {
+                    await createArc(arc, issue, transaction);
                 });
 
                 issueCreated = true;
