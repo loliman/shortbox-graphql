@@ -182,7 +182,7 @@ export const typeDef = gql`
     series: Series,
     pages: Int,
     releasedate: Date,
-    arcs: [Arc,]
+    arcs: [Arc]
     features: [Feature],
     stories: [Story],
     covers: [Cover],
@@ -748,12 +748,17 @@ export const resolvers = {
             if(!(await (await parent.getSeries()).getPublisher()).original)
                 return [];
 
+            let issues = await models.Issue.findAll({
+                where: {fk_series: parent.fk_series, number: parent.number},
+                order: [['createdAt', 'ASC']]
+            });
+
             return await models.Arc.findAll({
                 include: [{
                     model: models.Issue
                 }],
                 where: {
-                    '$Issues->Issue_Arc.fk_issue$': parent.id
+                    '$Issues->Issue_Arc.fk_issue$': issues[0].id
                 }
             })
         },

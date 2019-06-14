@@ -27,6 +27,7 @@ export const typeDef = gql`
     publishers: [PublisherInput],
     series: [SeriesInput],
     numbers: [NumberFilter],
+    arcs: [ArcInput],
     writers: [IndividualInput],
     artists: [IndividualInput],
     inkers: [IndividualInput],
@@ -181,6 +182,12 @@ async function convertFilterToString(filter) {
     if (filter.numbers) {
         s += "\t\tNummer: ";
         filter.numbers.forEach(n => s += n.number + " " + n.compare + (n.variant !== '' ? " [" + n.variant + "]" : "") + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
+    if (filter.arcs) {
+        s += "\t\tTeil von: ";
+        filter.arcs.forEach(n => s += n.title + " (" + n.type.charAt(0).toUpperCase() + n.type.slice(1).toLowerCase() + ")" + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
@@ -380,6 +387,17 @@ export function createFilterQuery(selected, filter, print) {
             where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + translators + ") AND l1.individualtype = 'TRANSLATOR') ";
     }
 
+    if (filter.arcs && filter.arcs.length > 0) {
+        let arcs = "";
+        filter.arcs.map(arc => arcs += " CONCAT('" + arc.title + "', '#', '" + arc.type + "'), ");
+        arcs = arcs.substring(0, arcs.length - 2);
+
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + " CONCAT(l1.arctitle, '#', l1.arctype) IN (" + arcs + ") ";
+        else
+            joinwhere += " AND " + " CONCAT(ajoin.title, '#', ajoin.type) IN (" + arcs + ") ";
+    }
+
     if(selected.publisher)
         where += (where === "" ? "WHERE " : " AND ") + "(l1.seriestitle = '" + selected.title + "' AND l1.seriesvolume = " + selected.volume + " AND l1.publishername = '" + selected.publisher.name + "') ";
     else if(selected.name)
@@ -394,6 +412,10 @@ export function createFilterQuery(selected, filter, print) {
         "                       AND       p.original = " + (us ? 1 : 0) +
         "                       LEFT JOIN issue i " +
         "                       ON        i.fk_series = s.id " +
+        "                       LEFT JOIN issue_arc ia " +
+        "                       ON        ia.fk_issue = i.id " +
+        "                       LEFT JOIN arc a " +
+        "                       ON a.id = ia.fk_arc " +
         "                       LEFT JOIN " + typeTable + " st " +
         "                       ON        st.fk_issue = i.id " +
         "                       LEFT JOIN " + typeTable + " stjoin " +
@@ -404,6 +426,10 @@ export function createFilterQuery(selected, filter, print) {
         "                       ON        ivjoin.id = sijoin.fk_individual " +
         "                       LEFT JOIN issue ijoin " +
         "                       ON        ijoin.id = stjoin.fk_issue " +
+        "                       LEFT JOIN issue_arc iajoin " +
+        "                       ON        iajoin.fk_issue = ijoin.id " +
+        "                       LEFT JOIN arc ajoin " +
+        "                       ON ajoin.id = iajoin.fk_arc " +
         "                       LEFT JOIN series sjoin " +
         "                       ON        sjoin.id = ijoin.fk_series " +
         "                       LEFT JOIN publisher pjoin " +
@@ -534,6 +560,8 @@ export function createFilterQuery(selected, filter, print) {
         "                             i.variant     AS issuevariant, " +
         "                             i.releasedate AS issuereleasedate, " +
         "                             iv.name       AS individualname, " +
+        "                             a.title       AS arctitle, " +
+        "                             a.type        AS arctype, " +
         "                             si.type       AS individualtype " +
         "                   FROM      publisher p " +
         "                   LEFT JOIN series s " +
@@ -541,6 +569,10 @@ export function createFilterQuery(selected, filter, print) {
         "                   AND       p.original = " + (us ? "1" : "0") +
         "                   LEFT JOIN issue i " +
         "                   ON        i.fk_series = s.id " +
+        "                   LEFT JOIN issue_arc ia " +
+        "                   ON        ia.fk_issue = i.id " +
+        "                   LEFT JOIN arc a " +
+        "                   ON a.id = ia.fk_arc " +
         "                   LEFT JOIN " + typeTable + " st " +
         "                   ON        st.fk_issue = i.id " +
         "                   LEFT JOIN " + typeTable + "_individual si " +

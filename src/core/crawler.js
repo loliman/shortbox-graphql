@@ -95,12 +95,19 @@ export async function crawlIssue(issue) {
                         let text = $(c).text();
                         if(text.trim() !== '' && i !== children.length-1) {
                             text = text.replace("Part of the '", "");
-                            let title = text.substring(0, text.lastIndexOf("'"));
+                            text = text.replace("', and '", "###");
+                            text = text.replace("', '", "###");
+
+                            let titles = text.substring(0, text.lastIndexOf("'")).split("###");
+
                             let type = text.substring(text.lastIndexOf("'") + 1);
                             type = type.replace(/ /g, "");
                             type = type.toUpperCase();
+                            if (titles.length > 1) {
+                                type = type.substr(0, type.length - 1);
+                            }
 
-                            res.arcs.push({title: title.trim(), type: type.trim()});
+                            titles.forEach(title => res.arcs.push({title: title.trim(), type: type.trim()}));
                         }
                     });
 

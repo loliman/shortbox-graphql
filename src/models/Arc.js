@@ -1,7 +1,6 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import {asyncForEach} from "../util/util";
 
 class Arc extends Model {
     static tableName = 'Arc';
@@ -40,10 +39,14 @@ export default (sequelize) => {
 };
 
 export const typeDef = gql`
+    extend type Query {
+      arcs: [Arc]  
+    }
+  
     input ArcInput {
-        id: String,
-        title: String,
-        type: String
+      id: String,
+      title: String,
+      type: String
     }
       
     type Arc {
@@ -55,6 +58,11 @@ export const typeDef = gql`
 `;
 
 export const resolvers = {
+    Query: {
+        arcs: () => models.Arc.findAll({
+            order: [['title', 'ASC']]
+        })
+    },
     Arc: {
         id: (parent) => parent.id,
         title: (parent) => parent.title.trim(),
