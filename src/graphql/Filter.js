@@ -187,7 +187,21 @@ async function convertFilterToString(filter) {
 
     if (filter.arcs) {
         s += "\t\tTeil von: ";
-        filter.arcs.forEach(n => s += n.title + " (" + n.type.charAt(0).toUpperCase() + n.type.slice(1).toLowerCase() + ")" + ", ");
+        filter.arcs.forEach(n => {
+            let type;
+            switch (n.type) {
+                case 'EVENT':
+                    type = 'Event';
+                    break;
+                case 'STORYLINE':
+                    type = 'Story Line';
+                    break;
+                default:
+                    type = 'Story Arc';
+
+            }
+            s += n.title + " (" + type + ")" + ", "
+        });
         s = s.substr(0, s.length - 2) + "\n";
     }
 

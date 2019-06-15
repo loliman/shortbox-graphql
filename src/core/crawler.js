@@ -97,15 +97,27 @@ export async function crawlIssue(issue) {
                             text = text.replace("Part of the '", "");
                             text = text.replace("', and '", "###");
                             text = text.replace("', '", "###");
+                            text = text.replace("(Event)", "");
+                            text = text.replace("(event)", "");
+                            text = text.replace("(story arc)", "");
+                            text = text.replace("(Story arc)", "");
+                            text = text.replace("(story Arc)", "");
+                            text = text.replace("(Story Arc)", "");
+                            text = text.replace("(story line)", "");
+                            text = text.replace("(Story line)", "");
+                            text = text.replace("(story Line)", "");
+                            text = text.replace("(Story Line)", "");
+                            text = text.replace("(Story)", "");
+                            text = text.replace("(story)", "");
+                            text = text.trim();
 
                             let titles = text.substring(0, text.lastIndexOf("'")).split("###");
 
                             let type = text.substring(text.lastIndexOf("'") + 1);
                             type = type.replace(/ /g, "");
                             type = type.toUpperCase();
-                            if (titles.length > 1) {
+                            if (titles.length > 1)
                                 type = type.substr(0, type.length - 1);
-                            }
 
                             titles.forEach(title => res.arcs.push({title: title.trim(), type: type.trim()}));
                         }
