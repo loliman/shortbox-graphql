@@ -32,7 +32,8 @@ export const typeDef = gql`
     artists: [IndividualInput],
     inkers: [IndividualInput],
     colourists: [IndividualInput],
-    letteres: [IndividualInput],
+    letterers: [IndividualInput],
+    pencilers: [IndividualInput],
     editors: [IndividualInput],
     translators: [IndividualInput],
     firstPrint: Boolean,
@@ -216,6 +217,12 @@ async function convertFilterToString(filter) {
         s = s.substr(0, s.length - 2) + "\n";
     }
 
+    if (filter.pencilers) {
+        s += "\t\tZeichner: ";
+        filter.pencilers.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
     if (filter.artists) {
         s += "\t\tZeichner: ";
         filter.artists.forEach(i => s += i.name + ", ");
@@ -341,6 +348,16 @@ export function createFilterQuery(selected, filter, print) {
             joinwhere += " AND " + "(ivjoin.name IN (" + writers + ") AND sijoin.type = 'WRITER') ";
     }
 
+    if (filter.pencilers && filter.pencilers.length > 0) {
+        let pencilers = "";
+        filter.pencilers.map(penciler => pencilers += "'" + penciler.name + "', ");
+        pencilers = pencilers.substring(0, pencilers.length - 2);
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + pencilers + ") AND l1.individualtype = 'PENCILER') ";
+        else
+            joinwhere += " AND " + "(ivjoin.name IN (" + pencilers + ") AND sijoin.type = 'PENCILER') ";
+    }
+
     if(filter.artists && filter.artists.length > 0) {
         let artists = "";
         filter.artists.map(artist => artists += "'" + artist.name + "', ");
@@ -378,7 +395,7 @@ export function createFilterQuery(selected, filter, print) {
         if (us)
             where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + colourists + ") AND l1.individualtype = 'COLOURIST') ";
         else
-            joinwhere += " AND " + "(ivjoin.name AND sijoin.type = 'COLOURIST') ";
+            joinwhere += " AND " + "(ivjoin.name IN (" + colourists + ") AND sijoin.type = 'COLOURIST') ";
     }
 
     if(filter.editors && filter.editors.length > 0) {
