@@ -332,10 +332,14 @@ export function createFilterQuery(selected, filter, print) {
     }
 
     if(filter.numbers && filter.numbers.length > 0) {
-        let numbers = "";
-        filter.numbers.map(number => numbers += ("'" + number.number + "' " + number.compare + " ijoin.number AND ijoin.variant LIKE '%" + number.variant + "%' "));
-        numbers = numbers.substring(0, numbers.length-5);
-        joinwhere += " AND " + numbers + " ";
+        if (us)
+            filter.numbers.map(number => {
+                joinwhere += (where === "" ? "WHERE " : " AND ") + "('" + number.number + "' " + number.compare + " l1.issuenumber AND l1.issuevariant LIKE '%" + number.variant + "%') "
+            });
+        else
+            filter.numbers.map(number => {
+                joinwhere += " AND " + "('" + number.number + "' " + number.compare + " ijoin.number AND ijoin.variant LIKE '%" + number.variant + "%') "
+            });
     }
 
     if(filter.writers && filter.writers.length > 0) {
@@ -557,7 +561,7 @@ export function createFilterQuery(selected, filter, print) {
 
     let columns = "";
     if (print)
-        columns = "publishername, seriestitle, seriesvolume, seriesstartyear, seriesendyear, issuenumber";
+        columns = "publishername, seriestitle, seriesvolume, seriesstartyear, seriesendyear, issuenumber, issuevariant";
     else if (selected.publisher)
         columns = "issuenumber, issueformat, issuevariant, seriesid";
     else if(selected.name)
@@ -618,6 +622,8 @@ export function createFilterQuery(selected, filter, print) {
         "         ) l1 " +
         " " + where + " " +
         "GROUP BY " + groupby + ";";
+
+    console.log(rawQuery);
 
     return rawQuery;
 }
