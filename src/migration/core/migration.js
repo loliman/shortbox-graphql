@@ -105,7 +105,7 @@ export async function fixUsComics() {
                         }
                     });
 
-                    if(crawledIssue.arcs && crawledIssue.arcs.length > 0) {
+                    /*if(crawledIssue.arcs && crawledIssue.arcs.length > 0) {
                         await asyncForEach(crawledIssue.arcs, async arc => {
                             try {
                                 await createArc(arc, i);
@@ -113,7 +113,7 @@ export async function fixUsComics() {
                                 //ignore, might already exist
                             }
                         });
-                    }
+                    }*/
 
                     let stories = await models.Story.findAll({
                         where: {fk_issue: i.id}
@@ -152,6 +152,14 @@ export async function fixUsComics() {
                                 return newStory;
                             }));
                         }
+                    } else if(stories.length > 0 && crawledIssue.stories.length > 0) {
+                        await asyncForEach(crawledIssue.stories, async (crawledStory, i) => {
+                            if(crawledStory.appearing && crawledStory.appearing.length > 0) {
+                                await asyncForEach(crawledStory.appearing, async appearance => {
+                                    await stories[i].associateAppearance(appearance.name, appearance.type, appearance.role, null);
+                                });
+                            }
+                        });
                     }
                 } catch (e) {
                     /*ignore errors while crawling*/

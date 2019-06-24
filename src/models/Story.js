@@ -12,6 +12,7 @@ class Story extends Model {
 
         Story.belongsTo(models.Issue, {foreignKey: 'fk_issue'});
         Story.belongsToMany(models.Individual, {through: models.Story_Individual, foreignKey: 'fk_story', unique: false});
+        Story.belongsToMany(models.Appearance, {through: models.Story_Appearance, foreignKey: 'fk_story'});
     }
 
     async associateIndividual(name, type, transaction) {
@@ -24,6 +25,24 @@ class Story extends Model {
                     transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Story_Individual.create({fk_story: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
+                });
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    async associateAppearance(name, type, role, transaction) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                models.Appearance.findOrCreate({
+                    where: {
+                        name: name,
+                        type: type
+                    },
+                    transaction: transaction
+                }).then(async ([appearance, created]) => {
+                    resolve(await models.Story_Appearance.create({fk_story: this.id, fk_appearance: appearance.id, role: role}, {transaction: transaction}));
                 });
             } catch (e) {
                 reject(e);

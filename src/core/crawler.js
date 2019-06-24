@@ -95,6 +95,7 @@ export async function crawlIssue(issue) {
                         let text = $(c).text();
                         if(text.trim() !== '' && i !== children.length-1) {
                             text = text.replace("Part of the '", "");
+                            text = text.replace("Part of the \"", "");
                             text = text.replace("', and '", "###");
                             text = text.replace("', '", "###");
                             text = text.replace("(Event)", "");
@@ -111,9 +112,18 @@ export async function crawlIssue(issue) {
                             text = text.replace("(story)", "");
                             text = text.trim();
 
-                            let titles = text.substring(0, text.lastIndexOf("'")).split("###");
+                            let titles;
+                            if(text.lastIndexOf("'") !== -1)
+                                titles = text.substring(0, text.lastIndexOf("'")).split("###");
+                            else
+                                titles = text.substring(0, text.lastIndexOf("\"")).split("###");
 
-                            let type = text.substring(text.lastIndexOf("'") + 1);
+                            let type;
+                            if(text.lastIndexOf("'") !== -1)
+                                type = text.substring(text.lastIndexOf("'") + 1);
+                            else
+                                type = text.substring(text.lastIndexOf("\"") + 1);
+
                             type = type.replace(/ /g, "");
                             type = type.toUpperCase();
                             if (titles.length > 1)
@@ -205,6 +215,8 @@ export async function crawlIssue(issue) {
                     }
                 } else if ((html.indexOf('<table ') === 0 || html.indexOf('<tbody>') === 0) && html.indexOf('Issue Details') === -1) {
                     let story = {};
+                    story.appearing = [];
+
                     let storyChildren = $(c).children();
 
                     if (storyChildren.first().html().indexOf('<tbody') === 0)
@@ -249,6 +261,77 @@ export async function crawlIssue(issue) {
                         story.number = res.stories.length + 1;
                         res.stories.push(story);
                     }
+
+
+                }
+            });
+
+            let headers = $('[id^=AppearingHeader]');
+            let currentType = '';
+            let currentSubType = '';
+
+            headers.each((i, e) => {
+                let first = $(e);
+                let story = first.text().trim();
+
+                if(story.indexOf("Appearing in") === -1)
+                    return;
+
+                story = story.replace("Appearing in ", "");
+                if(story.indexOf("\"") === 0 || story.indexOf("'") === 0)
+                    story = story.substring(1, story.length-1);
+
+                let currentStory;
+                res.stories.forEach(s => {
+                    if(s.title === story)
+                        currentStory = s;
+                });
+
+                while(true) {
+                    let next = first.next();
+
+                    if(next) {
+                        if (next.attr('id') && next.attr('id').indexOf('StoryTitle') !== -1)
+                            break;
+
+                        if(next.is('p')) {
+                            let text = $(next).text().trim();
+                            text = text.replace(/ /g, "");
+                            text = text.substring(0, text.length - 2);
+                            if(text.indexOf("Races") !== -1)
+                                text = "Races";
+
+                            currentType = text.toUpperCase();
+
+                            switch (currentType) {
+                                case "FEATUREDCHARACTER":
+                                    currentSubType = "FEATURED";
+                                    currentType = "CHARACTER";
+                                    break;
+                                case "SUPPORTINGCHARACTER":
+                                    currentSubType = "SUPPORTING";
+                                    currentType = "CHARACTER";
+                                    break;
+                                case "ANTAGONIST":
+                                    currentSubType = "ANTAGONIST";
+                                    currentType = "CHARACTER";
+                                    break;
+                                case "OTHERCHARACTER":
+                                    currentSubType = "OTHER";
+                                    currentType = "CHARACTER";
+                                    break;
+                                default:
+                                    currentSubType = "";
+                            }
+                        } else {
+                            if(next.is('ul'))
+                                crawlApps(next, $, currentType, currentSubType, currentStory)
+                        }
+
+                        first = next;
+                    } else {
+                        break;
+                    }
                 }
             });
 
@@ -256,6 +339,30 @@ export async function crawlIssue(issue) {
         } catch (e) {
             reject(new Error("Ausgabe " + issue.series.title + " (Vol." + issue.series.volume + ") " + issue.number + " nicht gefunden [" + url + "]"));
         }
+    });
+}
+
+function crawlApps(e, $, currentType, currentSubType, currentStory) {
+    let l = $(e).children();
+
+    l.each((i, e) => {
+        let a = $(e).children('a');
+        a.each((i, e) => {
+            let text = $(e).attr('title').trim();
+            text = text.replace("wikipedia:", "");
+            text = text.replace("(page does not exist)", "");
+
+            if (text !== '' && text.indexOf("Appearance of") === -1 && text.indexOf("Index/") === -1) {
+                let exists = currentStory.appearing.find(v => v.name === text.trim() && v.type === currentType && v.role === currentSubType);
+                if(!exists)
+                    currentStory.appearing.push({name: text.trim(), type: currentType, role: currentSubType});
+            }
+        });
+
+        let ul = $(e).children('ul');
+        ul.each((i, e) => {
+            crawlApps(e, $, currentType, currentSubType, currentStory);
+        });
     });
 }
 
