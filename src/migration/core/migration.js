@@ -57,9 +57,9 @@ export async function fixUsComics() {
 
             await asyncForEach(issues, async (i, idx, a) => {
                 try {
-                    console.log("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx+1) + " of " + a.length);
-
                     i.series = await models.Series.findOne({where: {id: i.fk_series}});
+
+                    console.log("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx+1) + " of " + a.length + " (" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")");
 
                     let crawledIssue = await crawlIssue(i).catch(() => {/*ignore errors while crawling*/});
 
