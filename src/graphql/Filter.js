@@ -32,7 +32,8 @@ export const typeDef = gql`
     artists: [IndividualInput],
     inkers: [IndividualInput],
     colourists: [IndividualInput],
-    letteres: [IndividualInput],
+    letterers: [IndividualInput],
+    pencilers: [IndividualInput],
     editors: [IndividualInput],
     translators: [IndividualInput],
     firstPrint: Boolean,
@@ -216,6 +217,12 @@ async function convertFilterToString(filter) {
         s = s.substr(0, s.length - 2) + "\n";
     }
 
+    if (filter.pencilers) {
+        s += "\t\tZeichner: ";
+        filter.pencilers.forEach(i => s += i.name + ", ");
+        s = s.substr(0, s.length - 2) + "\n";
+    }
+
     if (filter.artists) {
         s += "\t\tZeichner: ";
         filter.artists.forEach(i => s += i.name + ", ");
@@ -325,10 +332,14 @@ export function createFilterQuery(selected, filter, print) {
     }
 
     if(filter.numbers && filter.numbers.length > 0) {
-        let numbers = "";
-        filter.numbers.map(number => numbers += ("'" + number.number + "' " + number.compare + " ijoin.number AND ijoin.variant LIKE '%" + number.variant + "%' "));
-        numbers = numbers.substring(0, numbers.length-5);
-        joinwhere += " AND " + numbers + " ";
+        if (us)
+            filter.numbers.map(number => {
+                joinwhere += (where === "" ? "WHERE " : " AND ") + "('" + number.number + "' " + number.compare + " l1.issuenumber AND l1.issuevariant LIKE '%" + number.variant + "%') "
+            });
+        else
+            filter.numbers.map(number => {
+                joinwhere += " AND " + "('" + number.number + "' " + number.compare + " ijoin.number AND ijoin.variant LIKE '%" + number.variant + "%') "
+            });
     }
 
     if(filter.writers && filter.writers.length > 0) {
@@ -339,6 +350,16 @@ export function createFilterQuery(selected, filter, print) {
             where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + writers + ") AND l1.individualtype = 'WRITER') ";
         else
             joinwhere += " AND " + "(ivjoin.name IN (" + writers + ") AND sijoin.type = 'WRITER') ";
+    }
+
+    if (filter.pencilers && filter.pencilers.length > 0) {
+        let pencilers = "";
+        filter.pencilers.map(penciler => pencilers += "'" + penciler.name + "', ");
+        pencilers = pencilers.substring(0, pencilers.length - 2);
+        if (us)
+            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + pencilers + ") AND l1.individualtype = 'PENCILER') ";
+        else
+            joinwhere += " AND " + "(ivjoin.name IN (" + pencilers + ") AND sijoin.type = 'PENCILER') ";
     }
 
     if(filter.artists && filter.artists.length > 0) {
@@ -378,7 +399,7 @@ export function createFilterQuery(selected, filter, print) {
         if (us)
             where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + colourists + ") AND l1.individualtype = 'COLOURIST') ";
         else
-            joinwhere += " AND " + "(ivjoin.name AND sijoin.type = 'COLOURIST') ";
+            joinwhere += " AND " + "(ivjoin.name IN (" + colourists + ") AND sijoin.type = 'COLOURIST') ";
     }
 
     if(filter.editors && filter.editors.length > 0) {
@@ -540,7 +561,7 @@ export function createFilterQuery(selected, filter, print) {
 
     let columns = "";
     if (print)
-        columns = "publishername, seriestitle, seriesvolume, seriesstartyear, seriesendyear, issuenumber";
+        columns = "publishername, seriestitle, seriesvolume, seriesstartyear, seriesendyear, issuenumber, issuevariant";
     else if (selected.publisher)
         columns = "issuenumber, issueformat, issuevariant, seriesid";
     else if(selected.name)
@@ -601,6 +622,8 @@ export function createFilterQuery(selected, filter, print) {
         "         ) l1 " +
         " " + where + " " +
         "GROUP BY " + groupby + ";";
+
+    console.log(rawQuery);
 
     return rawQuery;
 }
