@@ -37,3 +37,35 @@ export default (sequelize) => {
 
     return Appearance;
 };
+
+export const typeDef = gql`
+    extend type Query {
+      apps: [Appearance]  
+    }
+    
+    input AppearanceInput {
+      id: String,
+      name: String
+    }
+    
+    type Appearance {
+      id: ID,
+      name: String,
+      type: String,
+      role: String
+    }
+`;
+
+export const resolvers = {
+    Query: {
+        apps: () => models.Appearance.findAll({
+            order: [['name', 'ASC']]
+        })
+    },
+    Appearance: {
+        id: (parent) => parent.id,
+        name: (parent) => parent.name.trim(),
+        type: (parent) => (parent.type.trim() === '' ? 'CHARACTER' : parent.type),
+        role: (parent) => ''
+    }
+};

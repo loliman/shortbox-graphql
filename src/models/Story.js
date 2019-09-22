@@ -115,6 +115,16 @@ export const typeDef = gql`
     firstapp: Boolean,
     onlytb: Boolean,
     exclusive: Boolean,
+    mainchars: [Appearance],
+    antagonists: [Appearance],
+    supchars: [Appearance],
+    otherchars: [Appearance],
+    teams: [Appearance],
+    races: [Appearance],
+    animals: [Appearance],
+    items: [Appearance],
+    vehicles: [Appearance],
+    places: [Appearance],
     pencilers: [Individual],
     writers: [Individual],
     inkers: [Individual],
@@ -333,6 +343,120 @@ export const resolvers = {
                 where: {
                     '$Stories->Story_Individual.fk_story$': parent.id,
                     '$Stories->Story_Individual.type$': 'TRANSLATOR'
+                }
+            })
+        },
+        mainchars: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Stories->Story_Appearance.role$': 'FEATURED',
+                    '$Appearance.type$': 'CHARACTER'
+                }
+            })
+        },
+        antagonists: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Stories->Story_Appearance.role$': 'ANTAGONIST',
+                    '$Appearance.type$': 'CHARACTER'
+                }
+            })
+        },
+        supchars: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Stories->Story_Appearance.role$': 'SUPPORTING',
+                    '$Appearance.type$': 'CHARACTER'
+                }
+            })
+        },
+        otherchars: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Stories->Story_Appearance.role$': 'OTHER',
+                    '$Appearance.type$': 'CHARACTER'
+                }
+            })
+        },
+        teams: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Appearance.type$': 'TEAM'
+                }
+            })
+        },
+        races: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Appearance.type$': 'RACE'
+                }
+            })
+        },
+        animals: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Appearance.type$': 'ANIMAL'
+                }
+            })
+        },
+        items: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Appearance.type$': 'ITEM'
+                }
+            })
+        },
+        vehicles: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Appearance.type$': 'VEHICLE'
+                }
+            })
+        },
+        places: async (parent) => {
+            return await models.Appearance.findAll({
+                include: [{
+                    model: models.Story
+                }],
+                where: {
+                    '$Stories->Story_Appearance.fk_story$': parent.id,
+                    '$Appearance.type$': 'PLACE'
                 }
             })
         }

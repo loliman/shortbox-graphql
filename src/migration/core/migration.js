@@ -59,7 +59,8 @@ export async function fixUsComics() {
                 try {
                     i.series = await models.Series.findOne({where: {id: i.fk_series}});
 
-                    console.log("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx+1) + " of " + a.length + " (" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")");
+                    console.log("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx+1) + " of " + a.length + " " +
+                        "(" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")");
 
                     let crawledIssue = await crawlIssue(i).catch(() => {/*ignore errors while crawling*/});
 
@@ -105,7 +106,7 @@ export async function fixUsComics() {
                         }
                     });
 
-                    /*if(crawledIssue.arcs && crawledIssue.arcs.length > 0) {
+                    if(crawledIssue.arcs && crawledIssue.arcs.length > 0) {
                         await asyncForEach(crawledIssue.arcs, async arc => {
                             try {
                                 await createArc(arc, i);
@@ -113,7 +114,7 @@ export async function fixUsComics() {
                                 //ignore, might already exist
                             }
                         });
-                    }*/
+                    }
 
                     let stories = await models.Story.findAll({
                         where: {fk_issue: i.id}

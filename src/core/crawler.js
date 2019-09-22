@@ -93,6 +93,7 @@ export async function crawlIssue(issue) {
                     res.arcs = [];
                     children.each((i, c) => {
                         let text = $(c).text();
+
                         if(text.trim() !== '' && i !== children.length-1) {
                             text = text.replace("Part of the '", "");
                             text = text.replace("Part of the \"", "");
@@ -113,23 +114,45 @@ export async function crawlIssue(issue) {
                             text = text.trim();
 
                             let titles;
-                            if(text.lastIndexOf("'") !== -1)
-                                titles = text.substring(0, text.lastIndexOf("'")).split("###");
-                            else
-                                titles = text.substring(0, text.lastIndexOf("\"")).split("###");
+
+                            let i2 = text.lastIndexOf("\"");
+                            let i1 = text.lastIndexOf("'");
+
+                            let temp = "";
+                            if(text.lastIndexOf("'") !== -1 && i1 > i2)
+                                temp = text.substring(0, text.lastIndexOf("'"));
+                            else if(text.lastIndexOf("\"") !== -1)
+                                temp = text.substring(0, text.lastIndexOf("\""));
+
+                            temp = temp.replace('\', \'', '###');
+                            temp = temp.replace('\", \"', '###');
+                            temp = temp.replace('\' and \'', '###');
+                            temp = temp.replace('\" and \"', '###');
+                            titles = temp.split('###');
 
                             let type;
-                            if(text.lastIndexOf("'") !== -1)
+                            if(text.lastIndexOf("'") !== -1 && i1 > i2)
                                 type = text.substring(text.lastIndexOf("'") + 1);
-                            else
+                            else if(text.lastIndexOf("\"") !== -1)
                                 type = text.substring(text.lastIndexOf("\"") + 1);
 
                             type = type.replace(/ /g, "");
                             type = type.toUpperCase();
+
                             if (titles.length > 1)
                                 type = type.substr(0, type.length - 1);
 
-                            titles.forEach(title => res.arcs.push({title: title.trim(), type: type.trim()}));
+                            if(type.indexOf("STORYARC") !== -1)
+                                type = "STORYARC";
+                            else if(type.indexOf("STORYLINE") !== -1)
+                                type = "STORYLINE";
+                            else if(type.indexOf("EVENT") !== -1)
+                                type = "EVENT";
+
+                            titles.forEach(title => {
+                                if(title.trim() !== '')
+                                    res.arcs.push({title: title.trim(), type: type.trim()})
+                            });
                         }
                     });
 
@@ -261,8 +284,6 @@ export async function crawlIssue(issue) {
                         story.number = res.stories.length + 1;
                         res.stories.push(story);
                     }
-
-
                 }
             });
 
@@ -303,25 +324,54 @@ export async function crawlIssue(issue) {
 
                             currentType = text.toUpperCase();
 
-                            switch (currentType) {
-                                case "FEATUREDCHARACTER":
-                                    currentSubType = "FEATURED";
-                                    currentType = "CHARACTER";
-                                    break;
-                                case "SUPPORTINGCHARACTER":
-                                    currentSubType = "SUPPORTING";
-                                    currentType = "CHARACTER";
-                                    break;
-                                case "ANTAGONIST":
-                                    currentSubType = "ANTAGONIST";
-                                    currentType = "CHARACTER";
-                                    break;
-                                case "OTHERCHARACTER":
-                                    currentSubType = "OTHER";
-                                    currentType = "CHARACTER";
-                                    break;
-                                default:
-                                    currentSubType = "";
+                            if(currentType.indexOf('FEATUREDCHARACTER') !== -1 ||
+                                currentType.indexOf('WEDDINGGUEST') !== -1 ||
+                                currentType.indexOf('VISION') !== -1 ||
+                                currentType.indexOf('FEATUREDCHARACTER') !== -1) {
+                                currentSubType = "FEATURED";
+                                currentType = "CHARACTER";
+                            } else if(currentType.indexOf('ANTAGONIST') !== -1 ||
+                                currentType.indexOf('ANAGONIST') !== -1 ||
+                                currentType.indexOf('ANGATONIST') !== -1 ||
+                                currentType.indexOf('ANTAGONGIST') !== -1 ||
+                                currentType.indexOf('ANTAGONIS') !== -1 ||
+                                currentType.indexOf('ANTAGONIT') !== -1 ||
+                                currentType.indexOf('ANTAGONSIST') !== -1 ||
+                                currentType.indexOf('ANTAGONSIT') !== -1 ||
+                                currentType.indexOf('MAINCHARACTER') !== -1 ||
+                                currentType.indexOf('ANTAOGNIST') !== -1 ||
+                                currentType.indexOf('ANTAONIST') !== -1 ||
+                                currentType.indexOf('VILLAI') !== -1 ||
+                                currentType.indexOf('VILLAIN') !== -1 ||
+                                currentType.indexOf('VILLIA') !== -1 ||
+                                currentType.indexOf('VILLIAN') !== -1 ||
+                                currentType.indexOf('ANTAGONOIST') !== -1) {
+                                currentSubType = "ANTAGONIST";
+                                currentType = "CHARACTER";
+                            } else if(currentType.indexOf('SUPPORITINGCHARACTER') !== -1 ||
+                                currentType.indexOf('SUPPORTIN') !== -1) {
+                                currentSubType = "SUPPORTING";
+                                currentType = "CHARACTER";
+                            } else if(currentType.indexOf('GROUP') !== -1 ||
+                                currentType.indexOf('TEAM') !== -1) {
+                                currentType = "GROUP";
+                            } else if(currentType.indexOf('VEHICLE') !== -1 ||
+                                currentType.indexOf('VECHILE') !== -1 ||
+                                currentType.indexOf('VEHICE') !== -1 ||
+                                currentType.indexOf('VEHICL') !== -1 ||
+                                currentType.indexOf('VEHICLE') !== -1) {
+                                currentType = 'VEHICLE';
+                            } else if(currentType.indexOf('RACE') !== -1) {
+                                currentType = 'RACE';
+                            } else if(currentType.indexOf('LOCATI') !== -1) {
+                                currentType = 'LOCATION';
+                            } else if (currentType.indexOf('ANIMAL') !== -1) {
+                                currentType = 'ANIMAL';
+                            } else if (currentType.indexOf('ITE') !== -1) {
+                                currentType = 'ITEM';
+                            } else /*FLASHBACK AND OTHER*/ {
+                                currentSubType = "OTHER";
+                                currentType = "CHARACTER";
                             }
                         } else {
                             if(next.is('ul'))
@@ -343,26 +393,33 @@ export async function crawlIssue(issue) {
 }
 
 function crawlApps(e, $, currentType, currentSubType, currentStory) {
-    let l = $(e).children();
+    let l = $(e).children('li');
 
     l.each((i, e) => {
-        let a = $(e).children('a');
-        a.each((i, e) => {
-            let text = $(e).attr('title').trim();
+        let text = '';
+        if($(e).children('ul').length === 0) {
+            text += $(e).text();
             text = text.replace("wikipedia:", "");
+            text = text.replace("w:c:dc:", "");
             text = text.replace("(page does not exist)", "");
+            $(e).children('.image').each((i, e) => text = text.replace($(e).text()));
+            $(e).children('span').each((i, e) => text = text.replace($(e).text(), ""));
+            $(e).children('sup').each((i, e) => text = text.replace($(e).text(), ""));
+            text = text.replace('undefined', '');
+            text = text.replace('undefined', '');
+            text = text.trim();
 
             if (text !== '' && text.indexOf("Appearance of") === -1 && text.indexOf("Index/") === -1) {
                 let exists = currentStory.appearing.find(v => v.name === text.trim() && v.type === currentType && v.role === currentSubType);
                 if(!exists)
                     currentStory.appearing.push({name: text.trim(), type: currentType, role: currentSubType});
             }
-        });
-
-        let ul = $(e).children('ul');
-        ul.each((i, e) => {
-            crawlApps(e, $, currentType, currentSubType, currentStory);
-        });
+        } else {
+            let ul = $(e).children('ul');
+            ul.each((i, e) => {
+                crawlApps(e, $, currentType, currentSubType, currentStory);
+            });
+        }
     });
 }
 
