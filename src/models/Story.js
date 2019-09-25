@@ -91,13 +91,7 @@ export const typeDef = gql`
     number: Int!,
     parent: StoryInput,
     issue: IssueInput,
-    translators: [IndividualInput],
-    writers: [IndividualInput],
-    pencilers: [IndividualInput],
-    inkers: [IndividualInput],
-    colourists: [IndividualInput],
-    letterers: [IndividualInput],
-    editors: [IndividualInput],
+    individuals: [IndividualInput],
     title: String,
     addinfo: String,
     exclusive: Boolean
@@ -115,23 +109,8 @@ export const typeDef = gql`
     firstapp: Boolean,
     onlytb: Boolean,
     exclusive: Boolean,
-    mainchars: [Appearance],
-    antagonists: [Appearance],
-    supchars: [Appearance],
-    otherchars: [Appearance],
-    teams: [Appearance],
-    races: [Appearance],
-    animals: [Appearance],
-    items: [Appearance],
-    vehicles: [Appearance],
-    places: [Appearance],
-    pencilers: [Individual],
-    writers: [Individual],
-    inkers: [Individual],
-    colourists: [Individual],
-    letterers: [Individual],
-    editors: [Individual],
-    translators: [Individual]    
+    appearances: [Appearance],
+    individuals: [Individual] 
   }
 `;
 
@@ -248,7 +227,7 @@ export const resolvers = {
         exclusive: async (parent) => {
             return parent.fk_parent === null;
         },
-        pencilers: async (parent) => {
+        individuals: async (parent) => {
             if(parent.fk_parent !== null)
                 return [];
 
@@ -257,206 +236,17 @@ export const resolvers = {
                     model: models.Story
                 }],
                 where: {
-                    '$Stories->Story_Individual.fk_story$': parent.id,
-                    '$Stories->Story_Individual.type$': 'PENCILER'
+                    '$Stories->Story_Individual.fk_story$': parent.id
                 }
             })
         },
-        writers: async (parent) => {
-            if(parent.fk_parent !== null)
-                return [];
-
-            return await models.Individual.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Individual.fk_story$': parent.id,
-                    '$Stories->Story_Individual.type$': 'WRITER'
-                }
-            })
-        },
-        inkers: async (parent) => {
-            if(parent.fk_parent !== null)
-                return [];
-
-            return await models.Individual.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Individual.fk_story$': parent.id,
-                    '$Stories->Story_Individual.type$': 'INKER'
-                }
-            })
-        },
-        colourists: async (parent) => {
-            if(parent.fk_parent !== null)
-                return [];
-
-            return await models.Individual.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Individual.fk_story$': parent.id,
-                    '$Stories->Story_Individual.type$': 'COLOURIST'
-                }
-            })
-        },
-        letterers: async (parent) => {
-            if(parent.fk_parent !== null)
-                return [];
-
-            return await models.Individual.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Individual.fk_story$': parent.id,
-                    '$Stories->Story_Individual.type$': 'LETTERER'
-                }
-            })
-        },
-        editors: async (parent) => {
-            if(parent.fk_parent !== null)
-                return [];
-
-            return await models.Individual.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Individual.fk_story$': parent.id,
-                    '$Stories->Story_Individual.type$': 'EDITOR'
-                }
-            })
-        },
-        translators: async (parent) => {
-            if(parent.fk_parent === null)
-                return [];
-
-            return await models.Individual.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Individual.fk_story$': parent.id,
-                    '$Stories->Story_Individual.type$': 'TRANSLATOR'
-                }
-            })
-        },
-        mainchars: async (parent) => {
+        appearances: async (parent) => {
             return await models.Appearance.findAll({
                 include: [{
                     model: models.Story
                 }],
                 where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Stories->Story_Appearance.role$': 'FEATURED',
-                    '$Appearance.type$': 'CHARACTER'
-                }
-            })
-        },
-        antagonists: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Stories->Story_Appearance.role$': 'ANTAGONIST',
-                    '$Appearance.type$': 'CHARACTER'
-                }
-            })
-        },
-        supchars: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Stories->Story_Appearance.role$': 'SUPPORTING',
-                    '$Appearance.type$': 'CHARACTER'
-                }
-            })
-        },
-        otherchars: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Stories->Story_Appearance.role$': 'OTHER',
-                    '$Appearance.type$': 'CHARACTER'
-                }
-            })
-        },
-        teams: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Appearance.type$': 'TEAM'
-                }
-            })
-        },
-        races: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Appearance.type$': 'RACE'
-                }
-            })
-        },
-        animals: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Appearance.type$': 'ANIMAL'
-                }
-            })
-        },
-        items: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Appearance.type$': 'ITEM'
-                }
-            })
-        },
-        vehicles: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Appearance.type$': 'VEHICLE'
-                }
-            })
-        },
-        places: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id,
-                    '$Appearance.type$': 'PLACE'
+                    '$Stories->Story_Appearance.fk_story$': parent.id
                 }
             })
         }
@@ -474,40 +264,10 @@ export async function create(story, issue, transaction, us) {
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                if(story.writers)
-                    await asyncForEach(story.writers, async writer => {
-                        if(writer.name && writer.name.trim() !== '')
-                            await resStory.associateIndividual(writer.name.trim(), 'WRITER', transaction);
-                    });
-
-                if(story.pencilers)
-                    await asyncForEach(story.pencilers, async penciler => {
-                        if(penciler.name && penciler.name.trim() !== '')
-                            await resStory.associateIndividual(penciler.name.trim(), 'PENCILER', transaction);
-                    });
-
-                if(story.inkers)
-                    await asyncForEach(story.inkers, async inker => {
-                        if(inker.name && inker.name.trim() !== '')
-                            await resStory.associateIndividual(inker.name.trim(), 'INKER', transaction);
-                    });
-
-                if(story.colourists)
-                    await asyncForEach(story.colourists, async colourist => {
-                        if(colourist.name && colourist.name.trim() !== '')
-                            await resStory.associateIndividual(colourist.name.trim(), 'COLOURIST', transaction);
-                    });
-
-                if(story.letterers)
-                    await asyncForEach(story.letterers, async letterer => {
-                        if(letterer.name && letterer.name.trim() !== '')
-                            await resStory.associateIndividual(letterer.name.trim(), 'LETTERER', transaction);
-                    });
-
-                if(story.editors)
-                    await asyncForEach(story.editors, async editors => {
-                        if(editors.name && editors.name.trim() !== '')
-                            await resStory.associateIndividual(editors.name.trim(), 'EDITOR', transaction);
+                if(story.individuals)
+                    await asyncForEach(story.individuals, async individual => {
+                        if(individual.name && individual.name.trim() !== '')
+                            await resStory.associateIndividual(individual.name.trim(), individual.type, transaction);
                     });
 
                 await resStory.save({transaction: transaction});
@@ -532,10 +292,10 @@ export async function create(story, issue, transaction, us) {
                     fk_parent: oStory.id
                 }, {transaction: transaction});
 
-                if(story.translators)
-                    await asyncForEach(story.translators, async translator => {
-                        if(translator.name && translator.name.trim() !== '')
-                            await newStory.associateIndividual(translator.name.trim(), 'TRANSLATOR', transaction);
+                if(story.individuals)
+                    await asyncForEach(story.individuals, async individual => {
+                        if(individual.name && individual.name.trim() !== '')
+                            await newStory.associateIndividual(individual.name.trim(), individual.type, transaction);
                     });
 
                 await newStory.setIssue(issue, {transaction: transaction});
@@ -581,41 +341,33 @@ export async function getStories(issue, transaction) {
                         volume: rawSeries.volume,
                     };
 
-                    let translators = await models.Individual.findAll({
+                    let individuals = await models.Individual.findAll({
                         include: [{
                             model: models.Story
                         }],
                         where: {
-                            '$Stories->Story_Individual.fk_story$': story.id,
-                            '$Stories->Story_Individual.type$': 'TRANSLATOR'
+                            '$Stories->Story_Individual.fk_story$': story.id
                         },
                         transaction
                     });
 
-                    rawStory.translators = [];
-                    if(translators)
-                        translators.forEach(translator => rawStory.translators.push({name: translator.name}));
+                    rawStory.individuals = [];
+                    if(individuals)
+                        individuals.forEach(individual => rawStory.individuals.push({name: individual.name, type: individual.type}));
                 } else {
-                    let individuals = ['COLOURIST', 'EDITOR', 'INKER', 'LETTERER', 'PENCILER', 'WRITER'];
-
-                    await asyncForEach(individuals, async type => {
-                        let individuals = await models.Individual.findAll({
-                            include: [{
-                                model: models.Story
-                            }],
-                            where: {
-                                '$Stories->Story_Individual.fk_story$': story.id,
-                                '$Stories->Story_Individual.type$': type
-                            },
-                            transaction
-                        });
-
-                        rawStory[type.toLowerCase() + 's'] = [];
-                        if(individuals)
-                            individuals.forEach(
-                                individual => rawStory[type.toLowerCase() + 's'].push({name: individual.name})
-                            );
+                    let individuals = await models.Individual.findAll({
+                        include: [{
+                            model: models.Story
+                        }],
+                        where: {
+                            '$Stories->Story_Individual.fk_story$': story.id
+                        },
+                        transaction
                     });
+
+                    rawStory.individuals = [];
+                    if(individuals)
+                        individuals.forEach(individual => rawStory.individuals.push({name: individual.name, type: individual.type}));
 
                 }
                 oldStories.push(rawStory);
@@ -636,12 +388,12 @@ export function equals(a, b) {
         return false;
 
     if(!a.exclusive) {
-        if(a.translators.length !== b.translators.length)
+        if(a.individuals.length !== b.individuals.length)
             return false;
 
-        let found = a.translators.every(aIndividual => {
-            return b.translators.some(bIndividual => {
-                return aIndividual.name === bIndividual.name;
+        let found = a.individuals.every(aIndividual => {
+            return b.individuals.some(bIndividual => {
+                return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
             });
         });
 
@@ -652,62 +404,13 @@ export function equals(a, b) {
           a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
-        if(a.colourists.length !== b.colourists.length)
+        if(a.individuals.length !== b.individuals.length)
             return false;
 
-        let found = a.colourists.every(aIndividual => {
-            return b.colourists.some(bIndividual => {
-                return aIndividual.name === bIndividual.name;
+        return a.individuals.every(aIndividual => {
+            return b.individuals.some(bIndividual => {
+                return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
             });
         });
-
-        if(!found)
-            return false;
-
-        if(a.editors.length !== b.editors.length)
-            return false;
-
-        found = a.editors.every(aIndividual => {
-            return b.editors.some(bIndividual => {
-                return aIndividual.name === bIndividual.name;
-            });
-        });
-
-        if(!found)
-            return false;
-
-        if(a.pencilers.length !== b.pencilers.length)
-            return false;
-
-        found = a.pencilers.every(aIndividual => {
-            return b.pencilers.some(bIndividual => {
-                return aIndividual.name === bIndividual.name;
-            });
-        });
-        if(!found)
-            return false;
-
-        if(a.writers.length !== b.writers.length)
-            return false;
-
-        found = a.writers.every(aIndividual => {
-            return b.writers.some(bIndividual => {
-                return aIndividual.name === bIndividual.name;
-            });
-        });
-
-        if(!found)
-            return false;
-
-        if(a.letterers.length !== b.letterers.length)
-            return false;
-
-        found = a.letterers.every(aIndividual => {
-            return b.letterers.some(bIndividual => {
-                return aIndividual.name === bIndividual.name;
-            });
-        });
-
-        return found;
     }
 }

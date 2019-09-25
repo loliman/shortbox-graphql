@@ -43,12 +43,14 @@ export const typeDef = gql`
   }
   
   input IndividualInput {
-    name: String
+    name: String,
+    type: String
   }
   
   type Individual {
     id: ID,
-    name: String
+    name: String,
+    type: String
   }
 `;
 
@@ -60,6 +62,32 @@ export const resolvers = {
     },
     Individual: {
         id: (parent) => parent.id,
-        name: (parent) => parent.name
+        name: (parent) => parent.name,
+        type: async (parent) => {
+            let where = {};
+            let table = "";
+
+            if(parent.Stories) {
+                where.fk_story = parent.Stories[0].id;
+                table = "Story_Individual";
+            } else if(parent.Covers) {
+                where.fk_cover = parent.Covers[0].id;
+                table = "Cover_Individual";
+            } else if(parent.Issues) {
+                where.fk_issue = parent.Issues[0].id;
+                table = "Issue_Individual";
+            } else if(parent.Features) {
+                where.fk_feature = parent.Features[0].id;
+                table = "Feature_Individual";
+            }
+
+            where.fk_individual = parent.id;
+
+            let relation = await models[table].findAll({
+                where: where
+            });
+
+            return relation[0].type;
+        }
     }
 };

@@ -72,7 +72,7 @@ export const typeDef = gql`
     number: Int!,
     parent: CoverInput,
     issue: IssueInput,
-    artists: [IndividualInput],
+    individuals: [IndividualInput],
     addinfo: String,
     exclusive: Boolean
   }
@@ -88,7 +88,7 @@ export const typeDef = gql`
     firstapp: Boolean,
     exclusive: Boolean,
     issue: Issue,
-    artists: [Individual]
+    individuals: [Individual]
   }
 `;
 
@@ -154,7 +154,7 @@ export const resolvers = {
             return parent.fk_parent === null;
         },
         addinfo: (parent) => parent.addinfo,
-        artists: async (parent) => {
+        individuals: async (parent) => {
             if(parent.fk_parent !== null)
                 return [];
 
@@ -163,8 +163,7 @@ export const resolvers = {
                     model: models.Cover
                 }],
                 where: {
-                    '$Covers->Cover_Individual.fk_cover$': parent.id,
-                    '$Covers->Cover_Individual.type$': 'ARTIST'
+                    '$Covers->Cover_Individual.fk_cover$': parent.id
                 }
             })
         }
@@ -182,10 +181,10 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                if(cover.artists)
-                    await asyncForEach(cover.artists, async artist => {
-                        if(artist.name && artist.name.trim() !== '')
-                            await resCover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
+                if(cover.individuals)
+                    await asyncForEach(cover.individuals, async individual => {
+                        if(individual.name && individual.name.trim() !== '')
+                            await resCover.associateIndividual(individual.name.trim(), individual.type, transaction);
                     });
 
                 await resCover.save({transaction: transaction});
@@ -259,20 +258,19 @@ export async function getCovers(issue, transaction) {
                         volume: rawSeries.volume,
                     };
                 } else {
-                    let artists = await models.Individual.findAll({
+                    let individuals = await models.Individual.findAll({
                         include: [{
                             model: models.Cover
                         }],
                         where: {
-                            '$Covers->Cover_Individual.fk_cover$': cover.id,
-                            '$Covers->Cover_Individual.type$': 'ARTIST'
+                            '$Covers->Cover_Individual.fk_cover$': cover.id
                         },
                         transaction
                     });
 
-                    rawCover.artists = [];
-                    if(artists)
-                        artists.forEach(artist => rawCover.artists.push({name: artist.name}));
+                    rawCover.individuals = [];
+                    if(individuals)
+                        individuals.forEach(individual => rawCover.individuals.push({name: individual.name, type: individual.type}));
                 }
 
                 oldCovers.push(rawCover);
@@ -300,12 +298,12 @@ export function equals(a, b) {
             a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
-        if(a.artists.length !== b.artists.length)
+        if(a.individuals.length !== b.individuals.length)
             return false;
 
-        return a.artists.every(aIndividual => {
-            return b.artists.some(bIndividual => {
-                return aIndividual.name === bIndividual.name;
+        return a.individuals.every(aIndividual => {
+            return b.individuals.some(bIndividual => {
+                return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
             });
         });
     }

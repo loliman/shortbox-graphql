@@ -162,7 +162,7 @@ export const typeDef = gql`
     releasedate: Date,
     price: String,
     currency: String,
-    editors: [IndividualInput],
+    individuals: [IndividualInput],
     addinfo: String,
     stories: [StoryInput],
     features: [FeatureInput],
@@ -190,7 +190,7 @@ export const typeDef = gql`
     variant: String,
     verified: Boolean,
     addinfo: String,
-    editors: [Individual],
+    individuals: [Individual],
     createdAt: DateTime,
     updatedAt: DateTime
   }
@@ -436,12 +436,12 @@ export const resolvers = {
 
                 let us = item.series.publisher.us;
 
-                if (us && item.editors.length > 0) {
-                    await models.Issue_Individual.destroy({where: {fk_issue: res.id, type: 'EDITOR'}, transaction});
+                if (us && item.individuals.length > 0) {
+                    await models.Issue_Individual.destroy({where: {fk_issue: res.id}, transaction});
 
-                    await asyncForEach(item.editors, async editor => {
-                        if(editor.name && editor.name.trim() !== '')
-                            await res.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                    await asyncForEach(item.individuals, async individual => {
+                        if(individual.name && individual.name.trim() !== '')
+                            await res.associateIndividual(individual.name.trim(), individual.type, transaction);
                     });
 
                     await res.save({transaction: transaction});
@@ -762,7 +762,7 @@ export const resolvers = {
                 }
             })
         },
-        editors: async (parent) => {
+        individuals: async (parent) => {
             if(!(await (await parent.getSeries()).getPublisher()).original)
                 return [];
 
@@ -771,8 +771,7 @@ export const resolvers = {
                     model: models.Issue
                 }],
                 where: {
-                    '$Issues->Issue_Individual.fk_issue$': parent.id,
-                    '$Issues->Issue_Individual.type$': 'EDITOR'
+                    '$Issues->Issue_Individual.fk_issue$': parent.id
                 }
             })
         },
@@ -818,10 +817,10 @@ export async function create(item, transaction) {
 
             let us = item.series.publisher.us;
 
-            if (us && item.editors.length > 0) {
-                await asyncForEach(item.editors, async editor => {
-                    if (editor.name && editor.name.trim() !== '')
-                        await res.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+            if (us && item.individuals.length > 0) {
+                await asyncForEach(item.individuals, async individual => {
+                    if (individual.name && individual.name.trim() !== '')
+                        await res.associateIndividual(individual.name.trim(), individual.type, transaction);
                 });
 
                 await res.save({transaction: transaction});
@@ -939,8 +938,8 @@ export function findOrCrawlIssue(i, transaction) {
                     addinfo: ''
                 }, {transaction: transaction});
 
-                await asyncForEach(crawledIssue.editors, async (editor) => {
-                    await issue.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                await asyncForEach(crawledIssue.individuals, async (individual) => {
+                    await issue.associateIndividual(individual.name.trim(), individual.type, transaction);
                     await issue.save({transaction: transaction});
                 });
 
@@ -979,8 +978,8 @@ export function findOrCrawlIssue(i, transaction) {
                         addinfo: ''
                     }, {transaction: transaction});
 
-                    await asyncForEach(crawledIssue.editors, async (editor) => {
-                        await variant.associateIndividual(editor.name.trim(), 'EDITOR', transaction);
+                    await asyncForEach(crawledIssue.individuals, async (individual) => {
+                        await variant.associateIndividual(individual.name.trim(), individual.type, transaction);
                     });
                     await variant.save({transaction: transaction});
 

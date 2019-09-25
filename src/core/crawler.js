@@ -80,7 +80,7 @@ export async function crawlIssue(issue) {
                 }
             };
 
-            let res = {stories: [], editors: [], cover: {artists: []}, variants: []};
+            let res = {stories: [], individuals: [], cover: {individuals: []}, variants: []};
             let $ = await rp(issueOptions);
 
             let infoBoxContent = $('.infobox').children();
@@ -217,9 +217,9 @@ export async function crawlIssue(issue) {
                             let editorInChief = $(e).text().trim();
 
                             if (editorInChief !== '') {
-                                let exists = res.editors.find(v => v.name === editorInChief);
+                                let exists = res.individuals.find(v => v.name === editorInChief && v.type === 'EDITOR');
                                 if(!exists)
-                                    res.editors.push({name: editorInChief});
+                                    res.individuals.push({name: editorInChief, type: 'EDITOR'});
                             }
                         });
                     }
@@ -230,9 +230,9 @@ export async function crawlIssue(issue) {
                             let coverArtist = $(e).text().trim();
 
                             if (coverArtist !== '') {
-                                let exists = res.cover.artists.find(v => v.name === coverArtist);
+                                let exists = res.cover.individuals.find(v => v.name === coverArtist && v.type === 'ARTIST');
                                 if (!exists)
-                                    res.cover.artists.push({name: coverArtist});
+                                    res.cover.individuals.push({name: coverArtist, type: 'ARTIST'});
                             }
                         });
                     }

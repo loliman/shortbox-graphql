@@ -79,19 +79,6 @@ export const resolvers = {
     }
 };
 
-export function equals(a, b) {
-    if(a.writers.length !== b.writers.length)
-        return false;
-
-    let found = a.writers.every(aIndividual => {
-        return b.writers.some(bIndividual => {
-            return aIndividual.name === bIndividual.name;
-        });
-    });
-
-    return (found && a.title === b.title && a.number === b.number && a.addinfo === b.addinfo);
-}
-
 export async function create(arc, issue, transaction) {
     return new Promise(async (resolve, reject) => {
         try {

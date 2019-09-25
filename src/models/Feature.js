@@ -65,7 +65,7 @@ export const typeDef = gql`
     input FeatureInput {
         id: String,
         number: Int!,
-        writers: [IndividualInput],
+        individuals: [IndividualInput],
         title: String,
         addinfo: String
     }
@@ -76,7 +76,7 @@ export const typeDef = gql`
       number: Int,
       addinfo: String,
       issue: Issue,
-      writers: [Individual]
+      individuals: [Individual]
     }
 `;
 
@@ -87,13 +87,12 @@ export const resolvers = {
         number: (parent) => parent.number,
         addinfo: (parent) => parent.addinfo,
         issue: async (parent) => await models.Issue.findById(parent.fk_issue),
-        writers: async (parent) => await models.Individual.findAll({
+        individuals: async (parent) => await models.Individual.findAll({
             include: [{
                 model: models.Feature
             }],
             where: {
-                '$Features->Feature_Individual.fk_feature$': parent.id,
-                '$Features->Feature_Individual.type$': 'WRITER'
+                '$Features->Feature_Individual.fk_feature$': parent.id
             }
         })
     }
@@ -109,10 +108,10 @@ export async function create(feature, issue, transaction) {
                 fk_issue: issue.id
             }, {transaction: transaction});
 
-            if(feature.writers)
-                await asyncForEach(feature.writers, async writer => {
-                    if(writer.name && writer.name.trim() !== '')
-                        await resFeature.associateIndividual(writer.name.trim(), 'WRITER', transaction);
+            if(feature.individuals)
+                await asyncForEach(feature.individuals, async individual => {
+                    if(individual.name && individual.name.trim() !== '')
+                        await resFeature.associateIndividual(individual.name.trim(), individual.type, transaction);
                 });
 
             await resFeature.save({transaction: transaction});
@@ -135,20 +134,19 @@ export async function getFeatures(issue, transaction) {
                 rawFeature.number = !isNaN(feature.number) ? feature.number : 1;
                 rawFeature.addinfo = feature.addinfo;
 
-                let writers = await models.Individual.findAll({
+                let individuals = await models.Individual.findAll({
                     include: [{
                         model: models.Feature
                     }],
                     where: {
-                        '$Features->Feature_Individual.fk_feature$': feature.id,
-                        '$Features->Feature_Individual.type$': 'WRITER'
+                        '$Features->Feature_Individual.fk_feature$': feature.id
                     },
                     transaction
                 });
 
-                rawFeature.writers = [];
-                if(writers)
-                    writers.forEach(writer => rawFeature.writers.push({name: writer.name}));
+                rawFeature.individuals = [];
+                if(individuals)
+                    individuals.forEach(individual => rawFeature.individuals.push({name: individual.name, type: individual.type}));
 
                 oldFeatures.push(rawFeature);
             });
@@ -161,12 +159,12 @@ export async function getFeatures(issue, transaction) {
 }
 
 export function equals(a, b) {
-    if(a.writers.length !== b.writers.length)
+    if(a.individuals.length !== b.individuals.length)
         return false;
 
-    let found = a.writers.every(aIndividual => {
-        return b.writers.some(bIndividual => {
-            return aIndividual.name === bIndividual.name;
+    let found = a.individuals.every(aIndividual => {
+        return b.individuals.some(bIndividual => {
+            return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
         });
     });
 

@@ -45,7 +45,9 @@ export const typeDef = gql`
     
     input AppearanceInput {
       id: String,
-      name: String
+      name: String,
+      type: String,
+      role: String
     }
     
     type Appearance {
@@ -66,6 +68,15 @@ export const resolvers = {
         id: (parent) => parent.id,
         name: (parent) => parent.name.trim(),
         type: (parent) => (parent.type.trim() === '' ? 'CHARACTER' : parent.type),
-        role: (parent) => ''
+        role: async (parent) => {
+            let relation = await models.Story_Appearance.findAll({
+                where: {
+                    fk_story: parent.Stories[0].id,
+                    fk_appearance: parent.id
+                }
+            });
+
+            return relation[0].role;
+        }
     }
 };

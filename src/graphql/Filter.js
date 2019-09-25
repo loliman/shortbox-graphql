@@ -28,14 +28,8 @@ export const typeDef = gql`
     series: [SeriesInput],
     numbers: [NumberFilter],
     arcs: [ArcInput],
-    writers: [IndividualInput],
-    artists: [IndividualInput],
-    inkers: [IndividualInput],
-    colourists: [IndividualInput],
-    letterers: [IndividualInput],
-    pencilers: [IndividualInput],
-    editors: [IndividualInput],
-    translators: [IndividualInput],
+    individuals: [IndividualInput],
+    appearances: [AppearanceInput],
     firstPrint: Boolean,
     onlyPrint: Boolean,
     otherTb: Boolean,
@@ -211,59 +205,88 @@ async function convertFilterToString(filter) {
 
     s += "\tMitwirkende\n";
 
-    if (filter.writers) {
+    if (filter.individuals && filter.individuals.filter(i => i.type === 'WRITER').length > 0) {
         s += "\t\tAutor: ";
-        filter.writers.forEach(i => s += i.name + ", ");
+        filter.individuals.filter(i => i.type === 'WRITER').forEach(i => s += i.name + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (filter.pencilers) {
+    if (filter.individuals && filter.individuals.filter(i => i.type === 'PENCILER').length > 0) {
         s += "\t\tZeichner: ";
-        filter.pencilers.forEach(i => s += i.name + ", ");
+        filter.individuals.filter(i => i.type === 'PENCILER').forEach(i => s += i.name + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (filter.artists) {
+    if (filter.individuals && filter.individuals.filter(i => i.type === 'ARTIST').length > 0) {
         s += "\t\tZeichner: ";
-        filter.artists.forEach(i => s += i.name + ", ");
+        filter.individuals.filter(i => i.type === 'ARTIST').forEach(i => s += i.name + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (filter.inkers) {
+    if (filter.individuals && filter.individuals.filter(i => i.type === 'INKER').length > 0) {
         s += "\t\tInker: ";
-        filter.inkers.forEach(i => s += i.name + ", ");
+        filter.individuals.filter(i => i.type === 'INKER').forEach(i => s += i.name + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (filter.colourists) {
+    if (filter.individuals && filter.individuals.filter(i => i.type === 'COLOURIST').length > 0) {
         s += "\t\tKolorist: ";
-        filter.colourists.forEach(i => s += i.name + ", ");
+        filter.individuals.filter(i => i.type === 'COLOURIST').forEach(i => s += i.name + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (filter.letterers) {
+    if (filter.individuals && filter.individuals.filter(i => i.type === 'LETTERER').length > 0) {
         s += "\t\tLetterer: ";
-        filter.letterers.forEach(i => s += i.name + ", ");
+        filter.individuals.filter(i => i.type === 'LETTERER').forEach(i => s += i.name + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (filter.editors) {
+    if (filter.individuals && filter.individuals.filter(i => i.type === 'EDITOR').length > 0) {
         s += "\t\tEditor: ";
-        filter.editors.forEach(i => s += i.name + ", ");
+        filter.individuals.filter(i => i.type === 'EDITOR').forEach(i => s += i.name + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (filter.translators) {
+    if (filter.individuals && filter.individuals.filter(i => i.type === 'TRANSLATOR').length > 0) {
         s += "\t\tÜbersetzer: ";
-        filter.translators.forEach(i => s += i.name + ", ");
+        filter.individuals.filter(i => i.type === 'TRANSLATOR').forEach(i => s += i.name + ", ");
         s = s.substr(0, s.length - 2) + "\n";
     }
 
+    if (!filter.individuals)
+        s += "\t\t-\n";
 
-    if (!filter.writers && !filter.artists && !filter.inkers && !filter.colourists && !filter.letterers && !filter.editors && !filter.translators)
+    s += "\tAuftritte\n";
+
+    if (filter.appearances) {
+        filter.appearances.forEach(i => s += "\t\t" + i.name.replace(new RegExp("\"", 'g'), '\'') + " (" + getType(i.type) + ")\n");
+    }
+
+    if (!filter.appearances)
         s += "\t\t-\n";
 
     return s + "\n\n";
+}
+
+function getType(type) {
+    switch (type) {
+        case "CHARACTER":
+            return "Charakter";
+        case "ITEM":
+            return "Gegenstand";
+        case "TEAM":
+            return "Team";
+        case "RACE":
+            return "Rasse";
+        case "ANIMAL":
+            return "Tier";
+        case "LOCATION":
+            return "Ort";
+        case "VEHICLE":
+            return "Fahrzeug";
+        default:
+            return "";
+    }
 }
 
 export function createFilterQuery(selected, filter, print) {
@@ -281,20 +304,6 @@ export function createFilterQuery(selected, filter, print) {
 
     if((!us ? 1 : 0) + (filter.firstPrint ? 1 : 0) + (filter.onlyPrint ? 1 : 0)  + (filter.otherTb ? 1 : 0)  + (filter.exclusive ? 1 : 0) > 2)
         throw new Error("Kombination nicht erlaubt");
-
-    if(us && filter.translators)
-        throw new Error("Kombination nicht erlaubt");
-
-    if (filter.cover) {
-        if ((filter.cover ? 1 : 0) + (filter.writers ? 1 : 0) + (filter.inkers ? 1 : 0) + (filter.colourists ? 1 : 0) + (filter.letterers ? 1 : 0) + (filter.editors ? 1 : 0) + (filter.translators ? 1 : 0) > 1)
-            throw new Error("Kombination nicht erlaubt");
-    }
-
-    if (filter.feature) {
-        if ((filter.feature ? 1 : 0) + (filter.firstPrint ? 1 : 0) + (filter.onlyPrint ? 1 : 0) + (filter.otherTb ? 1 : 0) + (filter.exclusive ? 1 : 0) + (filter.publishers ? 1 : 0)
-            + (filter.series ? 1 : 0) + (filter.pencilers ? 1 : 0) + (filter.inkers ? 1 : 0) + (filter.colourists ? 1 : 0) + (filter.letterers ? 1 : 0) + (filter.editors ? 1 : 0) + (filter.translators ? 1 : 0) > 1)
-            throw new Error("Kombination nicht erlaubt");
-    }
 
     let where = "";
 
@@ -342,84 +351,14 @@ export function createFilterQuery(selected, filter, print) {
             });
     }
 
-    if(filter.writers && filter.writers.length > 0) {
-        let writers = "";
-        filter.writers.map(writer => writers += "'" + writer.name + "', ");
-        writers = writers.substring(0, writers.length-2);
-        if (us)
-            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + writers + ") AND l1.individualtype = 'WRITER') ";
-        else
-            joinwhere += " AND " + "(ivjoin.name IN (" + writers + ") AND sijoin.type = 'WRITER') ";
-    }
-
-    if (filter.pencilers && filter.pencilers.length > 0) {
-        let pencilers = "";
-        filter.pencilers.map(penciler => pencilers += "'" + penciler.name + "', ");
-        pencilers = pencilers.substring(0, pencilers.length - 2);
-        if (us)
-            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + pencilers + ") AND l1.individualtype = 'PENCILER') ";
-        else
-            joinwhere += " AND " + "(ivjoin.name IN (" + pencilers + ") AND sijoin.type = 'PENCILER') ";
-    }
-
-    if(filter.artists && filter.artists.length > 0) {
-        let artists = "";
-        filter.artists.map(artist => artists += "'" + artist.name + "', ");
-        artists = artists.substring(0, artists.length-2);
-        if (us)
-            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + artists + ") AND l1.individualtype = 'ARTIST') ";
-        else
-            joinwhere += " AND " + "(ivjoin.name IN (" + artists + ") AND sijoin.type = 'ARTIST') ";
-    }
-
-    if (filter.letterers && filter.letterers.length > 0) {
-        let letterers = "";
-        filter.letterers.map(letterer => letterers += "'" + letterer.name + "', ");
-        letterers = letterers.substring(0, letterers.length - 2);
-        if (us)
-            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + letterers + ") AND l1.individualtype = 'LETTERER') ";
-        else
-            joinwhere += " AND " + "(ivjoin.name IN (" + letterers + ") AND sijoin.type = 'LETTERER') ";
-    }
-
-    if(filter.inkers && filter.inkers.length > 0) {
-        let inkers = "";
-        filter.inkers.map(inker => inkers += "'" + inker.name + "', ");
-        inkers = inkers.substring(0, inkers.length-2);
-        if (us)
-            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + inkers + ") AND l1.individualtype = 'INKER') ";
-        else
-            joinwhere += " AND " + "(ivjoin.name IN (" + inkers + ") AND sijoin.type = 'INKER') ";
-    }
-
-    if(filter.colourists && filter.colourists.length > 0) {
-        let colourists = "";
-        filter.colourists.map(colourist => colourists += "'" + colourist.name + "', ");
-        colourists = colourists.substring(0, colourists.length-2);
-        if (us)
-            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + colourists + ") AND l1.individualtype = 'COLOURIST') ";
-        else
-            joinwhere += " AND " + "(ivjoin.name IN (" + colourists + ") AND sijoin.type = 'COLOURIST') ";
-    }
-
-    if(filter.editors && filter.editors.length > 0) {
-        let editors = "";
-        filter.editors.map(editor => editors += "'" + editor.name + "', ");
-        editors = editors.substring(0, editors.length-2);
-        if (us)
-            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + editors + ") AND l1.individualtype = 'EDITOR') ";
-        else
-            joinwhere += " AND " + "(ivjoin.name IN (" + editors + ") AND sijoin.type = 'EDITOR') ";
-    }
-
-    if(filter.translators && filter.translators.length > 0) {
-        let translators = "";
-        filter.translators.map(translator => translators += "'" + translator.name + "', ");
-        translators = translators.substring(0, translators.length-2);
-        if (us)
-            joinwhere += " AND " + "(ivjoin.name IN (" + translators + ") AND sijoin.type = 'TRANSLATOR') ";
-        else
-            where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname IN (" + translators + ") AND l1.individualtype = 'TRANSLATOR') ";
+    if(filter.individuals && filter.individuals.length > 0) {
+        let where = "";
+        filter.individuals.map(individual => {
+            if (us)
+                where += (where === "" ? "WHERE " : " AND ") + "(l1.individualname = '" + individual.name + "' AND l1.individualtype = '" + individual.type + "') ";
+            else
+                joinwhere += " AND " + "(ivjoin.name = '" + individual.name + "' AND sijoin.type = '" + individual.type + "') ";
+        });
     }
 
     if (filter.arcs && filter.arcs.length > 0) {
