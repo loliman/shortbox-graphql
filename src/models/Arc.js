@@ -46,8 +46,7 @@ export const typeDef = gql`
     input ArcInput {
       id: String,
       title: String,
-      type: String,
-      __typename: String
+      type: String
     }
       
     type Arc {
