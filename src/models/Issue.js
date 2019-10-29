@@ -145,7 +145,7 @@ export const typeDef = gql`
   
   extend type Query {
     issues(series: SeriesInput!, filter: Filter): [Issue], 
-    lastEdited(us: Boolean): [Issue],
+    lastEdited(us: Boolean, offset: Int): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }
     
@@ -235,7 +235,7 @@ export const resolvers = {
                 return issues.sort((a, b) => naturalCompare(a.number, b.number));
             }
         },
-        lastEdited: async (_, {us}) => await models.Issue.findAll({
+        lastEdited: async (_, {us, offset}) => await models.Issue.findAll({
             where: {
                 '$Series->Publisher.original$': us
             },
@@ -248,7 +248,8 @@ export const resolvers = {
                 }
             ],
             order: [['updatedAt', 'DESC']],
-            limit: 50
+            offset: offset,
+            limit: 25
         }),
         issue: async (_, {issue, edit}) => {
             let where = {
