@@ -144,8 +144,8 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    issues(series: SeriesInput!, filter: Filter): [Issue], 
-    lastEdited(us: Boolean, offset: Int): [Issue],
+    issues(series: SeriesInput!, offset: Int, filter: Filter): [Issue], 
+    lastEdited(filter: Filter, offset: Int): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }
     
@@ -198,19 +198,27 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        issues: async (_, {series, filter}) => {
+        issues: async (_, {series, offset, filter}) => {
             if(!filter) {
                 let res = await models.Issue.findAll({
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
                         [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
                         [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
-                        'number', 'fk_series'],
+                        [models.sequelize.cast(models.sequelize.col('number'), 'unsigned'), 'numberasint'],
+                        [models.sequelize.fn('fromRoman', models.sequelize.col('number')), 'numberfromroman'],
+                        'number', 'releasedate', 'fk_series'],
                     where: {
                         '$Series.title$': series.title,
                         '$Series.volume$': series.volume,
                         '$Series->Publisher.name$': series.publisher.name
                     },
-                    order: [['number', 'ASC'], ['variant', 'DESC'], ['title', 'DESC'], ['format', 'DESC']],
+                    order: [[models.sequelize.literal('numberasint'), 'ASC'],
+                        [models.sequelize.literal('numberfromroman'), 'ASC'],
+                        ['releasedate', 'ASC'],
+                        ['number', 'ASC'],
+                        [models.sequelize.literal('variant'), 'DESC'],
+                        [models.sequelize.literal('title'), 'DESC'],
+                        [models.sequelize.literal('format'), 'DESC']],
                     group: ['fk_series', 'number'],
                     include: [
                         {
@@ -219,10 +227,12 @@ export const resolvers = {
                                 models.Publisher
                             ]
                         }
-                    ]
+                    ],
+                    offset: offset,
+                    limit: 50
                 });
 
-                return res.sort((a, b) => naturalCompare(a.number, b.number));
+                return res;
             } else {
                 let rawQuery = createFilterQuery(series, filter);
                 let res = await models.sequelize.query(rawQuery);
@@ -235,22 +245,34 @@ export const resolvers = {
                 return issues.sort((a, b) => naturalCompare(a.number, b.number));
             }
         },
-        lastEdited: async (_, {us, offset}) => await models.Issue.findAll({
-            where: {
-                '$Series->Publisher.original$': us
-            },
-            include: [
-                {
-                    model: models.Series,
-                    include: [
-                        models.Publisher
-                    ]
+        lastEdited: async (_, {filter, offset}) => {
+            let where = {};
+            where['$Series->Publisher.original$'] = filter.us;
+            if(filter.publishers && filter.publishers[0] && filter.publishers[0].name) {
+                where['$Series->Publisher.name$'] = filter.publishers[0].name;
+
+                if(filter.series && filter.series[0] && filter.series[0].title && filter.series[0].volume) {
+                    where['$Series.title$'] = filter.series[0].title;
+                    where['$Series.volume$'] = filter.series[0].volume;
                 }
-            ],
-            order: [['updatedAt', 'DESC']],
-            offset: offset,
-            limit: 25
-        }),
+            }
+
+
+            return await models.Issue.findAll({
+                where: where,
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ],
+                order: [['updatedAt', 'DESC']],
+                offset: offset,
+                limit: 25
+            })
+        },
         issue: async (_, {issue, edit}) => {
             let where = {
                 number: issue.number,

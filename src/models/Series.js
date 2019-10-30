@@ -86,7 +86,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    series(publisher: PublisherInput!, filter: Filter): [Series],
+    series(publisher: PublisherInput!, offset: Int, filter: Filter): [Series],
     seriesd(series: SeriesInput!): Series
   }
   
@@ -118,11 +118,13 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        series: async (_, {publisher, filter}) => {
+        series: async (_, {publisher, offset, filter}) => {
             if(!filter) {
                 let options = {
                     order: [['title', 'ASC'], ['volume', 'ASC']],
                     include: [models.Publisher],
+                    offset: offset,
+                    limit: 50
                 };
 
                 if (publisher.name !== "*")

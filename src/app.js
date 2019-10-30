@@ -32,6 +32,40 @@ async function start() {
         //might be gone already, that's fine!
     }
 
+    try {
+        await sequelize.query("DROP FUNCTION fromRoman");
+    } catch (e) {
+        //might be gone already, that's fine!
+    }
+
+    await sequelize.query(
+        "CREATE FUNCTION fromRoman (inRoman varchar(256)) RETURNS integer DETERMINISTIC\n" +
+        "BEGIN\n" +
+        "\n" +
+        "    DECLARE numeral CHAR(7) DEFAULT 'IVXLCDM';\n" +
+        "\n" +
+        "    DECLARE digit TINYINT;\n" +
+        "    DECLARE previous INT DEFAULT 0;\n" +
+        "    DECLARE current INT;\n" +
+        "    DECLARE sum INT DEFAULT 0;\n" +
+        "\n" +
+        "    SET inRoman = UPPER(inRoman);\n" +
+        "\n" +
+        "    WHILE LENGTH(inRoman) > 0 DO\n" +
+        "        SET digit := LOCATE(RIGHT(inRoman, 1), numeral) - 1;\n" +
+        "        SET current := POW(10, FLOOR(digit / 2)) * POW(5, MOD(digit, 2));\n" +
+        "        IF current = 0 THEN\n" +
+        "           RETURN 0;\n" +
+        "        END IF;\n" +
+        "        SET sum := sum + POW(-1, current < previous) * current;\n" +
+        "        SET previous := current;\n" +
+        "        SET inRoman = LEFT(inRoman, LENGTH(inRoman) - 1);\n" +
+        "    END WHILE;\n" +
+        "\n" +
+        "    RETURN sum;\n" +
+        "end\n"
+    )
+
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Database is set up");
 
     if (!fs.existsSync(wwwDir + '/' + coverDir))
