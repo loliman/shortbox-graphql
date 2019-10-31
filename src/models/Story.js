@@ -388,7 +388,13 @@ export function equals(a, b) {
         return false;
 
     if(!a.exclusive) {
-        if(a.individuals.length !== b.individuals.length)
+        if(a.individuals && !b.individuals)
+            return false;
+
+        if(!a.individuals && b.individuals)
+            return false;
+
+        if((a.individuals && b.individuals) && (a.individuals.length !== b.individuals.length))
             return false;
 
         let found = a.individuals.every(aIndividual => {

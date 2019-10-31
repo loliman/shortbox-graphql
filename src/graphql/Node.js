@@ -6,7 +6,7 @@ import matchSorter from "match-sorter";
 
 export const typeDef = gql`
   extend type Query {
-    nodes(pattern: String!, us: Boolean!): [Node],
+    nodes(pattern: String!, us: Boolean!, offset: Int): [Node],
   }
     
   type Node {
@@ -18,7 +18,7 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        nodes: async (_, {pattern, us}) => {
+        nodes: async (_, {pattern, us, offset}) => {
             let orgiginalPattern = pattern;
             pattern = '%' + pattern.replace(/\s/g, '%') + '%';
             let res = [];
@@ -97,8 +97,13 @@ export const resolvers = {
             }
 
             res = matchSorter(res, orgiginalPattern, {keys: ['label']});
-            if (res.length >= 25)
-                return res.slice(0, 25);
+            console.log(res.length);
+
+            if(offset === res.length)
+                return [];
+
+            if(res.length >= 25)
+                return res.slice(offset, 25);
 
             return res;
         }
