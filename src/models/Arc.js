@@ -40,7 +40,7 @@ export default (sequelize) => {
 
 export const typeDef = gql`
     extend type Query {
-      arcs: [Arc]  
+      arcs(pattern: String, offset: Int): [Arc]  
     }
   
     input ArcInput {
@@ -59,9 +59,18 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        arcs: () => models.Arc.findAll({
-            order: [['title', 'ASC']]
-        })
+        arcs: (_, {pattern, offset}) => {
+            let where = {};
+            if(pattern)
+                where.title = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+
+            return models.Arc.findAll({
+                where: where,
+                order: [['title', 'ASC']],
+                offset: offset,
+                limit: 50
+            })
+        }
     },
     Arc: {
         id: (parent) => parent.id,

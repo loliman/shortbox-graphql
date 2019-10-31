@@ -40,7 +40,7 @@ export default (sequelize) => {
 
 export const typeDef = gql`
     extend type Query {
-      apps(pattern: String!, offset: Int!): [Appearance]  
+      apps(pattern: String, offset: Int): [Appearance]  
     }
     
     input AppearanceInput {
@@ -60,14 +60,18 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        apps: (pattern, offset) => models.Appearance.findAll({
-            order: [['name', 'ASC']],
-            where: {
-                name: {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'}
-            },
-            offset: offset,
-            limit: 10
-        })
+        apps: (_, {pattern, offset}) => {
+            let where = {};
+            if(pattern)
+                where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+
+            return models.Appearance.findAll({
+                order: [['name', 'ASC']],
+                where: where,
+                offset: offset,
+                limit: 50
+            })
+        }
     },
     Appearance: {
         id: (parent) => parent.id,

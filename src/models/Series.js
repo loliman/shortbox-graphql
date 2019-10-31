@@ -86,7 +86,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    series(publisher: PublisherInput!, offset: Int, filter: Filter): [Series],
+    series(pattern: String, publisher: PublisherInput!, offset: Int, filter: Filter): [Series],
     seriesd(series: SeriesInput!): Series
   }
   
@@ -118,7 +118,7 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        series: async (_, {publisher, offset, filter}) => {
+        series: async (_, {pattern, publisher, offset, filter}) => {
             if(!filter) {
                 let options = {
                     order: [['title', 'ASC'], ['volume', 'ASC']],
@@ -132,6 +132,9 @@ export const resolvers = {
 
                 if (publisher.us !== undefined)
                     options.where = {'$Publisher.original$': publisher.us ? 1 : 0};
+
+                if(pattern)
+                    options.where.title = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
 
                 return await models.Series.findAll(options);
             } else {

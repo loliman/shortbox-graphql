@@ -19,93 +19,67 @@ export const typeDef = gql`
 export const resolvers = {
     Query: {
         nodes: async (_, {pattern, us, offset}) => {
-            let orgiginalPattern = pattern;
+            if (!offset)
+                offset = 0;
+
             pattern = '%' + pattern.replace(/\s/g, '%') + '%';
-            let res = [];
+            let res = await models.sequelize.query("SELECT type, \n" +
+               "       Createlabel(type, name, title, volume, startyear, endyear, number, format, variant) AS label, \n" +
+               "       Createurl(type, original, name, title, volume, number, format, variant) AS url \n" +
+               "FROM   (SELECT \"publisher\" AS type, \n" +
+               "               original    AS original, \n" +
+               "               name        AS name, \n" +
+               "               \"\"          AS title, \n" +
+               "               0           AS volume, \n" +
+               "               0           AS startyear, \n" +
+               "               0           AS endyear, \n" +
+               "               0           AS number, \n" +
+               "               ''          AS format, \n" +
+               "               ''          AS variant \n" +
+               "        FROM   publisher p \n" +
+               "        WHERE  original = 0 \n" +
+               "        UNION \n" +
+               "        SELECT \"series\"    AS type, \n" +
+               "               original    AS original, \n" +
+               "               name        AS name, \n" +
+               "               s.title     AS title, \n" +
+               "               volume      AS volume, \n" +
+               "               s.startyear AS startyear, \n" +
+               "               s.endyear   AS endyear, \n" +
+               "               0           AS number, \n" +
+               "               ''          AS format, \n" +
+               "               ''          AS variant \n" +
+               "        FROM   series s \n" +
+               "               LEFT JOIN publisher p \n" +
+               "                      ON s.fk_publisher = p.id \n" +
+               "        WHERE  p.original = 0 \n" +
+               "        UNION \n" +
+               "        SELECT \"issue\"     AS type, \n" +
+               "               original    AS original, \n" +
+               "               name        AS name, \n" +
+               "               s.title     AS title, \n" +
+               "               volume      AS volume, \n" +
+               "               s.startyear AS startyear, \n" +
+               "               s.endyear   AS endyear, \n" +
+               "               number      AS number, \n" +
+               "               format      AS format, \n" +
+               "               variant     AS variant \n" +
+               "        FROM   issue i \n" +
+               "               LEFT JOIN series s \n" +
+               "                      ON i.fk_series = s.id \n" +
+               "               LEFT JOIN publisher p \n" +
+               "                      ON s.fk_publisher = p.id \n" +
+               "        WHERE  p.original = 0 \n" +
+               "        ORDER  BY title, \n" +
+               "                  volume, \n" +
+               "                  name, \n" +
+               "                  Cast(number AS UNSIGNED), \n" +
+               "                  format, \n" +
+               "                  variant) a \n" +
+               "HAVING label LIKE '" + pattern +"' \n" +
+               "LIMIT  25 offset " + offset);
 
-            let publisher = await models.Publisher.findAll({
-                where: {
-                    original: (us ? 1 : 0),
-                    name: {[Sequelize.Op.like]: pattern}
-                },
-                order: [['name', 'ASC']]
-            });
-
-            await asyncForEach(publisher, async p => {
-                res.push({
-                    type: 'Publisher',
-                    label: await generateLabel(p),
-                    url: await generateUrl(p, us)
-                })
-            });
-
-            if (res.length < 25) {
-                let series = await models.Series.findAll({
-                    attributes: [
-                        [Sequelize.fn("concat", Sequelize.col('title'), ' (Vol.', Sequelize.col('volume'), ')'), 'concatinated'],
-                        'volume', 'title', 'startyear', 'endyear', 'fk_publisher'],
-                    where: {
-                        '$Publisher.original$': us ? 1 : 0,
-                    },
-                    having: {
-                        concatinated: {[Sequelize.Op.like]: pattern}
-                    },
-                    order: [['title', 'ASC'], ['volume', 'ASC']],
-                    include: [models.Publisher]
-                });
-
-                await asyncForEach(series, async s => {
-                    res.push({
-                        type: 'Series',
-                        label: await generateLabel(s),
-                        url: await generateUrl(s, us)
-                    })
-                });
-            }
-
-            if (res.length < 25) {
-                let issues = await models.Issue.findAll({
-                    attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
-                        [Sequelize.fn("concat", Sequelize.col('Series.title'), ' (Vol.', Sequelize.col('Series.volume'), ') #', Sequelize.col('number'), ' (', Sequelize.col('format'), ')'), 'concatinated'],
-                        'id', 'number', 'fk_series', 'format', 'variant'],
-                    where: {
-                        '$Series->Publisher.original$': us ? 1 : 0
-                    },
-                    group: ['fk_series', 'number', 'format', 'variant'],
-                    having: {
-                        concatinated: {[Sequelize.Op.like]: pattern}
-                    },
-                    order: [['number', 'ASC'], ['variant', 'DESC'], ['title', 'DESC'], ['format', 'DESC']],
-                    grgenerateUrloup: ['fk_series', 'number'],
-                    include: [
-                        {
-                            model: models.Series,
-                            include: [
-                                models.Publisher
-                            ]
-                        }
-                    ]
-                });
-
-                await asyncForEach(issues, async i => {
-                    res.push({
-                        type: 'Issue',
-                        label: await generateLabel(i),
-                        url: await generateUrl(i, us)
-                    })
-                });
-            }
-
-            res = matchSorter(res, orgiginalPattern, {keys: ['label']});
-            console.log(res.length);
-
-            if(offset === res.length)
-                return [];
-
-            if(res.length >= 25)
-                return res.slice(offset, 25);
-
-            return res;
+            return res[0];
         }
     },
     Node: {

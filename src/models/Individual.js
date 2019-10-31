@@ -39,7 +39,7 @@ export default (sequelize) => {
 
 export const typeDef = gql`
   extend type Query {
-    individuals: [Individual]  
+    individuals(pattern: String, offset: Int): [Individual]  
   }
   
   input IndividualInput {
@@ -56,9 +56,18 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        individuals: () => models.Individual.findAll({
-            order: [['name', 'ASC']]
-        })
+        individuals: (_, {pattern, offset}) => {
+            let where = {};
+            if(pattern)
+                where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+
+            return models.Individual.findAll({
+                where: where,
+                order: [['name', 'ASC']],
+                offset: offset,
+                limit: 50
+            })
+        }
     },
     Individual: {
         id: (parent) => parent.id,

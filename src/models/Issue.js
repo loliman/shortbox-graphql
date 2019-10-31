@@ -144,7 +144,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    issues(series: SeriesInput!, offset: Int, filter: Filter): [Issue], 
+    issues(pattern: String, series: SeriesInput!, offset: Int, filter: Filter): [Issue], 
     lastEdited(filter: Filter, offset: Int): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }
@@ -198,7 +198,7 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        issues: async (_, {series, offset, filter}) => {
+        issues: async (_, {pattern, series, offset, filter}) => {
             if(!filter) {
                 let res = await models.Issue.findAll({
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],

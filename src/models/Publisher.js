@@ -86,7 +86,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    publishers(us: Boolean!, offset: Int, filter: Filter): [Publisher],
+    publishers(pattern: String, us: Boolean!, offset: Int, filter: Filter): [Publisher],
     publisher(publisher: PublisherInput!): Publisher
   }
   
@@ -118,10 +118,14 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        publishers: async (_, {us, offset, filter}) => {
+        publishers: async (_, {pattern, us, offset, filter}) => {
             if(!filter) {
+                let where = {original: (us ? 1 : 0)};
+                if(pattern)
+                    where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+
                 return await models.Publisher.findAll({
-                    where: {original: (us ? 1 : 0)},
+                    where: where,
                     order: [['name', 'ASC']],
                     offset: offset,
                     limit: 50
