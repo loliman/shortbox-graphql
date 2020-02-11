@@ -349,7 +349,7 @@ export function createFilterQuery(selected, filter, print) {
             " left join series s on p.id = s.fk_publisher " +
             " left join issue i on s.id = i.fk_series " +
             " left join story st on i.id = st.fk_issue " +
-            " left join story_appearance stapp on st.fk_parent = stapp.fk_story " +
+            " left join story_appearance stapp on " + (us ? "st.id" : "st.fk_parent") + " = stapp.fk_story " +
             " left join appearance app on stapp.fk_appearance = app.id " +
             " where i.id is not null " +
             " and (";
@@ -361,6 +361,120 @@ export function createFilterQuery(selected, filter, print) {
             });
 
             intersect += ") group by i.id) ";
+    }
+
+    if(filter.individuals && filter.individuals.length > 0) {
+        intersect += " AND i.id IN (" +
+            "select i.id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join story st on i.id = st.fk_issue " +
+            " left join story_individual stindi on " + (us ? "st.id" : "st.fk_parent") + " = stindi.fk_story " +
+            " left join individual indi on stindi.fk_individual = indi.id " +
+            " where i.id is not null " +
+            " and (";
+
+        filter.individuals.map((individual, i) => {
+            if(i > 0)
+                intersect += " OR ";
+            intersect += " (indi.name = '" + individual.name + "' and stindi.type = '" + individual.type + "')";
+        });
+
+        intersect += ") group by i.id) ";
+    }
+
+    if(filter.arcs && filter.arcs.length > 0) {
+        intersect += " AND i.id IN (" +
+            "select i.id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series ";
+
+        intersect += us ? " left join issue_arc ia on i.id = ia.fk_issue " :
+            " left join story st on i.id = st.fk_issue " +
+            " left join story stjoin on st.fk_parent = stjoin.id " +
+            " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
+            " left join issue_arc ia on ijoin.id = ia.fk_issue ";
+
+        intersect += " left join arc a on ia.fk_arc = a.id " +
+            " where i.id is not null " +
+            " and (";
+
+        filter.arcs.map((arc, i) => {
+            if(i > 0)
+                intersect += " OR ";
+            intersect += " (a.title = '" + arc.title + "' and a.type = '" + arc.type + "')";
+        });
+
+        intersect += ") group by i.id) ";
+    }
+
+    if(filter.publishers && filter.publishers.length > 0) {
+        intersect += " AND i.id IN (" +
+            "select i.id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join story st on i.id = st.fk_issue " +
+            " left join story stjoin on " + (us ? "st.id =" : "st.fk_parent =") + (us ? "stjoin.fk_parent " : "stjoin.id ") +
+            " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
+            " left join series sjoin on ijoin.fk_series = sjoin.id " +
+            " left join publisher pjoin on pjoin.id = sjoin.fk_publisher " +
+            " where i.id is not null " +
+            " and (";
+
+        filter.publishers.map((publisher, i) => {
+            if(i > 0)
+                intersect += " OR ";
+            intersect += " (pjoin.name = '" + publisher.name + "')";
+        });
+
+        intersect += ") group by i.id) ";
+    }
+
+    if(filter.series && filter.series.length > 0) {
+        intersect += " AND i.id IN (" +
+            "select i.id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join story st on i.id = st.fk_issue " +
+            " left join story stjoin on " + (us ? "st.id =" : "st.fk_parent =") + (us ? "stjoin.fk_parent " : "stjoin.id ") +
+            " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
+            " left join series sjoin on ijoin.fk_series = sjoin.id " +
+            " left join publisher pjoin on pjoin.id = sjoin.fk_publisher " +
+            " where i.id is not null " +
+            " and (";
+
+        filter.series.map((series, i) => {
+            if(i > 0)
+                intersect += " OR ";
+            intersect += " (sjoin.title = '" + series.title + "' and sjoin.volume = " + series.volume + " and pjoin.name = '" + series.publisher.name + "')";
+        });
+
+        intersect += ") group by i.id) ";
+    }
+
+    if(filter.numbers && filter.numbers.length > 0) {
+        intersect += " AND i.id IN (" +
+            "select i.id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join story st on i.id = st.fk_issue " +
+            " left join story stjoin on " + (us ? "st.id =" : "st.fk_parent =") + (us ? "stjoin.fk_parent " : "stjoin.id ") +
+            " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
+            " where i.id is not null " +
+            " and (";
+
+        filter.numbers.map((number, i) => {
+            if(i > 0)
+                intersect += " OR ";
+            intersect += " (cast(ijoin.number as unsigned) " + number.compare + "cast('" + number.number + "' as unsigned))";
+        });
+
+        intersect += ") group by i.id) ";
     }
 
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
