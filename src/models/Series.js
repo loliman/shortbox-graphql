@@ -138,7 +138,7 @@ export const resolvers = {
 
                 return await models.Series.findAll(options);
             } else {
-                let rawQuery = createFilterQuery(publisher, filter);
+                let rawQuery = createFilterQuery(publisher, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
                 let series = [];
                 res[0].forEach(s => {

@@ -50,7 +50,7 @@ export const typeDef = gql`
   type Individual {
     id: ID,
     name: String,
-    type: String
+    type: [String]
   }
 `;
 
@@ -96,7 +96,7 @@ export const resolvers = {
                 where: where
             });
 
-            return relation[0].type;
+            return relation.map(r => r.type);
         }
     }
 };

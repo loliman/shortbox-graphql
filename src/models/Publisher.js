@@ -131,7 +131,7 @@ export const resolvers = {
                     limit: 50
                 });
             } else {
-                let rawQuery = createFilterQuery(us, filter);
+                let rawQuery = createFilterQuery(us, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
                 let publishers = [];
                 res[0].forEach(p => publishers.push({

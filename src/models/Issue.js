@@ -234,7 +234,7 @@ export const resolvers = {
 
                 return res;
             } else {
-                let rawQuery = createFilterQuery(series, filter);
+                let rawQuery = createFilterQuery(series, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
                 let issues = [];
                 res[0].forEach(i => issues.push({

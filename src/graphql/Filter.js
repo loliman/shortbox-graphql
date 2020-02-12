@@ -46,7 +46,7 @@ export const typeDef = gql`
 export const resolvers = {
     Query: {
         export: async (_, {filter}) => {
-            let rawQuery = createFilterQuery(filter.us, filter, true);
+            let rawQuery = createFilterQuery(filter.us, filter, 0, true);
             let res = await models.sequelize.query(rawQuery);
 
             let response = {};
@@ -289,11 +289,11 @@ function getType(type) {
     }
 }
 
-export function createFilterQuery(selected, filter, print) {
+export function createFilterQuery(selected, filter, offset, print) {
     console.log(selected);
     console.log(filter);
 
-    let type = filter.story ? "Story" : filter.cover ? "Cover" : "Feature";
+    let type = filter.story ? "story" : filter.cover ? "cover" : "feature";
     let us = filter.us ? 1 : 0;
 
     let columns = "p.name as publishername, p.id as publisherid, " +
@@ -342,46 +342,60 @@ export function createFilterQuery(selected, filter, print) {
 
     let intersect = "";
 
-    if(filter.appearances && filter.appearances.length > 0) {
-        intersect += " AND i.id IN (" +
-            "select i.id " +
-            " from publisher p " +
-            " left join series s on p.id = s.fk_publisher " +
-            " left join issue i on s.id = i.fk_series " +
-            " left join story st on i.id = st.fk_issue " +
-            " left join story_appearance stapp on " + (us ? "st.id" : "st.fk_parent") + " = stapp.fk_story " +
-            " left join appearance app on stapp.fk_appearance = app.id " +
-            " where i.id is not null " +
-            " and (";
+    if(filter.appearances && filter.appearances.length > 0 && (filter.cover || filter.story)) {
+        intersect += " AND i.id IN (";
+
+        for(let i = 2; i > 0; i--) {
+            intersect +=
+                "select i.id " +
+                " from publisher p " +
+                " left join series s on p.id = s.fk_publisher " +
+                " left join issue i on s.id = i.fk_series " +
+                " left join " + type + " st on i.id = st.fk_issue " +
+                " left join story_appearance stapp on " + (i === 2 ? "st.id" : "st.fk_parent") + " = stapp.fk_story " +
+                " left join appearance app on stapp.fk_appearance = app.id " +
+                " where i.id is not null " +
+                " and (";
 
             filter.appearances.map((app, i) => {
                 if(i > 0)
                     intersect += " OR ";
-                intersect += " (app.name = '" + app.name + "' and app.type = '" + app.type + "')";
+                intersect += " (app.name = '" + app.name + "' and app.type = '" + app.type + "'))";
             });
 
-            intersect += ") group by i.id) ";
+            if(i === 2)
+                intersect += " UNION "
+        }
+
+        intersect += " group by i.id) ";
     }
 
     if(filter.individuals && filter.individuals.length > 0) {
-        intersect += " AND i.id IN (" +
-            "select i.id " +
-            " from publisher p " +
-            " left join series s on p.id = s.fk_publisher " +
-            " left join issue i on s.id = i.fk_series " +
-            " left join story st on i.id = st.fk_issue " +
-            " left join story_individual stindi on " + (us ? "st.id" : "st.fk_parent") + " = stindi.fk_story " +
-            " left join individual indi on stindi.fk_individual = indi.id " +
-            " where i.id is not null " +
-            " and (";
+        intersect += " AND i.id IN (";
 
-        filter.individuals.map((individual, i) => {
-            if(i > 0)
-                intersect += " OR ";
-            intersect += " (indi.name = '" + individual.name + "' and stindi.type = '" + individual.type + "')";
-        });
+        for(let i = 2; i > 0; i--) {
+            intersect +=
+                "select i.id " +
+                " from publisher p " +
+                " left join series s on p.id = s.fk_publisher " +
+                " left join issue i on s.id = i.fk_series " +
+                " left join " + type + " st on i.id = st.fk_issue " +
+                " left join " + type + "_individual stindi on " + (i === 2 ? "st.id" : "st.fk_parent") + " = stindi.fk_" + type + " " +
+                " left join individual indi on stindi.fk_individual = indi.id " +
+                " where i.id is not null " +
+                " and (";
 
-        intersect += ") group by i.id) ";
+            filter.individuals.map((individual, i) => {
+                if(i > 0)
+                    intersect += " OR ";
+                intersect += " (indi.name = '" + individual.name + "' and stindi.type = '" + individual.type + "'))";
+            });
+
+            if(i === 2)
+                intersect += " UNION "
+        }
+
+        intersect += " group by i.id) ";
     }
 
     if(filter.arcs && filter.arcs.length > 0) {
@@ -477,7 +491,112 @@ export function createFilterQuery(selected, filter, print) {
         intersect += ") group by i.id) ";
     }
 
+    let intersectContains = "";
+    if(filter.exclusive && !us && (filter.cover || filter.story)) {
+        intersectContains +=
+            "select i.id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join " + type + " st on i.id = st.fk_issue " +
+            " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
+            " where i.id is not null " +
+            " and st.id is not null and st.fk_parent is null group by i.id ";
+    }
+
+    if(filter.otherTb && !us && (filter.cover || filter.story)) {
+        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+            "select id from ( " +
+            " select i.id as id, i.format " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join " + type + " st on i.id = st.fk_issue " +
+            " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
+            " where i.id is not null " +
+            " AND stjoin.id IS NOT NULL " +
+            " GROUP BY  st.fk_parent" +
+            " HAVING count(DISTINCT i.id) - count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) = 1 " +
+            " AND count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) > 0" +
+            " and i.format != 'Taschenbuch') a ";
+    }
+
+    if(filter.onlyPrint && !us && (filter.cover || filter.story)) {
+        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+            "select id from ( " +
+            " select i.id as id, i.format " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join " + type + " st on i.id = st.fk_issue " +
+            " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
+            " where i.id is not null " +
+            " AND stjoin.id IS NOT NULL " +
+            " GROUP BY  st.fk_parent" +
+            " HAVING count(distinct concat(s.id, '#', i.number)) = 1) a ";
+    }
+
+    if(filter.firstPrint && !us && (filter.cover || filter.story)) {
+        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+            "SELECT i.id FROM publisher p " +
+            " LEFT JOIN series s ON p.id = s.fk_publisher " +
+            " LEFT JOIN issue i ON s.id = i.fk_series " +
+            " LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
+            " LEFT JOIN " + type + " stjoin ON st.fk_parent = stjoin.id " +
+            " WHERE  i.id IS NOT NULL " +
+            " AND stjoin.id IS NOT NULL " +
+            " AND Concat(stjoin.id, '#', i.releasedate) IN ( " +
+            "   SELECT Concat(stjoin.id, '#', Min(i.releasedate)) FROM publisher p " +
+            "   LEFT JOIN series s ON p.id = s.fk_publisher " +
+            "   LEFT JOIN issue i ON s.id = i.fk_series " +
+            "   LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
+            "   LEFT JOIN " + type + " stjoin ON st.fk_parent = stjoin.id " +
+            "   WHERE i.id IS NOT NULL " +
+            "   AND stjoin.id IS NOT NULL " +
+            "   GROUP BY stjoin.id) ";
+    }
+
+    if(filter.onlyTb && us && (filter.cover || filter.story)) {
+        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+            "select id from ( " +
+            " select i.id as id, ijoin.format " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join " + type + " st on i.id = st.fk_issue " +
+            " left join " + type + " stjoin ON st.id = stjoin.fk_parent" +
+            " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
+            " where i.id is not null " +
+            " and (i.variant IS NULL OR i.variant = '') " +
+            " AND stjoin.id IS NOT NULL " +
+            " GROUP BY  st.id" +
+            " HAVING count(*) = 1 " +
+            " AND ijoin.format = 'Taschenbuch') a ";
+    }
+
+    if(filter.noPrint && us && (filter.cover || filter.story)) {
+        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+            "select id from ( " +
+            " select i.id as id, i.format " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join " + type + " st on i.id = st.fk_issue " +
+            " left join " + type + " stjoin ON st.id = stjoin.fk_parent" +
+            " where i.id is not null " +
+            " and (i.variant IS NULL OR i.variant = '') " +
+            " AND stjoin.id IS NULL " +
+            " GROUP BY  i.id" +
+            " ) a ";
+    }
+
+    if(intersectContains !== "")
+        intersect += " and i.id in (" + intersectContains + ")";
+
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
+    if(!print)
+        rawQuery += " LIMIT " + offset + ", 50";
+
     console.log(rawQuery);
 
     return rawQuery;
