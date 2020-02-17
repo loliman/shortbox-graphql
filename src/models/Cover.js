@@ -184,7 +184,9 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                 if(cover.individuals)
                     await asyncForEach(cover.individuals, async individual => {
                         if(individual.name && individual.name.trim() !== '')
-                            await resCover.associateIndividual(individual.name.trim(), individual.type, transaction);
+                            await asyncForEach(individual.type, async type => {
+                                await resCover.associateIndividual(individual.name.trim(), type, transaction);
+                            });
                     });
 
                 await resCover.save({transaction: transaction});

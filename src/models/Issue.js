@@ -43,6 +43,24 @@ class Issue extends Model {
         });
     }
 
+    async associateArc(title, type, transaction) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                models.Arc.findOrCreate({
+                    where: {
+                        title: title,
+                        type: type
+                    },
+                    transaction: transaction
+                }).then(async ([arc, created]) => {
+                    resolve(await models.Issue_Arc.create({fk_issue: this.id, fk_arc: arc.id}, {transaction: transaction}));
+                });
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
     async delete(transaction) {
         return new Promise(async (resolve, reject) => {
             try {
@@ -464,7 +482,9 @@ export const resolvers = {
 
                     await asyncForEach(item.individuals, async individual => {
                         if(individual.name && individual.name.trim() !== '')
-                            await res.associateIndividual(individual.name.trim(), individual.type, transaction);
+                            await asyncForEach(individual.type, async type => {
+                                  await res.associateIndividual(individual.name.trim(), type, transaction);
+                            });
                     });
 
                     await res.save({transaction: transaction});
@@ -473,8 +493,9 @@ export const resolvers = {
                 if(us && item.arcs && item.arcs.length > 0) {
                     await models.Issue_Arc.destroy({where: {fk_issue: res.id}, transaction});
 
-                    await asyncForEach(item.arcs, async (arc) => {
-                        await createArc(arc, item, transaction);
+                    await asyncForEach(item.arcs, async arc => {
+                        if(arc.title && arc.title.trim() !== '')
+                            await res.associateArc(arc.title.trim(), arc.type, transaction);
                     });
 
                     await res.save({transaction: transaction});
@@ -843,7 +864,9 @@ export async function create(item, transaction) {
             if (us && item.individuals.length > 0) {
                 await asyncForEach(item.individuals, async individual => {
                     if (individual.name && individual.name.trim() !== '')
-                        await res.associateIndividual(individual.name.trim(), individual.type, transaction);
+                        await asyncForEach(individual.type, async type => {
+                            await res.associateIndividual(individual.name.trim(), type, transaction);
+                        });
                 });
 
                 await res.save({transaction: transaction});

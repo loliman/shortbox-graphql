@@ -61,43 +61,6 @@ export function romanize(num) {
     return Array(+digits.join("") + 1).join("M") + roman;
 }
 
-export async function generateUrl(item, us) {
-    let url = (us ? "/us/" : "/de/");
-
-    if (item.name)
-        return url + encodeURIComponent(item.name);
-
-    if (item.volume) {
-        let publisher = await item.getPublisher();
-
-        return url
-            + encodeURIComponent(publisher.name.replace(/%/g, '%25'))
-            + "/"
-            + encodeURIComponent(item.title.replace(/%/g, '%25') + "_Vol_" + item.volume);
-    }
-
-    let series = await item.getSeries();
-    let publisher = await series.getPublisher();
-
-    if (!item.variant || item.variant === "")
-        return url
-            + encodeURIComponent(publisher.name.replace(/%/g, '%25'))
-            + "/"
-            + encodeURIComponent(series.title.replace(/%/g, '%25') + "_Vol_" + series.volume)
-            + "/"
-            + encodeURIComponent(item.number.replace(/%/g, '%25'))
-            + (item.format ? ("/" + encodeURIComponent(item.format)) : "");
-
-    return url
-        + encodeURIComponent(publisher.name.replace(/%/g, '%25'))
-        + "/"
-        + encodeURIComponent(series.title.replace(/%/g, '%25') + "_Vol_" + series.volume)
-        + "/"
-        + encodeURIComponent(item.number.replace(/%/g, '%25'))
-        + "/"
-        + encodeURIComponent(item.format + "_" + item.variant);
-}
-
 export async function generateLabel(item) {
     if (!item)
         return '';

@@ -44,7 +44,7 @@ export const typeDef = gql`
   
   input IndividualInput {
     name: String,
-    type: String
+    type: [String]
   }
   
   type Individual {

@@ -89,11 +89,11 @@ begin
   end IF; 
   SET url := concat(url, urlencode(title)); 
   IF type != 'publisher' THEN 
-  SET url := concat(url, urlencode(name), '_Vol_', volume); 
+  SET url := concat(url, '/', urlencode(name), '_Vol_', volume);
   IF type != 'series' THEN 
-  SET url := concat(url, urlencode(number), '/', urlencode(format)); 
+  SET url := concat(url, '/', urlencode(number), '/', urlencode(format));
   IF variant != '' THEN 
-    SET url := concat(url, '/', urlencode(variant)); 
+    SET url := concat(url, '_', urlencode(variant));
   end IF; 
 end IF; 
 end IF; 

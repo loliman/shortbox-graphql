@@ -111,7 +111,9 @@ export async function create(feature, issue, transaction) {
             if(feature.individuals)
                 await asyncForEach(feature.individuals, async individual => {
                     if(individual.name && individual.name.trim() !== '')
-                        await resFeature.associateIndividual(individual.name.trim(), individual.type, transaction);
+                        await asyncForEach(individual.type, async type => {
+                            await resFeature.associateIndividual(individual.name.trim(), type, transaction);
+                        });
                 });
 
             await resFeature.save({transaction: transaction});

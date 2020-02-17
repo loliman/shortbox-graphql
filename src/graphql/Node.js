@@ -1,8 +1,5 @@
-import Sequelize from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "../models";
-import {asyncForEach, generateLabel, generateUrl} from "../util/util";
-import matchSorter from "match-sorter";
 
 export const typeDef = gql`
   extend type Query {

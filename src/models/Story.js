@@ -42,7 +42,7 @@ class Story extends Model {
                     },
                     transaction: transaction
                 }).then(async ([appearance, created]) => {
-                    resolve(await models.Story_Appearance.create({fk_story: this.id, fk_appearance: appearance.id, role: role}, {transaction: transaction}));
+                    resolve(await models.Story_Appearance.create({fk_story: this.id, fk_appearance: appearance.id, role: role ? role : ""}, {transaction: transaction}));
                 });
             } catch (e) {
                 reject(e);
@@ -92,6 +92,7 @@ export const typeDef = gql`
     parent: StoryInput,
     issue: IssueInput,
     individuals: [IndividualInput],
+    appearances: [AppearanceInput],
     title: String,
     addinfo: String,
     exclusive: Boolean
@@ -267,7 +268,15 @@ export async function create(story, issue, transaction, us) {
                 if(story.individuals)
                     await asyncForEach(story.individuals, async individual => {
                         if(individual.name && individual.name.trim() !== '')
-                            await resStory.associateIndividual(individual.name.trim(), individual.type, transaction);
+                            await asyncForEach(individual.type, async type => {
+                                await resStory.associateIndividual(individual.name.trim(), type, transaction);
+                            });
+                    });
+
+                if(story.appearances)
+                    await asyncForEach(story.appearances, async appearance => {
+                        if(appearance.name && appearance.name.trim() !== '')
+                            await resStory.associateAppearance(appearance.name.trim(), appearance.type, appearance.role, transaction);
                     });
 
                 await resStory.save({transaction: transaction});
@@ -295,7 +304,15 @@ export async function create(story, issue, transaction, us) {
                 if(story.individuals)
                     await asyncForEach(story.individuals, async individual => {
                         if(individual.name && individual.name.trim() !== '')
-                            await newStory.associateIndividual(individual.name.trim(), individual.type, transaction);
+                            await asyncForEach(individual.type, async type => {
+                                await newStory.associateIndividual(individual.name.trim(), type, transaction);
+                            });
+                    });
+
+                if(story.appearances)
+                    await asyncForEach(story.appearances, async appearance => {
+                        if(appearance.name && appearance.name.trim() !== '')
+                            await newStory.associateAppearance(appearance.name.trim(), appearance.type, appearance.role, transaction);
                     });
 
                 await newStory.setIssue(issue, {transaction: transaction});
@@ -369,6 +386,19 @@ export async function getStories(issue, transaction) {
                     if(individuals)
                         individuals.forEach(individual => rawStory.individuals.push({name: individual.name, type: individual.type}));
 
+                    let appearances = await models.Appearance.findAll({
+                        include: [{
+                            model: models.Story
+                        }],
+                        where: {
+                            '$Stories->Story_Appearance.fk_story$': story.id
+                        },
+                        transaction
+                    });
+
+                    rawStory.appearances = [];
+                    if(appearances)
+                        appearances.forEach(appearance => rawStory.appearances.push({name: appearance.name, type: appearance.type, role: appearance.role}));
                 }
                 oldStories.push(rawStory);
             });
@@ -387,22 +417,37 @@ export function equals(a, b) {
     if(a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo)
         return false;
 
-    if(!a.exclusive) {
-        if(a.individuals && !b.individuals)
-            return false;
+    if(a.individuals && !b.individuals)
+        return false;
 
-        if(!a.individuals && b.individuals)
-            return false;
+    if(a.appearances && !b.appearances)
+        return false;
 
-        if((a.individuals && b.individuals) && (a.individuals.length !== b.individuals.length))
-            return false;
+    if(!a.individuals && b.individuals)
+        return false;
 
-        let found = a.individuals.every(aIndividual => {
-            return b.individuals.some(bIndividual => {
-                return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
-            });
+    if(!a.appearances && b.appearances)
+        return false;
+
+    if((a.individuals && b.individuals) && (a.individuals.length !== b.individuals.length))
+        return false;
+
+    if((a.appearances && b.appearances) && (a.appearances.length !== b.appearances.length))
+        return false;
+
+    let found = a.individuals.every(aIndividual => {
+        return b.individuals.some(bIndividual => {
+            return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
         });
+    });
 
+    found = found && a.appearances.every(aAppearance => {
+        return b.appearances.some(bAppearance => {
+            return aAppearance.name === bAppearance.name && aAppearance.type === bAppearance.type && aAppearance.role === bAppearance.role;
+        });
+    });
+
+    if(!a.exclusive) {
         return (found &&
           a.parent.number === b.number &&
           a.parent.issue.number === b.parent.issue.number &&
@@ -410,13 +455,6 @@ export function equals(a, b) {
           a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
-        if(a.individuals.length !== b.individuals.length)
-            return false;
-
-        return a.individuals.every(aIndividual => {
-            return b.individuals.some(bIndividual => {
-                return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
-            });
-        });
+        return found
     }
 }
