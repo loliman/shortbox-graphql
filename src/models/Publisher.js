@@ -121,12 +121,21 @@ export const resolvers = {
         publishers: async (_, {pattern, us, offset, filter}) => {
             if(!filter) {
                 let where = {original: (us ? 1 : 0)};
-                if(pattern)
+                let order = [['name', 'ASC']];
+
+                if(pattern) {
                     where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+                    order = [[models.sequelize.literal("CASE " +
+                        "   WHEN name LIKE '" + pattern + "' THEN 1 " +
+                        "   WHEN name LIKE '" + pattern + "%' THEN 2 " +
+                        "   WHEN name LIKE '%" + pattern + "' THEN 4 " +
+                        "   ELSE 3 " +
+                        "END"), 'ASC']];
+                }
 
                 return await models.Publisher.findAll({
                     where: where,
-                    order: [['name', 'ASC']],
+                    order: order,
                     offset: offset,
                     limit: 50
                 });

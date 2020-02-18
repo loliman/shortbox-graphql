@@ -58,12 +58,21 @@ export const resolvers = {
     Query: {
         individuals: (_, {pattern, offset}) => {
             let where = {};
-            if(pattern)
+            let order = [['name', 'ASC']];
+
+            if(pattern) {
                 where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+                order = [[models.sequelize.literal("CASE " +
+                    "   WHEN name LIKE '" + pattern + "' THEN 1 " +
+                    "   WHEN name LIKE '" + pattern + "%' THEN 2 " +
+                    "   WHEN name LIKE '%" + pattern + "' THEN 4 " +
+                    "   ELSE 3 " +
+                    "END"), 'ASC']];
+            }
 
             return models.Individual.findAll({
                 where: where,
-                order: [['name', 'ASC']],
+                order: order,
                 offset: offset,
                 limit: 50
             })

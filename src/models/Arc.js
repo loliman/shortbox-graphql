@@ -61,15 +61,24 @@ export const resolvers = {
     Query: {
         arcs: (_, {pattern, type, offset}) => {
             let where = {};
-            if(pattern)
-                where.title = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+            let order = [['title', 'ASC']];
+
+            if(pattern) {
+                where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+                order = [[models.sequelize.literal("CASE " +
+                    "   WHEN title LIKE '" + pattern + "' THEN 1 " +
+                    "   WHEN title LIKE '" + pattern + "%' THEN 2 " +
+                    "   WHEN title LIKE '%" + pattern + "' THEN 4 " +
+                    "   ELSE 3 " +
+                    "END"), 'ASC']];
+            }
 
             if(type)
                 where.type = {[Sequelize.Op.eq]: type.toUpperCase()};
 
             return models.Arc.findAll({
                 where: where,
-                order: [['title', 'ASC']],
+                order: order,
                 offset: offset,
                 limit: 50
             })
