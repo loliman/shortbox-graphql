@@ -24,7 +24,7 @@
     "mysql2": "^1.6.5",
     "request": "^2.88.0",
     "request-promise": "^4.2.4",
-    "sequelize": "^4.44.0",
+    "sequelize": "^5.15.1",
     "shelljs": "^0.8.3"
   },
   "devDependencies": {
