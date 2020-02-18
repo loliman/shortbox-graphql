@@ -25,7 +25,7 @@ class Story extends Model {
                     transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Story_Individual.create({fk_story: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
-                });
+                }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
             }
@@ -43,7 +43,7 @@ class Story extends Model {
                     transaction: transaction
                 }).then(async ([appearance, created]) => {
                     resolve(await models.Story_Appearance.create({fk_story: this.id, fk_appearance: appearance.id, role: role ? role : ""}, {transaction: transaction}));
-                });
+                }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
             }

@@ -24,7 +24,7 @@ class Cover extends Model {
                     transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Cover_Individual.create({fk_cover: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
-                });
+                }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
             }

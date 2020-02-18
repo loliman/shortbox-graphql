@@ -290,9 +290,6 @@ function getType(type) {
 }
 
 export function createFilterQuery(selected, filter, offset, print) {
-    console.log(selected);
-    console.log(filter);
-
     let type = filter.story ? "story" : filter.cover ? "cover" : "feature";
     let us = filter.us ? 1 : 0;
 
@@ -596,8 +593,6 @@ export function createFilterQuery(selected, filter, offset, print) {
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
     if(!print)
         rawQuery += " LIMIT " + offset + ", 50";
-
-    console.log(rawQuery);
 
     return rawQuery;
 }

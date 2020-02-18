@@ -36,7 +36,7 @@ class Issue extends Model {
                     transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Issue_Individual.create({fk_issue: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
-                });
+                }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
             }
@@ -54,7 +54,7 @@ class Issue extends Model {
                     transaction: transaction
                 }).then(async ([arc, created]) => {
                     resolve(await models.Issue_Arc.create({fk_issue: this.id, fk_arc: arc.id}, {transaction: transaction}));
-                });
+                }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
             }

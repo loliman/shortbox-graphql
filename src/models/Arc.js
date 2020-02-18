@@ -102,7 +102,7 @@ export async function create(arc, issue, transaction) {
                 transaction: transaction
             }).then(async ([arc, created]) => {
                 resolve(await models.Issue_Arc.create({fk_issue: issue.id, fk_arc: arc.id}, {transaction: transaction}));
-            });
+            }).catch(e => reject(e));
         } catch (e) {
             reject(e);
         }

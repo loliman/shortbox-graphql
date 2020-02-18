@@ -415,7 +415,7 @@ function crawlApps(e, $, currentType, currentSubType, currentStory) {
                 text = text.substr(0, text.length-2);
 
             if (text !== '' && text.indexOf("Appearance of") === -1 && text.indexOf("Index/") === -1) {
-                let exists = currentStory.appearing.find(v => v.name === text.trim() && v.type === currentType && v.role === currentSubType);
+                let exists = currentStory.appearing.find(v => v.name === text.trim() && v.type === currentType);
                 if(!exists)
                     currentStory.appearing.push({name: text.trim(), type: currentType, role: currentSubType});
             }

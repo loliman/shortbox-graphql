@@ -21,7 +21,7 @@ class Feature extends Model {
                     transaction: transaction
                 }).then(async ([individual, created]) => {
                     resolve(await models.Feature_Individual.create({fk_feature: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
-                });
+                }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
             }
