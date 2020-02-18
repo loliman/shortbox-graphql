@@ -240,4 +240,6 @@ end IF;
 RETURN ret; 
 end
 
+$$
+
 DELIMITER ;
