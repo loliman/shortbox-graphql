@@ -164,40 +164,6 @@ end
 
 $$
 
-CREATE FUNCTION toroman (inArabic int unsigned) RETURNS varchar(15) CHARSET latin1 DETERMINISTIC
-BEGIN
-    DECLARE numeral CHAR(7) DEFAULT 'IVXLCDM';
-
-    DECLARE stringInUse CHAR(3);
-    DECLARE position tinyint DEFAULT 1;
-    DECLARE currentDigit tinyint;
-
-    DECLARE returnValue VARCHAR(15) DEFAULT '';
-
-    IF(inArabic > 3999) THEN RETURN 'overflow'; END IF;
-    IF(inArabic = 0) THEN RETURN 'N'; END IF;
-
-    WHILE position <= CEIL(LOG10(inArabic + .1)) DO
-        SET currentDigit := MOD(FLOOR(inArabic / POW(10, position - 1)), 10);
-
-        SET returnValue := CONCAT(
-            CASE currentDigit
-                WHEN 4 THEN CONCAT(SUBSTRING(numeral, position * 2 - 1, 1), SUBSTRING(numeral, position * 2, 1))
-                WHEN 9 THEN CONCAT(SUBSTRING(numeral, position * 2 - 1, 1), SUBSTRING(numeral, position * 2 + 1, 1))
-                ELSE CONCAT(
-                    REPEAT(SUBSTRING(numeral, position * 2, 1), currentDigit >= 5),
-                    REPEAT(SUBSTRING(numeral, position * 2 - 1, 1), MOD(currentDigit, 5))
-                )
-            END,
-            returnValue);
-
-        SET position := position + 1;
-    END WHILE;
-    RETURN returnValue;
-END
-
-$$
-
 CREATE function 
   urlencode(str VARCHAR(4096) charset utf8) returns VARCHAR(4096) charset utf8 
   DETERMINISTIC 
