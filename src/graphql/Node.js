@@ -34,7 +34,7 @@ export const resolvers = {
                "               ''          AS format, \n" +
                "               ''          AS variant \n" +
                "        FROM   publisher p \n" +
-               "        WHERE  original = 0 \n" +
+               "        WHERE  original = " + (us ? 1 : 0) + " \n" +
                "        UNION \n" +
                "        SELECT \"series\"    AS type, \n" +
                "               original    AS original, \n" +
@@ -49,7 +49,7 @@ export const resolvers = {
                "        FROM   series s \n" +
                "               LEFT JOIN publisher p \n" +
                "                      ON s.fk_publisher = p.id \n" +
-               "        WHERE  p.original = 0 \n" +
+               "        WHERE  p.original = " + (us ? 1 : 0) + " \n" +
                "        UNION \n" +
                "        SELECT \"issue\"     AS type, \n" +
                "               original    AS original, \n" +
@@ -66,7 +66,7 @@ export const resolvers = {
                "                      ON i.fk_series = s.id \n" +
                "               LEFT JOIN publisher p \n" +
                "                      ON s.fk_publisher = p.id \n" +
-               "        WHERE  p.original = 0 \n" +
+               "        WHERE  p.original = " + (us ? 1 : 0) + " \n" +
                "        ORDER  BY title, \n" +
                "                  volume, \n" +
                "                  name, \n" +
@@ -74,7 +74,7 @@ export const resolvers = {
                "                  format, \n" +
                "                  variant) a \n" +
                "HAVING label LIKE '" + pattern +"' \n" +
-               "LIMIT  25 offset " + offset);
+               "LIMIT 25 offset " + offset);
 
             return res[0];
         }
