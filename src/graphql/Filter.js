@@ -1,6 +1,6 @@
 import {gql} from 'apollo-server';
 import models from "../models";
-import {asyncForEach, generateLabel, naturalCompare} from "../util/util";
+import {asyncForEach, escapeSqlString, generateLabel, naturalCompare} from "../util/util";
 
 var dateFormat = require('dateformat');
 
@@ -35,7 +35,8 @@ export const typeDef = gql`
     otherTb: Boolean,
     exclusive: Boolean,
     onlyTb: Boolean,
-    noPrint: Boolean
+    noPrint: Boolean,
+    onlyOnePrint: Boolean
   }
   
   extend type Query {
@@ -157,6 +158,8 @@ async function convertFilterToString(filter) {
         s += "\t\tExclusiv\n";
     if (filter.onlyTb)
         s += "\t\tNur in TB\n";
+    if (filter.onlyOnePrint)
+        s += "\t\tNur einfach auf deutsch erschienen\n";
     if (filter.noPrint)
         s += "\t\tNicht auf deutsch erschienen\n";
 
@@ -200,7 +203,7 @@ async function convertFilterToString(filter) {
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (!filter.firstPrint && !filter.onlyPrint && !filter.otherTb && !filter.exclusive && !filter.onlyTb && !filter.noPrint)
+    if (!filter.firstPrint && !filter.onlyPrint && !filter.otherTb && !filter.exclusive && !filter.onlyTb && !filter.noPrint && !filter.onlyOnePrint)
         s += "\t\t-\n";
 
     s += "\tMitwirkende\n";
@@ -304,11 +307,11 @@ export function createFilterQuery(selected, filter, offset, print) {
         groupby = "i.number, s.title, s.volume, p.name";
     else if (selected.publisher) {
         groupby = "i.number";
-        where = " and s.title = '" + selected.title + "' and s.volume = " + selected.volume + " and p.name = '" + selected.publisher.name + "' ";
+        where = " and s.title = '" + escapeSqlString(selected.title) + "' and s.volume = " + selected.volume + " and p.name = '" + escapeSqlString(selected.publisher.name) + "' ";
     }
     else if(selected.name) {
         groupby = "s.title, s.volume";
-        where = " and p.name = '" + selected.name + "' ";
+        where = " and p.name = '" + escapeSqlString(selected.name) + "' ";
     }
     else
         groupby = "p.name";
@@ -357,7 +360,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             filter.appearances.map((app, i) => {
                 if(i > 0)
                     intersect += " OR ";
-                intersect += " (app.name = '" + app.name + "' and app.type = '" + app.type + "'))";
+                intersect += " (app.name = '" + escapeSqlString(app.name) + "' and app.type = '" + app.type + "'))";
             });
 
             if(i === 2)
@@ -385,7 +388,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             filter.individuals.map((individual, i) => {
                 if(i > 0)
                     intersect += " OR ";
-                intersect += " (indi.name = '" + individual.name + "' and stindi.type = '" + individual.type + "'))";
+                intersect += " (indi.name = '" + escapeSqlString(individual.name) + "' and stindi.type = '" + individual.type + "'))";
             });
 
             if(i === 2)
@@ -415,7 +418,7 @@ export function createFilterQuery(selected, filter, offset, print) {
         filter.arcs.map((arc, i) => {
             if(i > 0)
                 intersect += " OR ";
-            intersect += " (a.title = '" + arc.title + "' and a.type = '" + arc.type + "')";
+            intersect += " (a.title = '" + escapeSqlString(arc.title) + "' and a.type = '" + arc.type + "')";
         });
 
         intersect += ") group by i.id) ";
@@ -438,7 +441,7 @@ export function createFilterQuery(selected, filter, offset, print) {
         filter.publishers.map((publisher, i) => {
             if(i > 0)
                 intersect += " OR ";
-            intersect += " (pjoin.name = '" + publisher.name + "')";
+            intersect += " (pjoin.name = '" + escapeSqlString(publisher.name) + "')";
         });
 
         intersect += ") group by i.id) ";
@@ -461,7 +464,7 @@ export function createFilterQuery(selected, filter, offset, print) {
         filter.series.map((series, i) => {
             if(i > 0)
                 intersect += " OR ";
-            intersect += " (sjoin.title = '" + series.title + "' and sjoin.volume = " + series.volume + " and pjoin.name = '" + series.publisher.name + "')";
+            intersect += " (sjoin.title = '" + escapeSqlString(series.title) + "' and sjoin.volume = " + series.volume + " and pjoin.name = '" + escapeSqlString(series.publisher.name) + "')";
         });
 
         intersect += ") group by i.id) ";
@@ -569,6 +572,23 @@ export function createFilterQuery(selected, filter, offset, print) {
             " GROUP BY  st.id" +
             " HAVING count(*) = 1 " +
             " AND ijoin.format = 'Taschenbuch') a ";
+    }
+
+    if(filter.onlyOnePrint && us && (filter.cover || filter.story)) {
+        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+            "select id from ( " +
+            " select i.id as id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join " + type + " st on i.id = st.fk_issue " +
+            " left join " + type + " stjoin ON st.id = stjoin.fk_parent" +
+            " where i.id is not null " +
+            " and (i.variant IS NULL OR i.variant = '') " +
+            " AND stjoin.id IS NOT NULL " +
+            " GROUP BY  st.id " +
+            " HAVING count(*) = 1 " +
+            " ) a ";
     }
 
     if(filter.noPrint && us && (filter.cover || filter.story)) {

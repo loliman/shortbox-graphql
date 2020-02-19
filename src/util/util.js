@@ -61,6 +61,10 @@ export function romanize(num) {
     return Array(+digits.join("") + 1).join("M") + roman;
 }
 
+export function escapeSqlString(s) {
+    return s.replace("'", '%');
+}
+
 export async function generateLabel(item) {
     if (!item)
         return '';

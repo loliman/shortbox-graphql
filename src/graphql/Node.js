@@ -1,5 +1,6 @@
 import {gql} from 'apollo-server';
 import models from "../models";
+import {escapeSqlString} from "../util/util";
 
 export const typeDef = gql`
   extend type Query {
@@ -76,11 +77,11 @@ export const resolvers = {
                 "                  Cast(number AS UNSIGNED), \n" +
                 "                  format, \n" +
                 "                  variant) a \n" +
-                "HAVING label LIKE '%" + pattern.replace(/\s/g, '%') + "%') a \n" +
+                "HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%') a \n" +
                 "ORDER BY \n" +
-                "    CASE WHEN label LIKE '" + pattern + "' THEN 1 \n" +
-                "        WHEN label LIKE '" + pattern + "%' THEN 2 \n" +
-                "        WHEN label LIKE '%" + pattern + "' THEN 4 \n" +
+                "    CASE WHEN label LIKE '" + escapeSqlString(pattern) + "' THEN 1 \n" +
+                "        WHEN label LIKE '" + escapeSqlString(pattern) + "%' THEN 2 \n" +
+                "        WHEN label LIKE '%" + escapeSqlString(pattern) + "' THEN 4 \n" +
                 "        ELSE 3 \n" +
                 "    END ASC, label ASC \n" +
                 "LIMIT 25 offset " + offset;

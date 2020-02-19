@@ -110,6 +110,7 @@ export const typeDef = gql`
     firstapp: Boolean,
     onlytb: Boolean,
     exclusive: Boolean,
+    onlyoneprint: Boolean,
     appearances: [Appearance],
     individuals: [Individual] 
   }
@@ -224,6 +225,17 @@ export const resolvers = {
             }
 
             return onlytb;
+        },
+        onlyoneprint: async (parent) => {
+            let onlyoneprint = false;
+
+            let stories = await models.Story.findAll({
+                where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
+                include: [models.Issue],
+                group: ['id']
+            });
+
+            return stories.length === 1;
         },
         exclusive: async (parent) => {
             return parent.fk_parent === null;
