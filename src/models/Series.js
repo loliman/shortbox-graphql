@@ -140,7 +140,7 @@ export const resolvers = {
                         "   WHEN title LIKE '" + pattern + "%' THEN 2 " +
                         "   WHEN title LIKE '%" + pattern + "' THEN 4 " +
                         "   ELSE 3 " +
-                        "END"), 'ASC']];
+                        "END"), 'ASC'], ['volume', 'ASC']];
                 }
 
                 return await models.Series.findAll(options);
