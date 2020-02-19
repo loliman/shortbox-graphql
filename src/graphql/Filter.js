@@ -360,8 +360,10 @@ export function createFilterQuery(selected, filter, offset, print) {
             filter.appearances.map((app, i) => {
                 if(i > 0)
                     intersect += " OR ";
-                intersect += " (app.name = '" + escapeSqlString(app.name) + "' and app.type = '" + app.type + "'))";
+                intersect += " (app.name = '" + escapeSqlString(app.name) + "' and app.type = '" + app.type + "')";
             });
+
+            intersect += ")";
 
             if(i === 2)
                 intersect += " UNION "
@@ -388,8 +390,10 @@ export function createFilterQuery(selected, filter, offset, print) {
             filter.individuals.map((individual, i) => {
                 if(i > 0)
                     intersect += " OR ";
-                intersect += " (indi.name = '" + escapeSqlString(individual.name) + "' and stindi.type = '" + individual.type + "'))";
+                intersect += " (indi.name = '" + escapeSqlString(individual.name) + "' and stindi.type = '" + individual.type + "')";
             });
+
+            intersect += ")";
 
             if(i === 2)
                 intersect += " UNION "
@@ -613,6 +617,8 @@ export function createFilterQuery(selected, filter, offset, print) {
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
     if(!print)
         rawQuery += " LIMIT " + offset + ", 50";
+
+    console.log(rawQuery);
 
     return rawQuery;
 }
