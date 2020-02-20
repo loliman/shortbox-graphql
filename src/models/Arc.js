@@ -63,7 +63,7 @@ export const resolvers = {
             let where = {};
             let order = [['title', 'ASC']];
 
-            if(pattern) {
+            if(pattern !== '') {
                 where.title = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
                 order = [[models.sequelize.literal("CASE " +
                     "   WHEN title LIKE '" + pattern + "' THEN 1 " +

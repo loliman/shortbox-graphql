@@ -1003,7 +1003,7 @@ export function findOrCrawlIssue(i, transaction) {
                     addinfo: ''
                 }, {transaction: transaction});
 
-                await asyncForEach(crawledIssue.cover.artists, async (artist) => {
+                await asyncForEach(crawledIssue.cover.individuals, async (artist) => {
                     await newCover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
                     await newCover.save({transaction: transaction});
                 });

@@ -133,7 +133,7 @@ export const resolvers = {
                 if (publisher.us !== undefined)
                     options.where = {'$Publisher.original$': publisher.us ? 1 : 0};
 
-                if(pattern) {
+                if(pattern !== '') {
                     options.where.title = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
                     options.order = [[models.sequelize.literal("CASE " +
                         "   WHEN title LIKE '" + pattern + "' THEN 1 " +
