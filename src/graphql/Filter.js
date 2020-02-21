@@ -121,7 +121,7 @@ async function resultsToCsv(results) {
             s[1].forEach(i => {
                 responseString += i.series.publisher.name + "\t;"
                     + i.series.title  + "\t;" + i.series.volume + "\t;" + i.series.startyear + "\t;" + i.series.endyear + "\t;"
-                    + i.number + "\t;" + i.variant + "\t;" + i.format + "\t;" + i.pages + "\t;" + i.releasedate + "\t;" + i.price + "\t;" + i.currency + "\n";
+                    + i.number + "\t;" + i.variant + "\t;" + i.format + "\t;" + i.pages + "\t;" + i.releasedate + "\t;" + (i.price + "").replace(".", ",") + "\t;" + i.currency + "\n";
             })
         });
     });
