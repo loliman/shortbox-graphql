@@ -40,13 +40,13 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    export(filter: Filter!): String
+    export(filter: Filter!, type: String!): String
   }
 `;
 
 export const resolvers = {
     Query: {
-        export: async (_, {filter}) => {
+        export: async (_, {filter, type}) => {
             let rawQuery = createFilterQuery(filter.us, filter, 0, true);
             let res = await models.sequelize.query(rawQuery);
 
@@ -61,10 +61,16 @@ export const resolvers = {
                     volume: r.seriesvolume,
                     startyear: r.seriesstartyear,
                     endyear: r.seriesendyear,
-                    publisher: null
+                    publisher: publisher
                 };
                 let issue = {
                     number: r.issuenumber,
+                    format: r.issueformat,
+                    variant: r.issuevariant,
+                    pages: r.issuepages,
+                    releasedate: r.issuereleasedate,
+                    price: r.issueprice,
+                    currency: r.issuecurrency,
                     series: series
                 };
 
@@ -91,31 +97,56 @@ export const resolvers = {
                     let s = p[key];
                     return [key, Object.keys(s).map(key => {
                         let i = s[key];
-                        i.series = undefined;
                         return i;
                     }).sort((a, b) => naturalCompare(a.number, b.number))];
                 }).sort()];
             }).sort();
 
-            let responseString = "";
-
-            sortedResponse.forEach(p => {
-                responseString += p[0] + "\n";
-                p[1].forEach(s => {
-                    responseString += "\t" + s[0] + "\n";
-                    s[1].forEach(i => {
-                        responseString += "\t\t#" + i.number + "\n";
-                    })
-                });
-                responseString += "\n";
-            });
-
-            return JSON.stringify(await convertFilterToString(filter) + responseString);
+            if(type === "txt") {
+                return JSON.stringify(await convertFilterToTxt(filter) + await resultsToTxt(sortedResponse));
+            } else if (type === "csv") {
+                return JSON.stringify(await resultsToCsv(sortedResponse));
+            } else {
+                throw new Error("Gültige Export Typen: txt, csv");
+            }
         }
     }
 };
 
-async function convertFilterToString(filter) {
+async function resultsToCsv(results) {
+    let responseString = "Verlag;Series;Volume;Start;Ende;Nummer;Variante;Format;Seiten;Erscheinungsdaten;Preis;Währung\n";
+
+    results.forEach(p => {
+        p[1].forEach(s => {
+            s[1].forEach(i => {
+                responseString += i.series.publisher.name + ";"
+                    + i.series.title  + ";" + i.series.volume + ";" + i.series.startyear + ";" + i.series.endyear + ";"
+                    + i.number + ";" + i.variant + ";" + i.format + ";" + i.pages + ";" + i.releasedate + ";" + i.price + ";" + i.currency + "\n";
+            })
+        });
+    });
+
+    return responseString;
+}
+
+async function resultsToTxt(results) {
+    let responseString = "";
+
+    results.forEach(p => {
+        responseString += p[0] + "\n";
+        p[1].forEach(s => {
+            responseString += "\t" + s[0] + "\n";
+            s[1].forEach(i => {
+                responseString += "\t\t#" + i.number + "\n";
+            })
+        });
+        responseString += "\n";
+    });
+
+    return responseString;
+}
+
+async function convertFilterToTxt(filter) {
     let s = "Aktive Filter\n";
 
     s += "\t" + (filter.us ? "Original Ausgaben" : "Deutsche Ausgaben") + "\n";
@@ -298,7 +329,7 @@ export function createFilterQuery(selected, filter, offset, print) {
 
     let columns = "p.name as publishername, p.id as publisherid, " +
         "s.title as seriestitle, s.volume as seriesvolume, s.startyear as seriesstartyear, s.endyear as seriesendyear, s.id as seriesid, " +
-        "i.number as issuenumber, i.variant as issuevariant, i.id as issueid ";
+        "i.number as issuenumber, i.variant as issuevariant, i.id as issueid, i.format as issueformat, i.pages as issuepages, i.releasedate as issuereleasedate, i.price as issueprice, i.currency as issuecurrency ";
 
     let groupby = "";
     let where = "";
@@ -617,8 +648,6 @@ export function createFilterQuery(selected, filter, offset, print) {
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
     if(!print)
         rawQuery += " LIMIT " + offset + ", 50";
-
-    console.log(rawQuery);
 
     return rawQuery;
 }
