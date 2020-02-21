@@ -119,9 +119,9 @@ async function resultsToCsv(results) {
     results.forEach(p => {
         p[1].forEach(s => {
             s[1].forEach(i => {
-                responseString += i.series.publisher.name + ";"
-                    + i.series.title  + ";" + i.series.volume + ";" + i.series.startyear + ";" + i.series.endyear + ";"
-                    + i.number + ";" + i.variant + ";" + i.format + ";" + i.pages + ";" + i.releasedate + ";" + i.price + ";" + i.currency + "\n";
+                responseString += i.series.publisher.name + "\t;"
+                    + i.series.title  + "\t;" + i.series.volume + "\t;" + i.series.startyear + "\t;" + i.series.endyear + "\t;"
+                    + i.number + "\t;" + i.variant + "\t;" + i.format + "\t;" + i.pages + "\t;" + i.releasedate + "\t;" + i.price + "\t;" + i.currency + "\n";
             })
         });
     });
