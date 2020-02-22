@@ -355,7 +355,8 @@ export const resolvers = {
                 let del = await issue.delete(transaction);
 
                 await transaction.commit();
-                return del === 1;
+
+                return del !== null;
             } catch (e) {
                 await transaction.rollback();
                 throw e;
