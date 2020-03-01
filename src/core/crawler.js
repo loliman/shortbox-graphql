@@ -1,3 +1,5 @@
+import {generateMarvelDbIssueUrl, generateMarvelDbSeriesUrl} from "../util/util";
+
 const dateFormat = require('dateformat');
 const cheerio = require('cheerio');
 const rp = require('request-promise');
@@ -71,7 +73,14 @@ export async function crawlSeries(series) {
 
 export async function crawlIssue(issue) {
     return new Promise(async (resolve, reject) => {
-        let url = generateMarvelDbIssueUrl(issue);
+        let url = "";
+
+        if(typeof issue === "string") {
+            url = issue;
+        } else {
+            url = generateMarvelDbIssueUrl(issue);
+        }
+
         try {
             const issueOptions = {
                 uri: url,
@@ -426,14 +435,4 @@ function crawlApps(e, $, currentType, currentSubType, currentStory) {
             });
         }
     });
-}
-
-function generateMarvelDbSeriesUrl(series) {
-    let url = "https://marvel.fandom.com/wiki/" + encodeURIComponent(series.title) + "_Vol_" + series.volume;
-    return url.replace(new RegExp(" ", 'g'), "_");
-}
-
-function generateMarvelDbIssueUrl(issue) {
-    let url = "https://marvel.fandom.com/wiki/" + encodeURIComponent(issue.series.title) + "_Vol_" + issue.series.volume + "_" + issue.number;
-    return url.replace(new RegExp(" ", 'g'), "_");
 }

@@ -5,6 +5,7 @@ import {coverDir, fixOnStartup, migrateOnStartup, wwwDir} from "./config/config"
 import {cleanup, run} from './core/cleanup';
 import migrationDatabase from "./migration/core/database";
 import {fixUsComics, fixUsSeries, migrate} from "./migration/core/migration";
+import {fix} from "./core/fixer";
 const shell = require('shelljs');
 
 async function start() {
@@ -59,6 +60,7 @@ async function start() {
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting cleanup process...");
 
     cleanup.start();
+    fix();
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
 

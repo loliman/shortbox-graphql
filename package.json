@@ -8,6 +8,7 @@
   },
   "keywords": [],
   "dependencies": {
+    "abort-controller": "^3.0.0",
     "apollo-server": "^2.6.1",
     "babel-cli": "^6.26.0",
     "babel-preset-env": "^1.7.0",
@@ -20,12 +21,15 @@
     "graphql-relay": "^0.5.5",
     "graphql-sequelize": "^9.3.6",
     "graphql-upload": "^8.0.6",
+    "make-fetch-happen": "^8.0.2",
     "match-sorter": "^3.0.1",
     "mysql2": "^1.6.5",
+    "node-fetch": "^2.6.0",
     "request": "^2.88.0",
     "request-promise": "^4.2.4",
     "sequelize": "^4.44.0",
-    "shelljs": "^0.8.3"
+    "shelljs": "^0.8.3",
+    "string-similarity": "^4.0.1"
   },
   "devDependencies": {
     "nodemon": "^1.19.1"
