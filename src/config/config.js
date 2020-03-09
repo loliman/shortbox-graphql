@@ -1,4 +1,7 @@
-export const wwwDir = '/Users/Christian/shortbox-sandbox/shortbox-react/public';
+import {HttpsProxyAgent} from "https-proxy-agent";
+import * as https from "agent-base";
+
+export const wwwDir = 'C:\\Sandboxen\\shortbox\\';
 export const coverDir = 'covers';
 export const db = 'shortbox_old';
 export const dbUser = 'root';

@@ -1,21 +1,30 @@
 import {generateMarvelDbIssueUrl, generateMarvelDbSeriesUrl} from "../util/util";
+import * as fetch from "node-fetch";
+import {httpAgent} from "../config/config";
 
 const dateFormat = require('dateformat');
 const cheerio = require('cheerio');
-const rp = require('request-promise');
 
 export async function crawlSeries(series) {
     return new Promise(async (resolve, reject) => {
-        let url = generateMarvelDbSeriesUrl(series);
         try {
-            const seriesOptions = {
-                uri: url,
-                transform: function (body) {
-                    return cheerio.load(body);
-                }
-            };
+            let url = generateMarvelDbSeriesUrl(series);
 
-            let $ = await rp(seriesOptions);
+            let response = await fetch(url, {
+                agent: httpAgent
+            });
+
+            resolve(crawlSeriesHtml(await response.text(), series));
+        } catch (e) {
+            reject(new Error("Serie " + series.title + " (Vol." + series.volume + ") nicht gefunden [" + url + "]"));
+        }
+    });
+}
+
+export async function crawlSeriesHtml(html, series) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let $ = cheerio.load(html);
 
             let messageBox = $('#messageBox').children()
                 .first().children()
@@ -73,24 +82,25 @@ export async function crawlSeries(series) {
 
 export async function crawlIssue(issue) {
     return new Promise(async (resolve, reject) => {
-        let url = "";
-
-        if(typeof issue === "string") {
-            url = issue;
-        } else {
-            url = generateMarvelDbIssueUrl(issue);
-        }
-
         try {
-            const issueOptions = {
-                uri: url,
-                transform: function (body) {
-                    return cheerio.load(body);
-                }
-            };
+            let url = generateMarvelDbIssueUrl(issue);
 
+            let response = await fetch(url, {
+                agent: httpAgent
+            });
+
+            resolve(crawlIssueHtml(await response.text(), issue));
+        } catch (e) {
+            reject(new Error("Ausgabe " + issue.series.title + " (Vol." + issue.series.volume + ") " + issue.number + " nicht gefunden [" + url + "]"));
+        }
+    });
+}
+
+export async function crawlIssueHtml(html, issue) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let $ = cheerio.load(html);
             let res = {stories: [], individuals: [], cover: {individuals: []}, variants: []};
-            let $ = await rp(issueOptions);
 
             let infoBoxContent = $('.infobox').children();
             infoBoxContent.each((i, c) => {

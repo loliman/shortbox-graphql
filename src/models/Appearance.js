@@ -1,7 +1,6 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import matchSorter from 'match-sorter';
 
 class Appearance extends Model {
     static tableName = 'Appearance';

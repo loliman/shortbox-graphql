@@ -1,6 +1,6 @@
 {
   "name": "shortbox-graphql",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "main": "src/app.js",
   "scripts": {
@@ -18,15 +18,11 @@
     "dataloader-sequelize": "^1.7.10",
     "dateformat": "^3.0.3",
     "graphql": "^14.3.1",
-    "graphql-relay": "^0.5.5",
     "graphql-sequelize": "^9.3.6",
     "graphql-upload": "^8.0.6",
-    "make-fetch-happen": "^8.0.2",
-    "match-sorter": "^3.0.1",
+    "https-proxy-agent": "^5.0.0",
     "mysql2": "^1.6.5",
     "node-fetch": "^2.6.0",
-    "request": "^2.88.0",
-    "request-promise": "^4.2.4",
     "sequelize": "^4.44.0",
     "shelljs": "^0.8.3",
     "string-similarity": "^4.0.1"
