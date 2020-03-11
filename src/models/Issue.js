@@ -2,7 +2,7 @@ import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
 import {asyncForEach, deleteFile, naturalCompare, storeFile} from "../util/util";
-import {crawlIssue, crawlSeries} from "../core/crawler";
+import {Crawler} from "../core/crawler";
 import {coverDir} from "../config/config";
 import {create as createStory, equals as storyEquals, getStories} from "./Story";
 import {create as createCover, equals as coverEquals, getCovers} from "./Cover";
@@ -914,6 +914,8 @@ export async function create(item, transaction) {
 export function findOrCrawlIssue(i, transaction) {
     return new Promise(async (resolve, reject) => {
         try {
+            let crawler = new Crawler();
+
             let series = await models.Series.findOne({
                 where: {
                     title: i.series.title.trim(),
@@ -944,7 +946,7 @@ export function findOrCrawlIssue(i, transaction) {
             });
 
             if(!series) {
-                let crawledSeries = await crawlSeries(i.series);
+                let {crawledSeries} = await crawler.crawlSeries(i.series);
 
                 let [publisher] = await models.Publisher.findOrCreate({
                     where: {
@@ -971,7 +973,9 @@ export function findOrCrawlIssue(i, transaction) {
             let crawledIssue;
 
             if(!issue) {
-                crawledIssue = await crawlIssue(i);
+                let response = await crawler.crawlIssue(i);
+                crawledIssue = response.crawledIssue;
+
                 issue = await models.Issue.create({
                     title: '',
                     number: i.number,

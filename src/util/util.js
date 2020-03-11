@@ -117,12 +117,12 @@ export async function generateLabel(item) {
 
 export function generateMarvelDbSeriesUrl(series) {
     let seriesTitle = series.title.replace(new RegExp(" ", 'g'), "_");
-    let url = "https://marvel.fandom.com/wiki/" + encodeURIComponent(seriesTitle) + "_Vol_" + series.volume;
+    let url = "https://marvel.fandom.com/wiki/" + seriesTitle + "_Vol_" + series.volume;
     return url.replace(new RegExp(" ", 'g'), "_");
 }
 
 export function generateMarvelDbIssueUrl(issue) {
     let seriesTitle = issue.series.title.replace(new RegExp(" ", 'g'), "_");
-    let url = "https://marvel.fandom.com/wiki/" + encodeURIComponent(seriesTitle) + "_Vol_" + issue.series.volume + "_" + issue.number;
+    let url = "https://marvel.fandom.com/wiki/" + seriesTitle + "_Vol_" + issue.series.volume + "_" + issue.number;
     return url.replace(new RegExp(" ", 'g'), "_");
 }

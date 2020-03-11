@@ -1,19 +1,19 @@
 import models from "../models";
 import {asyncForEach, generateMarvelDbIssueUrl, generateMarvelDbSeriesUrl} from "../util/util";
-import * as fetch from "node-fetch";
-import AbortController from "abort-controller";
-import {crawlIssueHtml, crawlSeriesHtml} from "./crawler";
+import {Crawler} from "./crawler";
 import Sequelize from "sequelize";
 import stringSimilarity from "string-similarity";
-import {httpAgent} from "../config/config";
+import {Logger} from "./logger";
+
+const crawler = new Crawler();
 
 export async function fix() {
     let series = await models.Series.findAll({
         attributes: ["id", "title", "volume", "startyear", "endyear", "fk_publisher"],
         where: {
             '$Publisher.original$': 1,
-            title: "Free Comic Book Day",
-            volume: 2016,
+            title: "Amazing Spider-Man Annual",
+            volume: 1,
         },
         raw: true,
         include: [
@@ -33,49 +33,25 @@ export async function fix() {
                 raw: true
             });
 
-            let url = generateMarvelDbSeriesUrl(s);
-            const controller = new AbortController();
-
             try {
-                if (idx % 100 === 0 && idx !== 0) {
-                    for (let x = 60; x > 0; x--) {
-                        process.stdout.clearLine();
-                        process.stdout.cursorTo(0);
-                        process.stdout.write("Taking a nap for " + x + " seconds... " + Math.round((idx / a.length * 100) * 100) / 100 + "% (" + (idx + 1) + "/" + a.length + ")");
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
-                }
+                Logger.log("Fetching " + generateMarvelDbSeriesUrl(s) + "... " + Math.round((idx / a.length * 100) * 100) / 100 + "% (" + (idx + 1) + "/" + a.length + ")", "fixer");
 
-                process.stdout.clearLine();
-                process.stdout.cursorTo(0);
-                process.stdout.write("Fetching " + url + "... " + Math.round((idx / a.length * 100) * 100) / 100 + "% (" + (idx + 1) + "/" + a.length + ")");
+                let {response, cached, crawledSeries} = await crawler.crawlSeries(s);
 
-                let response = await fetch(url, {
-                    agent: httpAgent,
-                    timeout: 60000,
-                    signal: controller.signal
-                });
+                if(cached)
+                    resolve(true);
 
                 if (response.status === 200) {
                     if (response.redirected) {
                         console.log("\n" + url + " redirected to " + response.url);
                     }
-
-                    let crawledSeries = await crawlSeriesHtml(await response.text(), s);
-
-                    controller.abort();
-
-                    console.log(s);
-                    console.log(crawledSeries);
-                } else {
-                    console.log("\n" + response.status + " while fetching " + url);
-
-                    controller.abort();
+                } else if(response.status !== 304) {
+                    console.log("\n" + response.status + " while fetching " + generateMarvelDbSeriesUrl(s));
                 }
 
                 resolve(true)
             } catch (e) {
-                console.log("\n" + e + " while fetching " + url + " COUNT: " + idx);
+                console.log("\n" + e + " while fetching " + generateMarvelDbSeriesUrl(s) + " COUNT: " + idx);
                 resolve(e);
             }
         });
@@ -85,9 +61,6 @@ export async function fix() {
         attributes: ['id', 'number', 'releasedate', 'fk_series'],
         where: {
             '$Series->Publisher.original$': 1,
-            '$Series.title$': "Free Comic Book Day",
-            '$Series.volume$': 2016,
-            number: 'Avengers',
             variant: ''
         },
         include: [
@@ -107,8 +80,10 @@ export async function fix() {
         raw: true
     });
 
-    await asyncForEach(issues, async (i, idx, a) => {
+    await asyncForEach(issues, async (issue, idx, a) => {
         return new Promise(async (resolve, reject) => {
+            let i = Object.assign({}, issue);
+
             i.series = await models.Series.findOne({
                 attributes: ["id", "title", "volume", "startyear", "endyear", "fk_publisher"],
                 where: {id: i.fk_series},
@@ -230,61 +205,74 @@ export async function fix() {
             if(!i.series)
                 resolve(true);
 
-            let url = generateMarvelDbIssueUrl(i);
-            const controller = new AbortController();
-
             try {
-                if(idx % 100 === 0 && idx !== 0) {
-                    for(let x = 60; x > 0; x--) {
-                        process.stdout.clearLine();
-                        process.stdout.cursorTo(0);
-                        process.stdout.write("Taking a nap for " + x + " seconds... " + Math.round((idx / a.length * 100) * 100) / 100 + "% (" + (idx+1) + "/" + a.length + ")");
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
-                }
+                Logger.log("Fetching " + generateMarvelDbIssueUrl(i) + "... " + Math.round((idx / a.length * 100) * 100) / 100 + "% (" + (idx+1) + "/" + a.length + ")", "fixer");
 
-                process.stdout.clearLine();
-                process.stdout.cursorTo(0);
-                process.stdout.write("Fetching " + url + "... " + Math.round((idx / a.length * 100) * 100) / 100 + "% (" + (idx+1) + "/" + a.length + ")");
+                let {response, cached, crawledIssue} = await crawler.crawlIssue(i);
 
-                let response = await fetch(url, {
-                    agent: httpAgent,
-                    timeout: 60000,
-                    signal: controller.signal
-                });
+                if(cached)
+                    resolve(true);
 
                 if (response.status === 200) {
                     if(response.redirected) {
-                       console.log("\n" + url + " redirected to " + response.url);
+                       console.log("\n" + generateMarvelDbIssueUrl(i) + " redirected to " + response.url);
                     }
-
-                    let crawledIssue = await crawlIssueHtml(await response.text(), i);
-
-                    controller.abort();
 
                     //console.log(i);
                     //console.log(crawledIssue);
 
-                    i.individuals.forEach(indi => {
-                        crawledIssue.individuals.forEach(crawledIndi => {
-                            console.log(indi.name + " compared to " + crawledIndi.name + " equals " + stringSimilarity.compareTwoStrings(indi.name, crawledIndi.name));
-                        })
-                    });
-                } else {
-                    console.log("\n" + response.status + " while fetching " + url);
+                    await handleReprints(crawledIssue);
 
-                    controller.abort();
+                    /*i.individuals.forEach(indi => {
+                       crawledIssue.individuals.forEach(crawledIndi => {
+                           console.log(indi.name + " compared to " + crawledIndi.name + " equals " + stringSimilarity.compareTwoStrings(indi.name, crawledIndi.name));
+                       })
+                    });*/
+                } else if(response.status !== 304) {
+                    console.log("\n" + response.status + " while fetching " + generateMarvelDbIssueUrl(i));
                 }
 
                 resolve(true);
             } catch (e) {
-                if(e.name === "AbortError")
-                    resolve(true);
-                else {
-                    console.log("\n" + e + " while fetching " + url + " COUNT: " + idx);
-                    resolve(e);
-                }
+                console.log("\n" + e + " while fetching " + generateMarvelDbIssueUrl(i) + " COUNT: " + idx);
+                resolve(e);
             }
         });
+    });
+}
+
+async function handleReprints(issue) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            await getReprintedIssues(issue);
+            await getReprintIssues(issue);
+            resolve(issue);
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+async function getReprintedIssues(issue) {
+    await asyncForEach(issue.stories, async (story) => {
+        if(!story.reprintOf)
+            return;
+
+        let {cached, crawledIssue} = await crawler.crawlIssue(story.reprintOf);
+
+        if(!cached)
+            await handleReprints(crawledIssue);
+    });
+}
+
+async function getReprintIssues(issue) {
+    if(!issue.reprintedIn)
+        return;
+
+    await asyncForEach(issue.reprintedIn, async (reprintedIn) => {
+        let {cached, crawledIssue} = await crawler.crawlIssue(reprintedIn);
+
+        if(!cached)
+            await handleReprints(crawledIssue);
     });
 }

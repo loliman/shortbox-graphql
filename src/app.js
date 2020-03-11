@@ -6,17 +6,21 @@ import {cleanup, run} from './core/cleanup';
 import migrationDatabase from "./migration/core/database";
 import {fixUsComics, fixUsSeries, migrate} from "./migration/core/migration";
 import {fix} from "./core/fixer";
+import {Logger} from "./core/logger";
 const shell = require('shelljs');
 
 async function start() {
+    Logger.initialize();
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Logger initialized");
+
     await sequelize.authenticate();
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 Database is up and running");
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Database is up and running");
 
     await sequelize.sync();
 
     //remove that nasty constraints...
     try {
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 Removing constraints from Database...");
+        Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Removing constraints from Database...");
 
         await sequelize.queryInterface.removeConstraint('cover_individual', 'cover_individual_fk_individual_fk_cover_unique');
         await sequelize.queryInterface.removeConstraint('feature_individual', 'feature_individual_fk_individual_fk_feature_unique');
@@ -32,64 +36,59 @@ async function start() {
     } catch (e) {
         //might be gone already, that's fine!
     } finally {
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
+        Logger.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
     }
 
     try {
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 Creating stored procedures...");
+        Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Creating stored procedures...");
 
         let sql = await fs.readFileSync('./functions.sql');
         await sequelize.query(sql.toString());
     } catch (e) {
         //might already exist
     } finally {
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
+        Logger.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
     }
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 Database is all set up");
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Database is all set up");
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 Creating cover directory...");
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Creating cover directory...");
 
     if (!fs.existsSync(wwwDir + '/' + coverDir))
         shell.mkdir('-p', wwwDir + '/' + coverDir);
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 Coverdir is set up at " + wwwDir + "/" + coverDir);
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Coverdir is set up at " + wwwDir + "/" + coverDir);
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting cleanup process...");
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Starting cleanup process...");
 
     cleanup.start();
     fix();
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
 
     let {url} = await server.listen();
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 Server is up and running at " + url);
-
-    if (fixOnStartup) {
-        await fixUsSeries();
-        await fixUsComics();
-    }
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Server is up and running at " + url);
 
     if (migrateOnStartup) {
         await migrationDatabase.authenticate();
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration Database is up and running");
+        Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Migration Database is up and running");
 
         await migrationDatabase.sync();
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration Database is set up");
+        Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Migration Database is set up");
 
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting migration...");
+        Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Starting migration...");
 
         migrate()
-            .then(o => console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration done! See logfile for eventual errors."))
+            .then(o => Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Migration done! See logfile for eventual errors."))
             .catch((e) => {
-                console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration failed! See logfile for errors.");
+                Logger.log("[" + (new Date()).toUTCString() + "] 🚀 Migration failed! See logfile for errors.");
             });
     }
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 All done, lets go!");
+    Logger.log("[" + (new Date()).toUTCString() + "] 🚀 All done, lets go!");
 }
 
 start();
