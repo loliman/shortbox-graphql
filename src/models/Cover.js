@@ -267,12 +267,23 @@ export async function getCovers(issue, transaction) {
                         where: {
                             '$Covers->Cover_Individual.fk_cover$': cover.id
                         },
-                        transaction
+                        transaction,
+                        raw: true
                     });
 
                     rawCover.individuals = [];
-                    if(individuals)
-                        individuals.forEach(individual => rawCover.individuals.push({name: individual.name, type: individual.type}));
+                    if(individuals) {
+                        individuals.forEach(individual => {
+                            let i = rawCover.individuals.find(n => n.name === individual.name);
+
+                            if (!i) {
+                                i = {name: individual.name, type: []};
+                                rawCover.individuals.push(i);
+                            }
+
+                            i.type.push(individual["Stories.Cover_Individual.type"]);
+                        });
+                    }
                 }
 
                 oldCovers.push(rawCover);
@@ -304,9 +315,12 @@ export function equals(a, b) {
             return false;
 
         return a.individuals.every(aIndividual => {
-            return b.individuals.some(bIndividual => {
-                return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
-            });
+            let r = b.individuals.find(bIndividual => aIndividual.name === bIndividual.name);
+
+            if(r)
+                return aIndividual.type.every(aType => r.type.some(bType => aType === bType));
+
+            return false;
         });
     }
 }
