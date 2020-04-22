@@ -27,7 +27,7 @@ export const resolvers = {
                 "(SELECT type, \n" +
                 "       label, \n" +
                 "       Createurl(type, original, name, title, volume, number, format, variant) AS url \n" +
-                "FROM   (SELECT Createlabel('publisher', name, '', 0, 0, 0, 0, '', '') as label, \n" +
+                "FROM   ((SELECT Createlabel('publisher', name, '', 0, 0, 0, 0, '', '') as label, \n" +
                 "               \"publisher\" AS type, \n" +
                 "               original    AS original, \n" +
                 "               name        AS name, \n" +
@@ -41,7 +41,7 @@ export const resolvers = {
                 "        FROM   publisher p \n" +
                 "        WHERE  original = " + (us ? 1 : 0) + " \n" +
                 "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
-                "        ORDER  BY label, \n" +
+                "        ORDER  BY label \n" +
                 "        LIMIT 10) \n" +
                 "        UNION \n" +
                 "        (SELECT Createlabel('series', name, s.title, volume, s.startyear, s.endyear, 0, '', '') as label, \n" +
@@ -60,7 +60,7 @@ export const resolvers = {
                 "                      ON s.fk_publisher = p.id \n" +
                 "        WHERE  p.original = " + (us ? 1 : 0) + " \n" +
                 "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
-                "        ORDER  BY label, \n" +
+                "        ORDER  BY label \n" +
                 "        LIMIT 10) \n" +
                 "        UNION \n" +
                 "        (SELECT Createlabel('issue', name, s.title, volume, s.startyear, s.endyear, number, format, variant) as label, \n" +
@@ -81,7 +81,7 @@ export const resolvers = {
                 "                      ON s.fk_publisher = p.id \n" +
                 "        WHERE  p.original = " + (us ? 1 : 0) + " \n" +
                 "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
-                "        ORDER  BY label, \n" +
+                "        ORDER  BY label \n" +
                 "        LIMIT 10)) a \n" +
                 ") a \n" +
                 "ORDER BY \n" +
@@ -90,6 +90,8 @@ export const resolvers = {
                 "        WHEN label LIKE '%" + escapeSqlString(pattern) + "' THEN 4 \n" +
                 "        ELSE 3 \n" +
                 "    END ASC, label ASC";
+
+            console.log(query);
 
             let res = await models.sequelize.query(query);
 
