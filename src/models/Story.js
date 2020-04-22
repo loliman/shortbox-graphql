@@ -377,12 +377,23 @@ export async function getStories(issue, transaction) {
                         where: {
                             '$Stories->Story_Individual.fk_story$': story.id
                         },
-                        transaction
+                        transaction,
+                        raw: true
                     });
 
                     rawStory.individuals = [];
-                    if(individuals)
-                        individuals.forEach(individual => rawStory.individuals.push({name: individual.name, type: individual.type}));
+                    if(individuals) {
+                        individuals.forEach(individual => {
+                            let i = rawStory.individuals.find(n => n.name === individual.name);
+
+                            if (!i) {
+                                i = {name: individual.name, type: []};
+                                rawStory.individuals.push(i);
+                            }
+
+                            i.type.push(individual["Stories.Story_Individual.type"]);
+                        });
+                    }
                 } else {
                     let individuals = await models.Individual.findAll({
                         include: [{
@@ -391,12 +402,22 @@ export async function getStories(issue, transaction) {
                         where: {
                             '$Stories->Story_Individual.fk_story$': story.id
                         },
-                        transaction
+                        transaction,
+                        raw: true
                     });
 
                     rawStory.individuals = [];
                     if(individuals)
-                        individuals.forEach(individual => rawStory.individuals.push({name: individual.name, type: individual.type}));
+                        individuals.forEach(individual => {
+                            let i = rawStory.individuals.find(n => n.name === individual.name);
+
+                            if(!i) {
+                                i = {name: individual.name, type: []};
+                                rawStory.individuals.push(i);
+                            }
+
+                            i.type.push(individual["Stories.Story_Individual.type"]);
+                        });
 
                     let appearances = await models.Appearance.findAll({
                         include: [{
@@ -405,12 +426,16 @@ export async function getStories(issue, transaction) {
                         where: {
                             '$Stories->Story_Appearance.fk_story$': story.id
                         },
-                        transaction
+                        transaction,
+                        raw: true
                     });
 
                     rawStory.appearances = [];
                     if(appearances)
-                        appearances.forEach(appearance => rawStory.appearances.push({name: appearance.name, type: appearance.type, role: appearance.role}));
+                        appearances.forEach(appearance => {
+                            let a = {name: appearance.name, type: appearance.type, role: appearance["Stories.Story_Appearance.role"]};
+                            rawStory.appearances.push(a);
+                        });
                 }
                 oldStories.push(rawStory);
             });
@@ -448,9 +473,12 @@ export function equals(a, b) {
         return false;
 
     let found = a.individuals.every(aIndividual => {
-        return b.individuals.some(bIndividual => {
-            return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
-        });
+        let r = b.individuals.find(bIndividual => aIndividual.name === bIndividual.name);
+
+        if(r)
+            return aIndividual.type.every(aType => r.type.some(bType => aType === bType));
+
+        return false;
     });
 
     found = found && a.appearances.every(aAppearance => {

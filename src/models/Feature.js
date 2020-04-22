@@ -143,12 +143,23 @@ export async function getFeatures(issue, transaction) {
                     where: {
                         '$Features->Feature_Individual.fk_feature$': feature.id
                     },
-                    transaction
+                    transaction,
+                    raw: true
                 });
 
                 rawFeature.individuals = [];
-                if(individuals)
-                    individuals.forEach(individual => rawFeature.individuals.push({name: individual.name, type: individual.type}));
+                if(individuals) {
+                    individuals.forEach(individual => {
+                        let i = rawFeature.individuals.find(n => n.name === individual.name);
+
+                        if (!i) {
+                            i = {name: individual.name, type: []};
+                            rawFeature.individuals.push(i);
+                        }
+
+                        i.type.push(individual["Stories.Feature_Individual.type"]);
+                    });
+                }
 
                 oldFeatures.push(rawFeature);
             });
@@ -165,9 +176,12 @@ export function equals(a, b) {
         return false;
 
     let found = a.individuals.every(aIndividual => {
-        return b.individuals.some(bIndividual => {
-            return aIndividual.name === bIndividual.name && aIndividual.type === bIndividual.type;
-        });
+        let r = b.individuals.find(bIndividual => aIndividual.name === bIndividual.name);
+
+        if(r)
+            return aIndividual.type.every(aType => r.type.some(bType => aType === bType));
+
+        return false;
     });
 
     return (found && a.title === b.title && a.number === b.number && a.addinfo === b.addinfo);
