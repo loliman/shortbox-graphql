@@ -25,9 +25,10 @@ export const resolvers = {
 
             let query = "SELECT * FROM \n" +
                 "(SELECT type, \n" +
-                "       Createlabel(type, name, title, volume, startyear, endyear, number, format, variant) AS label, \n" +
+                "       label, \n" +
                 "       Createurl(type, original, name, title, volume, number, format, variant) AS url \n" +
-                "FROM   (SELECT \"publisher\" AS type, \n" +
+                "FROM   (SELECT Createlabel('publisher', name, '', 0, 0, 0, 0, '', '') as label, \n" +
+                "               \"publisher\" AS type, \n" +
                 "               original    AS original, \n" +
                 "               name        AS name, \n" +
                 "               \"\"          AS title, \n" +
@@ -39,8 +40,12 @@ export const resolvers = {
                 "               ''          AS variant \n" +
                 "        FROM   publisher p \n" +
                 "        WHERE  original = " + (us ? 1 : 0) + " \n" +
+                "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
+                "        ORDER  BY label, \n" +
+                "        LIMIT 10) \n" +
                 "        UNION \n" +
-                "        SELECT \"series\"    AS type, \n" +
+                "        (SELECT Createlabel('series', name, s.title, volume, s.startyear, s.endyear, 0, '', '') as label, \n" +
+                "               \"series\"    AS type, \n" +
                 "               original    AS original, \n" +
                 "               name        AS name, \n" +
                 "               s.title     AS title, \n" +
@@ -54,8 +59,12 @@ export const resolvers = {
                 "               LEFT JOIN publisher p \n" +
                 "                      ON s.fk_publisher = p.id \n" +
                 "        WHERE  p.original = " + (us ? 1 : 0) + " \n" +
+                "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
+                "        ORDER  BY label, \n" +
+                "        LIMIT 10) \n" +
                 "        UNION \n" +
-                "        SELECT \"issue\"     AS type, \n" +
+                "        (SELECT Createlabel('issue', name, s.title, volume, s.startyear, s.endyear, number, format, variant) as label, \n" +
+                "               \"issue\"     AS type, \n" +
                 "               original    AS original, \n" +
                 "               name        AS name, \n" +
                 "               s.title     AS title, \n" +
@@ -71,20 +80,16 @@ export const resolvers = {
                 "               LEFT JOIN publisher p \n" +
                 "                      ON s.fk_publisher = p.id \n" +
                 "        WHERE  p.original = " + (us ? 1 : 0) + " \n" +
-                "        ORDER  BY title, \n" +
-                "                  volume, \n" +
-                "                  name, \n" +
-                "                  Cast(number AS UNSIGNED), \n" +
-                "                  format, \n" +
-                "                  variant) a \n" +
-                "HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%') a \n" +
+                "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
+                "        ORDER  BY label, \n" +
+                "        LIMIT 10)) a \n" +
+                ") a \n" +
                 "ORDER BY \n" +
                 "    CASE WHEN label LIKE '" + escapeSqlString(pattern) + "' THEN 1 \n" +
                 "        WHEN label LIKE '" + escapeSqlString(pattern) + "%' THEN 2 \n" +
                 "        WHEN label LIKE '%" + escapeSqlString(pattern) + "' THEN 4 \n" +
                 "        ELSE 3 \n" +
-                "    END ASC, label ASC \n" +
-                "LIMIT 25 offset " + offset;
+                "    END ASC, label ASC";
 
             let res = await models.sequelize.query(query);
 
