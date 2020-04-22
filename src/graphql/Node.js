@@ -91,8 +91,6 @@ export const resolvers = {
                 "        ELSE 3 \n" +
                 "    END ASC, label ASC";
 
-            console.log(query);
-
             let res = await models.sequelize.query(query);
 
             return res[0];
