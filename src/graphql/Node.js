@@ -73,7 +73,7 @@ export const resolvers = {
                 "               s.endyear   AS endyear, \n" +
                 "               number      AS number, \n" +
                 "               format      AS format, \n" +
-                "               CONVERT(variant USING ascii)     AS variant \n" +
+                "               variant     AS variant \n" +
                 "        FROM   issue i \n" +
                 "               LEFT JOIN series s \n" +
                 "                      ON i.fk_series = s.id \n" +
