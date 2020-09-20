@@ -63,7 +63,7 @@ export const resolvers = {
                 "        ORDER  BY label \n" +
                 "        LIMIT 10) \n" +
                 "        UNION \n" +
-                "        (SELECT Createlabel('issue', name, s.title, volume, s.startyear, s.endyear, number, format, '') as label, \n" +
+                "        (SELECT Createlabel('issue', name, s.title, volume, s.startyear, s.endyear, number, format, variant) as label, \n" +
                 "               \"issue\"     AS type, \n" +
                 "               original    AS original, \n" +
                 "               name        AS name, \n" +
