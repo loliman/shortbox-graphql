@@ -145,6 +145,10 @@ export default (sequelize) => {
         indexes: [{
             unique: true,
             fields: ['number', 'fk_series', 'format', 'variant']
+        }, {
+            fields: ['id']
+        }, {
+            fields: ['number', 'format', 'variant']
         }],
         sequelize,
         tableName: Issue.tableName

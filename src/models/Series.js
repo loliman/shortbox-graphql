@@ -70,6 +70,10 @@ export default (sequelize) => {
         indexes: [{
             unique: true,
             fields: ['title', 'volume', 'fk_publisher']
+        }, {
+            fields: ['id']
+        }, {
+            fields: ['title', 'volume']
         }],
         sequelize,
         tableName: Series.tableName

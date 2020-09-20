@@ -70,6 +70,10 @@ export default (sequelize) => {
         indexes: [{
             unique: true,
             fields: ['name']
+        }, {
+            fields: ['id']
+        }, {
+            fields: ['name']
         }],
         sequelize,
         tableName: Publisher.tableName
