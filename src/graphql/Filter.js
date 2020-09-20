@@ -34,6 +34,7 @@ export const typeDef = gql`
     onlyPrint: Boolean,
     otherTb: Boolean,
     exclusive: Boolean,
+    reprint: Boolean,
     onlyTb: Boolean,
     noPrint: Boolean,
     onlyOnePrint: Boolean
@@ -187,6 +188,8 @@ async function convertFilterToTxt(filter) {
         s += "\t\tSonst nur in TB\n";
     if (filter.exclusive)
         s += "\t\tExclusiv\n";
+    if (filter.reprint)
+        s += "\t\tReiner Nachdruck\n";
     if (filter.onlyTb)
         s += "\t\tNur in TB\n";
     if (filter.onlyOnePrint)
@@ -234,7 +237,7 @@ async function convertFilterToTxt(filter) {
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (!filter.firstPrint && !filter.onlyPrint && !filter.otherTb && !filter.exclusive && !filter.onlyTb && !filter.noPrint && !filter.onlyOnePrint)
+    if (!filter.firstPrint && !filter.onlyPrint && !filter.otherTb && !filter.exclusive && !filter.reprint && !filter.onlyTb && !filter.noPrint && !filter.onlyOnePrint)
         s += "\t\t-\n";
 
     s += "\tMitwirkende\n";
@@ -527,7 +530,7 @@ export function createFilterQuery(selected, filter, offset, print) {
     }
 
     let intersectContains = "";
-    if(filter.exclusive && !us && (filter.cover || filter.story)) {
+    if((filter.reprint || filter.exclusive) && !us && (filter.cover || filter.story)) {
         intersectContains +=
             "select i.id " +
             " from publisher p " +
@@ -539,7 +542,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " and st.id is not null and st.fk_parent is null group by i.id ";
     }
 
-    if(filter.otherTb && !us && (filter.cover || filter.story)) {
+    if((filter.reprint || filter.otherTb) && !us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, i.format " +
@@ -556,7 +559,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " and i.format != 'Taschenbuch') a ";
     }
 
-    if(filter.onlyPrint && !us && (filter.cover || filter.story)) {
+    if((filter.reprint || filter.onlyPrint) && !us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, i.format " +
@@ -571,7 +574,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " HAVING count(distinct concat(s.id, '#', i.number)) = 1) a ";
     }
 
-    if(filter.firstPrint && !us && (filter.cover || filter.story)) {
+    if((filter.reprint || filter.firstPrint) && !us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "SELECT i.id FROM publisher p " +
             " LEFT JOIN series s ON p.id = s.fk_publisher " +
@@ -643,7 +646,7 @@ export function createFilterQuery(selected, filter, offset, print) {
     }
 
     if(intersectContains !== "")
-        intersect += " and i.id in (" + intersectContains + ")";
+        intersect += " and i.id " + (filter.reprint ? "not in" : "in" ) + " (" + intersectContains + ")";
 
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
     if(!print)

@@ -8,12 +8,12 @@ CREATE function
                    endyear   INTEGER, 
                              number VARCHAR(256), 
                    format    VARCHAR(256), 
-                   variant   VARCHAR(256)) returns VARCHAR(1000) 
+                   variant   VARCHAR(256)) returns VARCHAR(1000) charset utf8
 begin 
   DECLARE label  VARCHAR(1000) DEFAULT concat(createserieslabel(title, name, volume, startyear, endyear), ' #', number);
   DECLARE format VARCHAR(256) DEFAULT concat(' (', format); 
   IF variant != '' THEN 
-    SET format := concat(format, '/', variant); 
+    SET format := concat(format, '/', variant);
   end IF; 
   SET format := concat(format, ')'); 
   SET label := concat(label, format); 
@@ -31,7 +31,7 @@ CREATE function
             endyear   INTEGER, 
                       number VARCHAR(256), 
             format    VARCHAR(256), 
-            variant   VARCHAR(256)) returns VARCHAR(4096) charset latin1 
+            variant   VARCHAR(256)) returns VARCHAR(4096) charset utf8
   DETERMINISTIC 
 begin 
   IF type = 'publisher' THEN 
@@ -52,7 +52,7 @@ CREATE function
                     name      VARCHAR(256), 
                     volume    INTEGER, 
                     startyear INTEGER, 
-                    endyear   INTEGER) returns VARCHAR(1000) charset latin1 
+                    endyear   INTEGER) returns VARCHAR(1000) charset utf8
   DETERMINISTIC 
 begin 
   DECLARE label     VARCHAR(1000) DEFAULT name; 
@@ -77,7 +77,7 @@ CREATE function
           volume   INTEGER, 
                    number VARCHAR(256), 
           format   VARCHAR(256), 
-          variant  VARCHAR(256)) returns VARCHAR(4096) charset latin1 
+          variant  VARCHAR(256)) returns VARCHAR(4096) charset utf8
   DETERMINISTIC 
 begin 
   DECLARE url VARCHAR(4096) DEFAULT ''; 
@@ -128,7 +128,7 @@ end
 $$
 
 CREATE function 
-  toroman(inarabic INT UNSIGNED) returns VARCHAR(15) charset latin1 
+  toroman(inarabic INT UNSIGNED) returns VARCHAR(15) charset utf8
   DETERMINISTIC 
 begin 
   DECLARE numeral      CHAR(7) DEFAULT 'IVXLCDM'; 
