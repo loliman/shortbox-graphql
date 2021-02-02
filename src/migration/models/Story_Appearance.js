@@ -23,8 +23,7 @@ export default (sequelize) => {
         },
         firstapp: {
             type: Sequelize.BOOLEAN,
-            allowNull: false,
-            defaultValue: false
+            allowNull: false
         }
     }, {
         sequelize,

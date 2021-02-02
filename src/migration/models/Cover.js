@@ -2,7 +2,7 @@ import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
 import {findOrCrawlIssue} from "./Issue";
-import {asyncForEach} from "../util/util";
+import {asyncForEach} from "../../util/util";
 
 class Cover extends Model {
     static tableName = 'Cover';
@@ -50,70 +50,10 @@ export default (sequelize) => {
             type: Sequelize.INTEGER,
             allowNull: false,
         },
-        coloured: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 1
-        },
-        fullsize: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 1
-        },
         addinfo: {
             type: Sequelize.STRING,
             allowNull: false,
             defaultValue: ''
-        },
-        onlyapp: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        firstapp: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        firstpartly: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        firstcomplete: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        firstmonochrome: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        firstcoloured: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        firstsmall: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        firstfullsize: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        onlytb: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        onlyoneprint: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        onlypartly: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        onlymonochrome: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
-        },
-        onlysmall: {
-            type: Sequelize.BOOLEAN,
-            defaultValue: 0
         }
     }, {
         indexes: [{
@@ -134,8 +74,6 @@ export const typeDef = gql`
     issue: IssueInput,
     individuals: [IndividualInput],
     addinfo: String,
-    coloured: Boolean,
-    fullsize: Boolean,
     exclusive: Boolean
   }
   
@@ -146,25 +84,9 @@ export const typeDef = gql`
     addinfo: String,
     parent: Cover,
     children: [Cover],
-    
-    exclusive: Boolean,
-    
-    onlyapp: Boolean, 
+    onlyapp: Boolean,
     firstapp: Boolean,
-    firstpartly: Boolean,
-    firstcomplete: Boolean,
-    firstmonochrome: Boolean,
-    firstcoloured: Boolean,
-    firstsmall: Boolean,
-    firstfullsize: Boolean,
-    onlytb: Boolean,
-    onlyoneprint: Boolean,
-    onlypartly: Boolean,
-    onlymonochrome: Boolean,
-    onlysmall: Boolean,
-    
-    coloured: Boolean,
-    fullsize: Boolean,
+    exclusive: Boolean,
     issue: Issue,
     individuals: [Individual]
   }
@@ -188,50 +110,48 @@ export const resolvers = {
                 order: [[models.Issue, 'releasedate', 'ASC']]
             })
         },
-        coloured: async (parent) => {
-            return parent.coloured;
-        },
         onlyapp: async (parent) => {
-            return parent.onlyapp;
+            if(parent.fk_parent === null)
+                return true;
+
+            let covers = await models.Cover.findAll({
+                where: {fk_parent: parent.fk_parent},
+                include: [models.Issue],
+                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
+                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
+            });
+
+            return covers.length === 1;
         },
         firstapp: async (parent) => {
-            return parent.firstapp;
-        },
-        firstpartly: async (parent) => {
-            return parent.firstpartly;
-        },
-        firstcomplete: async (parent) => {
-            return parent.firstcomplete;
-        },
-        firstmonochrome: async (parent) => {
-            return parent.firstmonochrome;
-        },
-        firstcoloured: async (parent) => {
-            return parent.firstcoloured;
-        },
-        firstsmall: async (parent) => {
-            return parent.firstsmall;
-        },
-        firstfullsize: async (parent) => {
-            return parent.firstfullsize;
+            if(parent.fk_parent === null)
+                return true;
+
+            let cover = await models.Cover.findAll({
+                where: {fk_parent: parent.fk_parent},
+                include: [models.Issue],
+                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
+                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
+            });
+
+            let firstapp = false;
+            if(cover.length > 0) {
+                if(cover[0]['Issue'].id === parent.fk_issue)
+                    firstapp = true;
+                else {
+                    let issue = await models.Issue.findOne({
+                        where: {id: parent.fk_issue}
+                    });
+
+                    if(issue.number === cover[0]['Issue'].number && issue.fk_series === cover[0]['Issue'].fk_series)
+                        firstapp = true;
+                }
+            }
+
+            return firstapp;
         },
         exclusive: async (parent) => {
             return parent.fk_parent === null;
-        },
-        onlytb: async (parent) => {
-            return parent.onlytb;
-        },
-        onlyoneprint: async (parent) => {
-            return parent.onlyoneprint;
-        },
-        onlymonochrome: async (parent) => {
-            return parent.onlymonochrome;
-        },
-        onlypartly: async (parent) => {
-            return parent.onlypartly;
-        },
-        onlysmall: async (parent) => {
-            return parent.onlysmall;
         },
         addinfo: (parent) => parent.addinfo,
         individuals: async (parent) => {
@@ -258,8 +178,6 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                     number: !isNaN(cover.number) ? cover.number : 1,
                     url: cover.number === 0 ? coverUrl : '',
                     addinfo: cover.addinfo,
-                    fullsize: cover.fullsize,
-                    coloured: cover.coloured,
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
@@ -298,8 +216,6 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                     url: cover.number === 0 ? coverUrl : '',
                     number: !isNaN(cover.number) ? cover.number : 1,
                     addinfo: cover.addinfo,
-                    fullsize: cover.fullsize,
-                    coloured: cover.coloured,
                     fk_parent: oCover.id
                 }, {transaction: transaction});
 
@@ -382,12 +298,6 @@ export async function getCovers(issue, transaction) {
 
 export function equals(a, b) {
     if(a.exclusive !== b.exclusive)
-        return false;
-
-    if(a.coloured !== b.coloured)
-        return false;
-
-    if(a.fullsize !== b.fullsize)
         return false;
 
     if(a.number !== b.number || a.addinfo !== b.addinfo)

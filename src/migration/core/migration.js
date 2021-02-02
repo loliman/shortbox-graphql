@@ -1,388 +1,179 @@
-import migration from "../models";
-import models from "../../models";
-import {asyncForEach, romanize} from "../../util/util";
+import models from '../../models';
+import migration from '../../migration/models';
+
+import {asyncForEach} from "../../util/util";
 import fs from 'fs';
-import {create} from "../../models/Issue";
-import {create as createArc} from "../../models/Arc";
-import {crawlIssue, crawlSeries} from "../../core/crawler";
-import {afterFirstMigration} from "../../config/config";
+import {crawl, generateIssueUrl, generateIssueName} from "../../core/crawler";
+import {create as createIssue} from "../../models/Issue";
+import {create as createSeries} from "../../models/Series";
+import {create as createPublisher} from "../../models/Publisher";
+import {update} from "../../util/FilterUpdater";
 
-var stream;
+const cliProgress = require('cli-progress');
+const multibar = new cliProgress.MultiBar({
+    format: '[{name}] [{bar}] {percentage}% | {filename} | {eta}s | {value}/{total}',
+    clearOnComplete: false,
+    hideCursor: true
+}, cliProgress.Presets.shades_grey);
 
-export async function fixUsSeries() {
-    return new Promise(async (resolve, reject) => {
-        try {
-            let series = await models.Series.findAll({
-                where: {startyear: 0}
-            });
+let current;
+let overall;
+export let notfound;
+let noparent;
+let insert;
+let storyBar;
 
-            await asyncForEach(series, async (s, i, a) => {
-                console.log("[" + (new Date()).toUTCString() + "] Fixing series " + (i+1) + " of " + a.length);
-
-                let crawledSeries = await crawlSeries(s);
-
-                s.startyear = crawledSeries.startyear;
-                s.endyear = crawledSeries.endyear;
-
-                await s.save();
-            });
-
-            console.log("[" + (new Date()).toUTCString() + "] Done fixing series.");
-            resolve(true);
-        } catch (e) {
-            console.log(e);
-            //Don't reject, errors are okay
-            resolve(false);
-        }
-    });
-}
-
-export async function fixUsComics() {
-    return new Promise(async (resolve, reject) => {
-        try {
-            let issues = await models.Issue.findAll({
-                where: {
-                    '$Series->Publisher.original$': 1,
-                    variant: ''
-                },
-                include: [
-                    {
-                        model: models.Series,
-                        include: [
-                            models.Publisher
-                        ]
-                    }
-                ]
-            });
-
-            await asyncForEach(issues, async (i, idx, a) => {
-                try {
-                    i.series = await models.Series.findOne({where: {id: i.fk_series}});
-
-                    console.log("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx+1) + " of " + a.length + " " +
-                        "(" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")");
-
-                    let crawledIssue = await crawlIssue(i).catch(() => {/*ignore errors while crawling*/});
-
-                    await asyncForEach(crawledIssue.variants, async variant => {
-                        let res = await models.Issue.findAll({
-                            where: {
-                                fk_series: i.fk_series,
-                                number: i.number,
-                                variant: variant.variant,
-                            }
-                        });
-
-                        if(!res) {
-                            console.log("[" + (new Date()).toUTCString() + "] " + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number +
-                                " is missing variant " + variant.variant);
-
-                            let newVariant = await models.Issue.create({title: '',
-                                number: i.number,
-                                format: 'Heft',
-                                variant: variant.variant,
-                                fk_series: i.fk_series,
-                                releasedate: i.releasedate,
-                                limitation: 0,
-                                pages: 0,
-                                price: 0,
-                                currency: i.currency ? i.currency : 'USD',
-                                addinfo: ''
-                            });
-
-                            await asyncForEach(crawledIssue.editors, async (editor) => {
-                                await newVariant.associateIndividual(editor.name.trim(), 'EDITOR');
-                            });
-                            await newVariant.save();
-
-                            let newCover = await models.Cover.create({
-                                url: crawledVariant.cover.url,
-                                number: 0,
-                                addinfo: ''
-                            });
-
-                            await newCover.setIssue(newVariant);
-                            await newCover.save();
-                        }
-                    });
-
-                    if(crawledIssue.arcs && crawledIssue.arcs.length > 0) {
-                        await asyncForEach(crawledIssue.arcs, async arc => {
-                            try {
-                                await createArc(arc, i);
-                            } catch (e) {
-                                //ignore, might already exist
-                            }
-                        });
-                    }
-
-                    let stories = await models.Story.findAll({
-                        where: {fk_issue: i.id}
-                    });
-
-                    if(stories.length > 0 && crawledIssue.stories.length !== stories.length) {
-                        let failed = false;
-
-                        for(let i = 0; i < stories.length; i++) {
-                            if (stories[i].title !== crawledIssue.stories[i].title) {
-                                console.log("[" + (new Date()).toUTCString() + "] " + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number +
-                                    " is missing story as story in between [" + romanize(i + 1) + "]");
-
-                                failed = true;
-                            }
-                        }
-
-                        if(!failed) {
-                            await Promise.all(crawledIssue.stories.map(async (crawledStory) => {
-                                if(stories.length >= crawledStory.number)
-                                    return;
-
-                                let newStory = await models.Story.create({
-                                    title: crawledStory.title ? crawledStory.title : '',
-                                    number: !isNaN(crawledStory.number) ? crawledStory.number : 1,
-                                    addinfo: ''
-                                });
-
-                                await asyncForEach(crawledStory.individuals, async (individual) => {
-                                    await newStory.associateIndividual(individual.name.trim(), individual.type, null);
-                                });
-
-                                await newStory.setIssue(i);
-                                await newStory.save();
-
-                                return newStory;
-                            }));
-                        }
-                    } else if(stories.length > 0 && crawledIssue.stories.length > 0) {
-                        await asyncForEach(crawledIssue.stories, async (crawledStory, i) => {
-                            if(crawledStory.appearing && crawledStory.appearing.length > 0) {
-                                await asyncForEach(crawledStory.appearing, async appearance => {
-                                    await stories[i].associateAppearance(appearance.name, appearance.type, appearance.role, null);
-                                });
-                            }
-                        });
-                    }
-                } catch (e) {
-                    /*ignore errors while crawling*/
-                }
-            });
-
-            console.log("[" + (new Date()).toUTCString() + "] Done fixing issues.");
-            resolve(true);
-        } catch (e) {
-            console.log(e);
-            //Don't reject, errors are okay
-            resolve(false);
-        }
-    });
-}
+export var storyLog;
+export var usLog;
+export var germanLog;
+export var noParentLog;
+export var notFoundLog;
 
 export async function migrate() {
     return new Promise(async (resolve, reject) => {
-        stream = fs.createWriteStream("migration.log", {flags: 'a'});
+        initLogs();
 
         try {
-            await migratePublishers();
-            await migrateSeries();
-            await migrateIssues();
+            let oldIssues = await getAllGermanIssuesFromMigration();
+            initBars(oldIssues.length);
 
-            resolve(true);
-        } catch (e) {
-            //Don't reject, errors are okay
-            resolve(false);
-        } finally {
-            if (stream)
-                stream.end();
-        }
-    });
-}
-
-async function migrateIssues() {
-    return new Promise(async (resolve, reject) => {
-        try {
-            let issues = await migration.Issue.findAll({
-                where: {originalissue: 0}
-            });
-
-            //let issues = [];
-            //issues.push(await migration.Issue.findOne({where: {id: 2863}}));
-
-            await asyncForEach(issues, async (issue, index, array) => {
-                let issueToCreate = {};
-                let variant = '';
+            await asyncForEach(oldIssues, async (oldIssue, oldIssuesIndex) => {
+                let transaction;
 
                 try {
-                    issueToCreate.title = issue.title;
-                    issueToCreate.number = issue.number;
-                    issueToCreate.format = issue.format;
-                    issueToCreate.variant = issue.variant;
-                    issueToCreate.pages = issue.pages;
-                    issueToCreate.releasedate = issue.releasedate;
-                    issueToCreate.price = issue.price;
-                    issueToCreate.currency = issue.currency;
+                    transaction = await models.sequelize.transaction();
+                    let oldIssueStories = await oldIssue.getStories();
+                    oldIssue = await issueDtoToObject(oldIssue);
 
-                    let variant = issueToCreate.format || issueToCreate.variant ? " [" : "";
-                    if (issueToCreate.format)
-                        variant += issueToCreate.format;
+                    updateBar(current, "DE", oldIssue, oldIssuesIndex+1);
 
-                    if (variant !== "" && issueToCreate.variant)
-                        variant += "/";
+                    let allStoriesInDb = true;
+                    await asyncForEach(oldIssueStories, async (oldIssueStory, oldIssueStoriesIdx) => {
+                        let oldStoryParent = await oldIssueStory.getParent();
 
-                    if (issueToCreate.variant)
-                        variant += issueToCreate.variant;
+                        if(!oldStoryParent) {
+                            if (allStoriesInDb) {
+                                oldIssue.stories.push({
+                                    exclusive: true,
+                                    number: oldIssueStory.number,
+                                    title: oldIssueStory.title,
+                                    addinfo: oldIssueStory.addinfo
+                                });
+                                return;
 
-                    if (variant !== "")
-                        variant += "]";
-
-                    let series;
-                    let publisher;
-                    if(afterFirstMigration) {
-                        series = await models.Series.findOne({
-                            where: {id: issue.fk_series}
-                        });
-
-                        if(!series)
-                            return;
-
-                        publisher = await models.Publisher.findOne({
-                            where: {id: series.fk_publisher}
-                        });
-
-                        if(!publisher)
-                            return;
-                    } else {
-                        series = await migration.Series.findOne({
-                            where: {id: issue.fk_series}
-                        });
-
-                        publisher = await migration.Publisher.findOne({
-                            where: {id: series.fk_publisher}
-                        });
-                    }
-
-                    issueToCreate.series = {
-                        title: series.title,
-                        volume: series.volume,
-                        publisher: {
-                            name: publisher.name
+                            } else {
+                                printError("NP", oldIssue, oldIssue, "Story " + (idx + 1) + " seems to be exclusive", noParentLog);
+                                updateBar(noparent, "NP", oldIssue, noparent.getTotal() + 1, noparent.getTotal() + 1);
+                                return;
+                            }
                         }
-                    };
 
-                    console.log("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " (" + (index+1) + " of " + array.length + ")");
+                        let oldStoryParentIssue = await oldStoryParent.getIssue();
+                        let oldStoryParentIssueStories = await oldStoryParentIssue.getStories();
+                        let oldStoryParentIssueStoriesLength = oldStoryParentIssueStories.length;
+                        oldStoryParentIssue = await oldIssueToNewIssue(oldStoryParentIssue);
+                        updateBar(overall, "US", oldStoryParentIssue, oldIssueStoriesIdx+1, oldIssueStories.length);
 
-                    issueToCreate.stories = [];
-                    let stories = await migration.Story.findAll({
-                        include: [{
-                            model: migration.Issue
-                        }],
-                        where: {
-                            '$Issues->Issue_Story.fk_issue$': issue.id
-                        }
-                    });
-
-                    await asyncForEach(stories, async story => {
-                        let parent = await migration.Story.findOne({
-                            include: [{
-                                model: migration.Issue,
-                                where: {
-                                    originalissue: 1
-                                }
-                            }],
+                        let newUsIssue = await models.Issue.findOne({
                             where: {
-                                id: story.id
+                                '$Series->Publisher.original$': oldStoryParentIssue.series.publisher.original,
+                                '$Series.title$':  oldStoryParentIssue.series.title.trim(),
+                                '$Series.volume$': oldStoryParentIssue.series.volume,
+                                'number': oldStoryParentIssue.number
+                            },
+                            group: ['fk_series', 'number'],
+                            include: [
+                                {
+                                    model: migration.Series,
+                                    include: [
+                                        migration.Publisher
+                                    ]
+                                }
+                            ],
+                            transaction: transaction
+                        });
+
+                        if(!newUsIssue) { //US Issue does not exist in new database!
+                            let crawledIssue = await crawl(oldStoryParentIssue);
+
+                            if(!crawledIssue) {
+                                crawledIssue = oldStoryParentIssue;
+                                crawledIssue.edited = true;
+
+                                if(crawledIssue.variants)
+                                    crawledIssue.variants.forEach(v => {
+                                        v.edited = true;
+                                    });
                             }
-                        });
+                            //console.log(util.inspect(ci, false, null, true));
 
-                        if(!parent)
-                            throw Error('No parent found for story ' + story.number  + " [ID#" + story.id + "]");
-                        
-                        let parentIssue;
-                        let parentIssues = await parent.getIssues();
-                        await asyncForEach(parentIssues, async p => {
-                            if (p.originalissue === 1)
-                                parentIssue = p;
-                        });
+                            if(crawledIssue.stories.length !== oldStoryParentIssueStoriesLength) {
+                                crawledIssue = oldStoryParentIssue;
 
-                        let parentSeries = await migration.Series.findOne({
-                            where: {id: parentIssue.fk_series}
-                        });
+                                if(crawledIssue.variants)
+                                    crawledIssue.variants.forEach(v => {
+                                        v.edited = true;
+                                    });
 
-                        if(!parentIssue)
-                            throw Error('No issue found for parent ' + parentSeries.title + " (Vol." + parentSeries.volume + ") [ID#" + parentIssue.id + "]");
+                                if(!crawledIssue) {
+                                    allStoriesInDb = false;
+                                    printError("ST", oldIssue, crawledIssue, "Stories do differ! "
+                                        + (crawledIssue.stories.length > oldStoryParentIssueStoriesLength.length ? "crawled" : "current")
+                                        + " has more stories. " +
+                                        "(Current: " + oldStoryParentIssueStoriesLength + ", Crawled: " + crawledIssue.stories.length + ")", storyLog);
+                                    updateBar(storyBar, "ST", crawledIssue, storyBar.getTotal()+1, storyBar.getTotal()+1);
 
-                        if(parentIssue.number === '')
-                            throw Error('No issue number found for parent ' + parentSeries.title + " (Vol." + parentSeries.volume + ") [ID#" + parentIssue.id + "]");
-
-                        let storyObj = {
-                            number: issueToCreate.stories.length + 1,
-                            addinfo: story.additionalInfo,
-                            parent: {
-                                number: parent.number === 0 ? 1 : parent.number,
-                                issue: {
-                                    number: parentIssue.number,
-                                    series: {
-                                        title: parentSeries.title,
-                                        volume: parentSeries.volume
-                                    }
+                                    throw new Error();
                                 }
                             }
-                        };
 
-                        issueToCreate.stories.push(storyObj);
+                            newUsIssue = await create(crawledIssue, transaction);
+
+                            if(!newUsIssue) {
+                                allStoriesInDb = false;
+                                printError("US", oldIssue, crawledIssue, "Could not create issue", usLog);
+                                updateBar(insert, "IS", crawledIssue, insert.getTotal()+1, insert.getTotal()+1);
+
+                                throw new Error();
+                            }
+                        } else {
+                            newUsIssue = await issueDtoToObject(newUsIssue, transaction);
+                        }
+
+                        if(allStoriesInDb) {
+                            //create Story in oldIssue
+                            oldIssue.stories.push({
+                                number: oldIssueStory.number,
+                                addinfo: oldIssueStory.addinfo,
+                                parent: {
+                                    number: oldStoryParent.number,
+                                    issue: newUsIssue
+                                }
+                            });
+                        }
                     });
 
-                    let where = {
-                        fk_series: issue.fk_series,
-                        number: issueToCreate.number
-                    };
+                    if(allStoriesInDb) {
+                        oldIssue.edited = true;
+                        if(oldIssue.variants)
+                            oldIssue.variants.forEach(v => {
+                                v.edited = true;
+                            });
 
-                    if(afterFirstMigration) {
-                        switch (issueToCreate.format) {
-                            case "Heft/Variant":
-                                where.format = "Heft";
-                                break;
-                            case "Softcover/Variant":
-                                where.format = "Softcover";
-                                break;
-                            case "Hardcover/Variant":
-                                where.format = "Hardcover";
-                                break;
-                            case "Softcover/Album":
-                                where.format = "Album";
-                                break;
-                            case "Hardcover/Album":
-                                where.format = "Album Hardcover";
-                                break;
-                            default:
-                                where.format = issueToCreate.format;
+                        let result = await create(oldIssue, transaction);
+                        if(!result) {
+                            printError("DE", oldIssue, oldIssue, "Could not create issue", germanLog);
+                            throw new Error();
                         }
-                    } else {
-                        if (issueToCreate.format)
-                            where.format = issueToCreate.format;
                     }
 
-                    if (issueToCreate.variant)
-                        where.variant = issueToCreate.variant;
-
-                    let i = await models.Issue.findOne({where: where});
-
-                    if (!i) {
-                        let transaction = await models.sequelize.transaction();
-
-                        let res = await create(issueToCreate, transaction).catch(async (e) => {
-                            stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful ");
-                            stream.write("[ERROR: " + e + "]\n");
-
-                            await transaction.rollback();
-                        });
-
-                        if(res)
-                            await transaction.commit();
-                    }
+                    await transaction.commit();
                 } catch (e) {
+                    if(transaction)
+                        await transaction.rollback();
+
                     console.log(e);
-                    stream.write("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " unsuccessful ");
-                    stream.write("[ERROR: " + e + "]\n");
+                    throw e;
                 }
             });
 
@@ -390,72 +181,251 @@ async function migrateIssues() {
         } catch (e) {
             console.log(e);
             resolve(false);
+        } finally {
+            multibar.stop();
+            closeLogs();
         }
     });
 }
 
-async function migratePublishers() {
+export function printError(type, issue, oIssue, e, stream) {
+    stream.write(/*TCString() + "] " + "[" + type + "] " + */generateIssueName(issue) + " | " + generateIssueUrl(oIssue) + ": " + e + "\n");
+}
+
+async function getAllGermanIssuesFromMigration() {
     return new Promise(async (resolve, reject) => {
-        let migrationTransaction = await migration.migrationDatabase.transaction();
-        let transaction = await models.sequelize.transaction();
+        let res = await migration.Issue.findAll({
+            where: {
+                '$Series->Publisher.original$': 0/*,
+        '$Series.title$': "Die Marvel-Superhelden-Sammlung",
+        '$Series.volume$': 1,
+        'number': '61'*/
+            },
+            include: [
+                {
+                    model: migration.Series,
+                    include: [
+                        migration.Publisher
+                    ]
+                }
+            ]
+        });
 
-        try {
-            let publishers = await migration.Publisher.findAll({
-                where: {'$Series.original$': 0},
-                include: [migration.Series],
-                migrationTransaction
-            });
+        resolve(res);
+    })
+}
 
-            await asyncForEach(publishers, async publisher => {
-                let p = await models.Publisher.findOne({where: {id: publisher.id}, transaction: transaction});
+async function create(issue, transaction) {
+    return new Promise(async (resolve, reject) => {
+        let result;
 
-                if(!p)
-                    await models.Publisher.create({
-                        id: publisher.id,
-                        name: publisher.name,
-                        original: 0
-                    }, {transaction: transaction});
-            });
+        let publisher = await models.Publisher.findOne({
+            where: {
+                name: issue.series.publisher.name,
+                original: issue.series.publisher.original
+            },
+            transaction: transaction
+        });
 
-            await transaction.commit();
-            resolve(true);
-        } catch (e) {
-            await transaction.rollback();
-            resolve(false);
+        if (!publisher) {
+            try {
+                publisher = await createPublisher(issue.series.publisher, transaction);
+            } catch (e) {
+                return null;
+            }
         }
+
+        let series = await models.Series.findOne({
+            where: {
+                title: issue.series.title,
+                volume: issue.series.volume,
+                fk_publisher: publisher.id
+            },
+            transaction: transaction
+        });
+
+        if (!series) {
+            try {
+                series = await createSeries(issue.series, transaction);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        result = await models.Issue.findOne({
+            where: {
+                number: issue.number,
+                format: issue.format,
+                variant: issue.variant,
+                fk_series: series.id
+            },
+            transaction: transaction
+        });
+
+        if (!result) {
+            try {
+                result = await createIssue(issue, transaction);
+
+                if (issue.variants)
+                    await asyncForEach(issue.variants, async v => {
+                        try {
+                            await createIssue(v, transaction);
+                        } catch (e) {
+                            return null;
+                        }
+                    });
+            } catch (e) {
+                return null;
+            }
+        }
+
+        let res = await issueDtoToObject(result, transaction);
+
+        if(!publisher.original) {
+            await update(result, transaction);
+        }
+
+        resolve(res);
     });
 }
 
-async function migrateSeries() {
+function initBars(issues) {
+    current = multibar.create(issues, 0);
+    overall = multibar.create(0, 0);
+    insert = multibar.create(0, 0);
+    insert.increment();
+    insert.update(0, {name: "IN", filename: "N/A"});
+    storyBar = multibar.create(0, 0);
+    storyBar.increment();
+    storyBar.update(0, {name: "ST", filename: "N/A"});
+    noparent = multibar.create(0, 0);
+    noparent.increment();
+    noparent.update(0, {name: "NP", filename: "N/A"});
+    notfound = multibar.create(0, 0);
+    notfound.increment();
+    notfound.update(0, {name: "NF", filename: "N/A"});
+}
+
+function initLogs() {
+    storyLog = fs.createWriteStream("logs/stories.log", {flags: 'a'});
+    germanLog = fs.createWriteStream("logs/german.log", {flags: 'a'});
+    usLog = fs.createWriteStream("logs/us.log", {flags: 'a'});
+    noParentLog = fs.createWriteStream("logs/noParent.log", {flags: 'a'});
+    notFoundLog = fs.createWriteStream("logs/notFound.log", {flags: 'a'});
+}
+
+function closeLogs() {
+    if (storyLog)
+        storyLog.end();
+    if (usLog)
+        usLog.end();
+    if (germanLog)
+        germanLog.end();
+    if (noParentLog)
+        noParentLog.end();
+    if (notFoundLog)
+        notFoundLog.end();
+}
+
+function updateBar(bar, name, issue, current, total) {
+    bar.increment();
+    bar.update(current, {name: name, filename: generateIssueUrl(issue)});
+    if(total)
+        bar.setTotal(total);
+}
+
+async function issueDtoToObject(issue, transaction) {
     return new Promise(async (resolve, reject) => {
-        let migrationTransaction = await migration.migrationDatabase.transaction();
-        let transaction = await models.sequelize.transaction();
+        let series = await issue.getSeries({transaction: transaction});
+        let publisher = await series.getPublisher({transaction: transaction});
 
-        try {
-            let series = await migration.Series.findAll({
-                where: {original: 0},
-                migrationTransaction
-            });
+        resolve({
+            number: issue.number,
+            title: issue.title,
+            format: issue.format,
+            limitation: issue.limitation,
+            variant: issue.variant,
+            releasedate: issue.releasedate,
+            pages: issue.pages,
+            price: issue.price,
+            currency: issue.currency,
+            addinfo: issue.addinfo,
+            series: {
+                title: series.title,
+                volume: series.volume,
+                addinfo: series.addinfo,
+                startyear: series.startyear,
+                endyear: series.endyear,
+                genre: series.genre,
+                publisher: {
+                    name: publisher.name,
+                    original: publisher.original,
+                    addinfo: publisher.addinfo,
+                    startyear: publisher.startyear,
+                    endyear: publisher.endyear
+                }
+            },
+            stories: []
+        });
+    });
+}
 
-            await asyncForEach(series, async series => {
-                let s = await models.Series.findOne({where: {id: series.id}, transaction: transaction});
+async function oldIssueToNewIssue(oldIssue) {
+    return new Promise(async (resolve, reject) => {
+        let result = await issueDtoToObject(oldIssue);
+        result.individuals = [];
+        result.stories = [];
 
-                if(!s)
-                    await models.Series.create({
-                        id: series.id,
-                        title: series.title,
-                        startyear: series.startyear,
-                        endyear: series.endyear,
-                        volume: series.volume,
-                        fk_publisher: series.fk_publisher
-                    }, {transaction: transaction});
-            });
-
-            await transaction.commit();
-            resolve(true);
-        } catch (e) {
-            await transaction.rollback();
-            resolve(false);
+        let covers = await oldIssue.getCovers();
+        if(covers.length > 0) {
+            result.cover = {url: covers[0].url};
         }
+
+        let oldStories = await oldIssue.getStories();
+        await asyncForEach(oldStories, async (oldStory) => {
+            let story = {
+                exclusive: oldStory.exclusive,
+                number: oldStory.number,
+                title: oldStory.title,
+                addinfo: oldStory.addinfo,
+                individuals: []
+            };
+
+            let oldIndividuals = await oldStory.getIndividuals();
+            await asyncForEach(oldIndividuals, async (oldIndividual) => {
+                let contains = story.individuals.find(i => i.name.toLowerCase() === oldIndividual.name.toLowerCase());
+                let type = oldIndividual.dataValues.Story_Individual.dataValues.type;
+
+                if (contains) {
+                    if (!contains.type.includes(type))
+                        contains.type.push(type);
+                } else {
+                    story.individuals.push({
+                        name: oldIndividual.name,
+                        type: [type]
+                    })
+                }
+            });
+
+            result.stories.push(story);
+        });
+
+        let oldIndividuals = await oldIssue.getIndividuals();
+        await asyncForEach(oldIndividuals, async (oldIndividual) => {
+            let contains = result.individuals.find(i => i.name.toLowerCase() === oldIndividual.name.toLowerCase());
+            let type = oldIndividual.dataValues.Issue_Individual.dataValues.type;
+
+            if (contains) {
+                if (!contains.type.includes(type))
+                    contains.type.push(type);
+            } else {
+                result.individuals.push({
+                    name: oldIndividual.name,
+                    type: [type]
+                })
+            }
+        });
+
+        resolve(result);
     });
 }

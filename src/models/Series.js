@@ -57,6 +57,9 @@ export default (sequelize) => {
             allowNull: true,
             defaultValue: 0
         },
+        genre: {
+            type: Sequelize.STRING(255)
+        },
         volume: {
             type: Sequelize.INTEGER,
             allowNull: false
@@ -110,6 +113,7 @@ export const typeDef = gql`
     startyear: Int,
     endyear: Int,
     volume: Int,
+    genre: String,
     issueCount: Int,
     firstIssue: Issue,
     lastIssue: Issue,
@@ -195,7 +199,7 @@ export const resolvers = {
                 let del = await series.delete(transaction);
 
                 await transaction.commit();
-                return del === 1;
+                return del !== null;
             } catch (e) {
                 await transaction.rollback();
                 throw e;
@@ -208,21 +212,7 @@ export const resolvers = {
                 if (!loggedIn)
                     throw new Error("Du bist nicht eingeloggt");
 
-                let pub = await models.Publisher.findOne({
-                    where: {
-                        name: item.publisher.name.trim()
-                    },
-                    transaction
-                });
-
-                let res = await models.Series.create({
-                    title: item.title.trim(),
-                    volume: item.volume,
-                    startyear: item.startyear,
-                    endyear: item.endyear,
-                    addinfo: item.addinfo,
-                    fk_publisher: pub.id
-                }, {transaction: transaction});
+                let res = await create(item, transaction);
 
                 await transaction.commit();
                 return res;
@@ -284,6 +274,7 @@ export const resolvers = {
         endyear: (parent) => parent.endyear,
         volume: (parent) => parent.volume,
         addinfo: (parent) => parent.addinfo,
+        genre: (parent) => parent.genre,
         issueCount: async (parent) => {
             let res = await models.Issue.findAll({
                 where: {
@@ -347,3 +338,30 @@ export const resolvers = {
         }),
     }
 };
+
+export async function create(item, transaction) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let pub = await models.Publisher.findOne({
+                where: {
+                    name: item.publisher.name.trim()
+                },
+                transaction
+            });
+
+            let res = await models.Series.create({
+                title: item.title.trim(),
+                volume: item.volume,
+                startyear: item.startyear,
+                endyear: item.endyear,
+                addinfo: item.addinfo,
+                genre: item.genre,
+                fk_publisher: pub.id
+            }, {transaction: transaction});
+
+            resolve(res);
+        } catch (e) {
+            reject(e);
+        }
+    });
+}

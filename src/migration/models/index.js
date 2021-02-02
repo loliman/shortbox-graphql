@@ -2,10 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import Sequelize from 'sequelize';
 
-import migrationDatabase from '../core/database';
+import sequelize from '../core/database';
 
-const migration = {
-    migrationDatabase,
+const db = {
+    sequelize,
     Sequelize
 };
 
@@ -16,14 +16,14 @@ fs
         file !== 'index.js',
     )
     .forEach((file) => {
-        const model = migrationDatabase.import(path.join(__dirname, file));
-        migration[model.name] = model;
+        const model = sequelize.import(path.join(__dirname, file));
+        db[model.name] = model;
     });
 
-Object.keys(migration).forEach((modelName) => {
-    if ('associate' in migration[modelName]) {
-        migration[modelName].associate(migration);
+Object.keys(db).forEach((modelName) => {
+    if ('associate' in db[modelName]) {
+        db[modelName].associate(db);
     }
 });
 
-export default migration;
+export default db;

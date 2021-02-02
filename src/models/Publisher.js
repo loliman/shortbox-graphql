@@ -72,8 +72,6 @@ export default (sequelize) => {
             fields: ['name']
         }, {
             fields: ['id']
-        }, {
-            fields: ['name']
         }],
         sequelize,
         tableName: Publisher.tableName
@@ -176,7 +174,7 @@ export const resolvers = {
                 let del = await pub.delete(transaction);
 
                 await transaction.commit();
-                return del === 1;
+                return del !== null;
             } catch (e) {
                 await transaction.rollback();
                 throw e;
@@ -189,13 +187,7 @@ export const resolvers = {
                 if (!loggedIn)
                     throw new Error("Du bist nicht eingeloggt");
 
-                let res = await models.Publisher.create({
-                    name: item.name.trim(),
-                    addinfo: item.addinfo,
-                    original: item.us,
-                    startyear: item.startyear,
-                    endyear: item.endyear
-                }, {transaction: transaction});
+                let res = await create(item, transaction);
 
                 await transaction.commit();
                 return res;
@@ -314,3 +306,21 @@ export const resolvers = {
         }),
     }
 };
+
+export async function create(item, transaction) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let res = await models.Publisher.create({
+                name: item.name.trim(),
+                addinfo: item.addinfo,
+                original: item.original,
+                startyear: item.startyear,
+                endyear: item.endyear
+            }, {transaction: transaction});
+
+            resolve(res);
+        } catch (e) {
+            reject(e);
+        }
+    });
+}

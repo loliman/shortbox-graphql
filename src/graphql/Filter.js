@@ -31,13 +31,22 @@ export const typeDef = gql`
     individuals: [IndividualInput],
     appearances: [AppearanceInput],
     firstPrint: Boolean,
-    onlyPrint: Boolean,
+    firstCompletePrint: Boolean,
+    firstMonochromePrint: Boolean,
+    firstColouredPrint: Boolean,
+    firstfullsize: Boolean,
     otherTb: Boolean,
+    onlyPartlyPrint: Boolean,
+    onlyCompletePrint: Boolean,
+    onlyMonochromePrint: Boolean,
+    onlyColouredPrint: Boolean,
+    onlyFullsize: Boolean,
+    onlyPrint: Boolean,
+    onlyTb: Boolean,
+    onlyOnePrint: Boolean
     exclusive: Boolean,
     reprint: Boolean,
-    onlyTb: Boolean,
     noPrint: Boolean,
-    onlyOnePrint: Boolean
   }
   
   extend type Query {
@@ -182,6 +191,24 @@ async function convertFilterToTxt(filter) {
     s += "\tEnthält\n";
     if (filter.firstPrint)
         s += "\t\tErstausgabe\n";
+    if (filter.firstCompletePrint)
+        s += "\t\tErste Komplettveröffentlichung\n";
+    if (filter.firstMonochromePrint)
+        s += "\t\tErste S/W Veröffentlichung\n";
+    if (filter.firstColouredPrint)
+        s += "\t\tErste Farbveröffentlichung\n";
+    if (filter.firstFullsize)
+        s += "\t\tErstveröffentlichung in Originalgröße\n";
+    if (filter.onlyPartlyPrint)
+        s += "\t\tNur teilweise auf deutsch erschienen\n";
+    if (filter.onlyCompletePrint)
+        s += "\t\tNur vollständig auf deutsch erschienen\n";
+    if (filter.onlyMonochromePrint)
+        s += "\t\tNur in S/W auf deutsch erschienen\n";
+    if (filter.onlyColouredPrint)
+        s += "\t\tNur in Farbe auf deutsch erschienen\n";
+    if (filter.onlyFullsize)
+        s += "\t\tNur in Originalgröße erschienen\n";
     if (filter.onlyPrint)
         s += "\t\tEinzige Ausgabe\n";
     if (filter.otherTb)
@@ -237,7 +264,10 @@ async function convertFilterToTxt(filter) {
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (!filter.firstPrint && !filter.onlyPrint && !filter.otherTb && !filter.exclusive && !filter.reprint && !filter.onlyTb && !filter.noPrint && !filter.onlyOnePrint)
+    if (!filter.firstPrint && !filter.firstCompletePrint && !filter.onlyPartlyPrint && !filter.onlyCompletePrint && !filter.firstMonochromePrint
+        && !filter.firstColouredPrint && !filter.onlyMonochromePrint && !filter.onlyColouredPrint && !filter.onlyFullsize
+        && !filter.firstFullsize && !filter.onlyPrint &&!filter.otherTb && !filter.exclusive && !filter.reprint
+        && !filter.onlyTb && !filter.noPrint && !filter.onlyOnePrint)
         s += "\t\t-\n";
 
     s += "\tMitwirkende\n";
@@ -530,123 +560,208 @@ export function createFilterQuery(selected, filter, offset, print) {
     }
 
     let intersectContains = "";
-    if((filter.reprint || filter.exclusive) && !us && (filter.cover || filter.story)) {
-        intersectContains +=
-            "select i.id " +
-            " from publisher p " +
-            " left join series s on p.id = s.fk_publisher " +
-            " left join issue i on s.id = i.fk_series " +
-            " left join " + type + " st on i.id = st.fk_issue " +
-            " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
-            " where i.id is not null " +
-            " and st.id is not null and st.fk_parent is null group by i.id ";
-    }
 
-    if((filter.reprint || filter.otherTb) && !us && (filter.cover || filter.story)) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
-            "select id from ( " +
-            " select i.id as id, i.format " +
-            " from publisher p " +
-            " left join series s on p.id = s.fk_publisher " +
-            " left join issue i on s.id = i.fk_series " +
-            " left join " + type + " st on i.id = st.fk_issue " +
-            " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
-            " where i.id is not null " +
-            " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.fk_parent" +
-            " HAVING count(DISTINCT i.id) - count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) = 1 " +
-            " AND count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) > 0" +
-            " and i.format != 'Taschenbuch') a ";
-    }
+    if(filter.cover || filter.story) {
+        if(!us) {
+            if(filter.firstPrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "SELECT i.id FROM publisher p " +
+                    " LEFT JOIN series s ON p.id = s.fk_publisher " +
+                    " LEFT JOIN issue i ON s.id = i.fk_series " +
+                    " LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
+                    " WHERE  i.id IS NOT NULL " +
+                    " AND st.firstapp = 1";
+            }
 
-    if((filter.reprint || filter.onlyPrint) && !us && (filter.cover || filter.story)) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
-            "select id from ( " +
-            " select i.id as id, i.format " +
-            " from publisher p " +
-            " left join series s on p.id = s.fk_publisher " +
-            " left join issue i on s.id = i.fk_series " +
-            " left join " + type + " st on i.id = st.fk_issue " +
-            " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
-            " where i.id is not null " +
-            " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.fk_parent" +
-            " HAVING count(distinct concat(s.id, '#', i.number)) = 1) a ";
-    }
+            if(filter.exclusive) {
+                intersectContains +=
+                    "select i.id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
+                    " where i.id is not null " +
+                    " and st.id is not null and st.fk_parent is null group by i.id ";
+            }
 
-    if((filter.reprint || filter.firstPrint) && !us && (filter.cover || filter.story)) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
-            "SELECT i.id FROM publisher p " +
-            " LEFT JOIN series s ON p.id = s.fk_publisher " +
-            " LEFT JOIN issue i ON s.id = i.fk_series " +
-            " LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
-            " LEFT JOIN " + type + " stjoin ON st.fk_parent = stjoin.id " +
-            " WHERE  i.id IS NOT NULL " +
-            " AND stjoin.id IS NOT NULL " +
-            " AND Concat(stjoin.id, '#', i.releasedate) IN ( " +
-            "   SELECT Concat(stjoin.id, '#', Min(i.releasedate)) FROM publisher p " +
-            "   LEFT JOIN series s ON p.id = s.fk_publisher " +
-            "   LEFT JOIN issue i ON s.id = i.fk_series " +
-            "   LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
-            "   LEFT JOIN " + type + " stjoin ON st.fk_parent = stjoin.id " +
-            "   WHERE i.id IS NOT NULL " +
-            "   AND stjoin.id IS NOT NULL " +
-            "   GROUP BY stjoin.id) ";
-    }
+            if(filter.otherTb) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id" +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " AND st.onlytb = 1 ";
+            }
 
-    if(filter.onlyTb && us && (filter.cover || filter.story)) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
-            "select id from ( " +
-            " select i.id as id, ijoin.format " +
-            " from publisher p " +
-            " left join series s on p.id = s.fk_publisher " +
-            " left join issue i on s.id = i.fk_series " +
-            " left join " + type + " st on i.id = st.fk_issue " +
-            " left join " + type + " stjoin ON st.id = stjoin.fk_parent" +
-            " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
-            " where i.id is not null " +
-            " and (i.variant IS NULL OR i.variant = '') " +
-            " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.id" +
-            " HAVING count(*) = 1 " +
-            " AND ijoin.format = 'Taschenbuch') a ";
-    }
+            if(filter.onlyPrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " AND st.onlyapp = 1 ";
+            }
 
-    if(filter.onlyOnePrint && us && (filter.cover || filter.story)) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
-            "select id from ( " +
-            " select i.id as id " +
-            " from publisher p " +
-            " left join series s on p.id = s.fk_publisher " +
-            " left join issue i on s.id = i.fk_series " +
-            " left join " + type + " st on i.id = st.fk_issue " +
-            " left join " + type + " stjoin ON st.id = stjoin.fk_parent" +
-            " where i.id is not null " +
-            " and (i.variant IS NULL OR i.variant = '') " +
-            " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.id " +
-            " HAVING count(*) = 1 " +
-            " ) a ";
-    }
+            if(filter.firstCompletePrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " AND st.firstcomplete = 1 ";
+            }
 
-    if(filter.noPrint && us && (filter.cover || filter.story)) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
-            "select id from ( " +
-            " select i.id as id, i.format " +
-            " from publisher p " +
-            " left join series s on p.id = s.fk_publisher " +
-            " left join issue i on s.id = i.fk_series " +
-            " left join " + type + " st on i.id = st.fk_issue " +
-            " left join " + type + " stjoin ON st.id = stjoin.fk_parent" +
-            " where i.id is not null " +
-            " and (i.variant IS NULL OR i.variant = '') " +
-            " AND stjoin.id IS NULL " +
-            " GROUP BY  i.id" +
-            " ) a ";
+            if(filter.firstMonochromePrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " AND st.firstmonochrome = 1 ";
+            }
+
+            if(filter.firstColouredPrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " AND st.firstcoloured = 1 ";
+            }
+
+            if(filter.reprint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " group by (i.id) having sum(st.firstapp) < 1 ";
+            }
+
+            if(filter.cover) {
+                if (filter.firstfullsize) {
+                    intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                        "select i.id as id " +
+                        " from publisher p " +
+                        " left join series s on p.id = s.fk_publisher " +
+                        " left join issue i on s.id = i.fk_series " +
+                        " left join " + type + " st on i.id = st.fk_issue " +
+                        " where i.id is not null " +
+                        " AND st.firstfullsize = 1 ";
+                }
+            }
+        } else {
+            if(filter.onlyTb) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " AND st.onlytb = 1 ";
+            }
+
+            if(filter.onlyOnePrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " and st.onlyoneprint = 1 ";
+            }
+
+            if(filter.noPrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id, i.format " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " left join " + type + " stjoin ON st.id = stjoin.fk_parent" +
+                    " where i.id is not null " +
+                    " and (i.variant IS NULL OR i.variant = '') " +
+                    " AND stjoin.id IS NULL " +
+                    " GROUP BY  i.id" +
+                    " ) a ";
+            }
+
+            if(filter.onlyPartlyPrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " and st.onlypartly = 1 ";
+            }
+
+            if(filter.onlyCompletePrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " and st.onlypartly = 0 ";
+            }
+
+            if(filter.onlyMonochromePrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " and st.onlymonochrome = 1 ";
+            }
+
+            if(filter.onlyColouredPrint) {
+                intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                    "select i.id as id " +
+                    " from publisher p " +
+                    " left join series s on p.id = s.fk_publisher " +
+                    " left join issue i on s.id = i.fk_series " +
+                    " left join " + type + " st on i.id = st.fk_issue " +
+                    " where i.id is not null " +
+                    " and st.onlymonochrome = 0 ";
+            }
+
+            if(filter.cover) {
+                if(filter.onlyFullsize) {
+                    intersectContains += (intersectContains !== "" ? " UNION " : "") +
+                        "select i.id as id " +
+                        " from publisher p " +
+                        " left join series s on p.id = s.fk_publisher " +
+                        " left join issue i on s.id = i.fk_series " +
+                        " left join " + type + " st on i.id = st.fk_issue " +
+                        " where i.id is not null " +
+                        " and st.onlyfullsize = 1 ";
+                }
+            }
+        }
     }
 
     if(intersectContains !== "")
-        intersect += " and i.id " + (filter.reprint ? "not in" : "in" ) + " (" + intersectContains + ")";
+        intersect += " and i.id in (" + intersectContains + ")";
 
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
     if(!print)

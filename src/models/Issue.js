@@ -2,24 +2,30 @@ import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
 import {asyncForEach, deleteFile, naturalCompare, storeFile} from "../util/util";
-import {crawlIssue, crawlSeries} from "../core/crawler";
+import {crawl} from "../core/crawler";
 import {coverDir} from "../config/config";
 import {create as createStory, equals as storyEquals, getStories} from "./Story";
 import {create as createCover, equals as coverEquals, getCovers} from "./Cover";
 import {create as createFeature, equals as featureEquals, getFeatures} from "./Feature";
 import {create as createArc} from "./Arc";
 import {createFilterQuery} from "../graphql/Filter";
+import {update} from "../util/FilterUpdater";
 
 class Issue extends Model {
     static tableName = 'Issue';
 
     static associate(models) {
         Issue.hasMany(models.Story, {
-            as: {singular: 'Issue', plural: 'Stories'},
+            as: 'stories',
             foreignKey: 'fk_issue',
             onDelete: 'cascade'
         });
-        Issue.hasMany(models.Cover, {foreignKey: 'fk_issue', onDelete: 'cascade'});
+
+        Issue.hasMany(models.Cover, {
+            as: 'covers',
+            foreignKey: 'fk_issue',
+            onDelete: 'cascade'
+        });
 
         Issue.belongsTo(models.Series, {foreignKey: 'fk_series'});
         Issue.belongsToMany(models.Individual, {through: models.Issue_Individual, foreignKey: 'fk_issue'});
@@ -140,6 +146,11 @@ export default (sequelize) => {
             type: Sequelize.BOOLEAN,
             allowNull: false,
             defaultValue: false
+        },
+        edited: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
         }
     }, {
         indexes: [{
@@ -211,6 +222,7 @@ export const typeDef = gql`
     variants: [Issue],
     variant: String,
     verified: Boolean,
+    edited: Boolean,
     addinfo: String,
     individuals: [Individual],
     createdAt: DateTime,
@@ -356,9 +368,13 @@ export const resolvers = {
                     transaction
                 });
 
-                let del = await issue.delete(transaction);
+                let oldStories = await issue.getStories();
+                let oldCovers = await issue.getCovers();
 
+                let del = await issue.delete(transaction);
                 await transaction.commit();
+
+                await update(oldStories, oldCovers);
 
                 return del !== null;
             } catch (e) {
@@ -376,6 +392,8 @@ export const resolvers = {
                 let res = await create(item, transaction);
 
                 await transaction.commit();
+
+                update(await res.getStories(), await res.getCovers());
                 return res;
             } catch (e) {
                 await transaction.rollback();
@@ -506,6 +524,7 @@ export const resolvers = {
                     await res.save({transaction: transaction});
                 }
 
+                let oldS = await res.getStories();
                 let oldStories = await getStories(res, transaction);
 
                 let deletedStories = oldStories.filter(o => {
@@ -602,6 +621,7 @@ export const resolvers = {
                     await asyncForEach(newFeatures, async feature => await createFeature(feature, res, transaction));
                 }
 
+                let oldC = await res.getCovers();
                 let oldCovers = await getCovers(res, transaction);
 
                 let deletedCovers = oldCovers.filter(o => {
@@ -669,6 +689,8 @@ export const resolvers = {
                 });
 
                 await transaction.commit();
+                await update(oldS, oldC);
+                await update(await res.getStories(), await res.getCovers());
                 return res;
             } catch (e) {
                 await transaction.rollback();
@@ -792,6 +814,7 @@ export const resolvers = {
         pages: (parent) => parent.pages,
         releasedate: (parent) => parent.releasedate,
         verified: (parent) => parent.verified,
+        edited: (parent) => parent.edited,
         addinfo: (parent) => parent.addinfo,
         arcs: async (parent) => {
             if(!(await (await parent.getSeries()).getPublisher()).original)
@@ -842,6 +865,9 @@ export async function create(item, transaction) {
                 transaction
             });
 
+            let pub = await series.getPublisher({transaction: transaction});
+            let us = pub.original;
+
             let releasedate = item.releasedate;
             if(parseInt(releasedate.toLocaleString().substring(0, 4)) < series.startyear)
                 releasedate.setFullYear(series.startyear);
@@ -857,14 +883,17 @@ export async function create(item, transaction) {
                 releasedate: releasedate,
                 price: !isNaN(item.price) && item.price !== '' ? item.price : '0',
                 currency: item.currency ? item.currency.trim() : '',
-                addinfo: item.addinfo
+                addinfo: item.addinfo,
+                edited: item.edited
             }, {transaction: transaction});
 
             let coverUrl = '';
-            if (item.cover)
+            if (item.cover && item.cover.url) {
+                coverUrl = item.cover.url;
+                await createCover(item.cover, res, coverUrl, transaction, us);
+            }
+            else if (item.cover)
                 coverUrl = await createCoverForIssue(item.cover, item.covers, res, transaction);
-
-            let us = item.series.publisher.us;
 
             if (us && item.individuals.length > 0) {
                 await asyncForEach(item.individuals, async individual => {
@@ -905,8 +934,11 @@ export async function create(item, transaction) {
             if (item.features && !us)
                 await asyncForEach(item.features, async feature => await createFeature(feature, res, transaction));
 
-            if (item.covers)
+            if (item.covers  && !us)
                 await asyncForEach(item.covers, async cover => await createCover(cover, res, coverUrl, transaction, us));
+
+            if (item.arcs)
+                await asyncForEach(item.arcs, async arc => await createArc(arc, res, transaction, us));
 
             resolve(res);
         } catch (e) {
@@ -932,6 +964,7 @@ export function findOrCrawlIssue(i, transaction) {
             let issue = await models.Issue.findOne({
                 where: {
                     number: i.number.trim(),
+                    variant: "",
                     '$Series.title$': i.series.title.trim(),
                     '$Series.volume$': i.series.volume,
                     '$Series->Publisher.original$': 1,
@@ -947,35 +980,34 @@ export function findOrCrawlIssue(i, transaction) {
                 transaction
             });
 
-            if(!series) {
-                let crawledSeries = await crawlSeries(i.series);
-
-                let [publisher] = await models.Publisher.findOrCreate({
-                    where: {
-                        name: crawledSeries.publisher.name
-                    },
-                    defaults: {
-                        name: crawledSeries.publisher.name,
-                        addinfo: '',
-                        original: 1,
-                    },
-                    transaction: transaction
-                });
-
-                series = await models.Series.create({
-                    title: crawledSeries.title,
-                    volume: crawledSeries.volume,
-                    startyear: !isNaN(crawledSeries.startyear) ? crawledSeries.startyear : 0,
-                    endyear: !isNaN(crawledSeries.endyear) ? crawledSeries.endyear : 0,
-                    addinfo: '',
-                    fk_publisher: publisher.id
-                }, {transaction: transaction});
-            }
-
             let crawledIssue;
 
             if(!issue) {
-                crawledIssue = await crawlIssue(i);
+                crawledIssue = await crawl(i);
+
+                if(!series) {
+                    let [publisher] = await models.Publisher.findOrCreate({
+                        where: {
+                            name: crawledIssue.series.publisher.name
+                        },
+                        defaults: {
+                            name: crawledIssue.series.publisher.name,
+                            addinfo: '',
+                            original: 1,
+                        },
+                        transaction: transaction
+                    });
+
+                    series = await models.Series.create({
+                        title: crawledIssue.series.title,
+                        volume: crawledIssue.series.volume,
+                        startyear: !isNaN(crawledIssue.series.startyear) ? crawledIssue.series.startyear : 0,
+                        endyear: !isNaN(crawledIssue.series.endyear) ? crawledIssue.series.endyear : 0,
+                        addinfo: '',
+                        fk_publisher: publisher.id
+                    }, {transaction: transaction});
+                }
+
                 issue = await models.Issue.create({
                     title: '',
                     number: i.number,
@@ -990,9 +1022,11 @@ export function findOrCrawlIssue(i, transaction) {
                 }, {transaction: transaction});
 
                 await asyncForEach(crawledIssue.individuals, async (individual) => {
-                    await issue.associateIndividual(individual.name.trim(), individual.type, transaction);
-                    await issue.save({transaction: transaction});
+                    await asyncForEach(individual.type, async i => {
+                        await issue.associateIndividual(individual.name.trim(), i, transaction);
+                    });
                 });
+                await issue.save({transaction: transaction});
 
                 await asyncForEach(crawledIssue.arcs, async (arc) => {
                     await createArc(arc, issue, transaction);
@@ -1030,7 +1064,9 @@ export function findOrCrawlIssue(i, transaction) {
                     }, {transaction: transaction});
 
                     await asyncForEach(crawledIssue.individuals, async (individual) => {
-                        await variant.associateIndividual(individual.name.trim(), individual.type, transaction);
+                        await asyncForEach(individual.type, async t => {
+                            await variant.associateIndividual(individual.name.trim(), t, transaction);
+                        });
                     });
                     await variant.save({transaction: transaction});
 
@@ -1054,7 +1090,9 @@ export function findOrCrawlIssue(i, transaction) {
                     }, {transaction: transaction});
 
                     await asyncForEach(crawledStory.individuals, async (individual) => {
-                        await newStory.associateIndividual(individual.name.trim(), individual.type, transaction);
+                        await asyncForEach(individual.type, async t => {
+                            await newStory.associateIndividual(individual.name.trim(), t, transaction);
+                        });
                     });
                     await newStory.setIssue(issue, {transaction: transaction});
                     await newStory.save({transaction: transaction});

@@ -1,5 +1,6 @@
 import models from '../models';
 import {asyncForEach} from '../util/util';
+import Sequelize from "sequelize";
 
 let CronJob = require('cron').CronJob;
 
@@ -55,43 +56,32 @@ export async function run() {
 
             let del = true;
             await asyncForEach(variants, async (variant) => {
-                let covers = await models.Cover.findAll({where: {fk_issue: variant.id}, transaction});
+                let stories = await models.Story.findAll({where: {fk_issue: variant.id}, transaction});
 
-                await asyncForEach(covers, async (cover) => {
+                await asyncForEach(stories, async (story) => {
                     if(del) {
-                        let c = await models.Cover.count({where: {fk_parent: cover.id}, transaction});
+                        let c = await models.Story.count({where: {
+                            fk_parent: story.id,
+                            fk_reprint: {[Sequelize.Op.ne]: null}
+                        }, transaction});
                         del = c === 0;
                     }
                 });
-
-                if(del) {
-                    let stories = await models.Story.findAll({where: {fk_issue: variant.id}, transaction});
-
-                    await asyncForEach(stories, async (story) => {
-                        if(del) {
-                            let c = await models.Story.count({where: {fk_parent: story.id}, transaction});
-                            del = c === 0;
-                        }
-                    });
-                }
             });
 
             if(del)
                 await asyncForEach(variants, async (variant) => {
-                    let covers = await models.Cover.findAll({where: {fk_issue: variant.id}, transaction});
-                    await asyncForEach(covers, async(cover) => {
-                        await cover.destroy({transaction});
-                        coverCount++;
-                    });
+                    let stories = await models.Story.findAll({where: {
+                        fk_issue: variant.id,
+                        fk_reprint: {[Sequelize.Op.like]: null}
+                    }, transaction});
 
-                    let stories = await models.Story.findAll({where: {fk_issue: variant.id}, transaction});
                     await asyncForEach(stories, async(story) => {
                         await story.destroy({transaction});
                         storyCount++;
                     });
                 });
         });
-        console.log("[" + (new Date()).toUTCString() + "] Deleted " + coverCount + " covers.");
         console.log("[" + (new Date()).toUTCString() + "] Deleted " + storyCount + " stories.");
 
         //Remove all US Issues without content
@@ -218,6 +208,20 @@ export async function run() {
             }
         });
         console.log("[" + (new Date()).toUTCString() + "] Deleted " + arcCount + " arcs.");
+
+        //Remove all appearances without content
+        let apps = await models.Appearance.findAll({transaction});
+        let appCount = 0;
+        await asyncForEach(apps, async (app) => {
+            let c = await models.Story_Appearance.count({where: {fk_appearance: app.id}, transaction});
+            let del = c === 0;
+
+            if(del) {
+                await app.destroy({transaction});
+                appCount++;
+            }
+        });
+        console.log("[" + (new Date()).toUTCString() + "] Deleted " + appCount + " appearances.");
 
         await transaction.commit();
         console.log("[" + (new Date()).toUTCString() + "] Cleanup done.");

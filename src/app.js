@@ -1,10 +1,9 @@
 import sequelize from './core/database'
 import server from "./core/server";
 import fs from "fs";
-import {coverDir, fixOnStartup, migrateOnStartup, wwwDir} from "./config/config";
+import {coverDir, migrateOnStartup, wwwDir} from "./config/config";
 import {cleanup, run} from './core/cleanup';
-import migrationDatabase from "./migration/core/database";
-import {fixUsComics, fixUsSeries, migrate} from "./migration/core/migration";
+import {migrate} from "./migration/core/migration";
 const shell = require('shelljs');
 
 async function start() {
@@ -56,35 +55,22 @@ async function start() {
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Coverdir is set up at " + wwwDir + "/" + coverDir);
 
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting cleanup process...");
+    if(!migrateOnStartup) {
+        console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting cleanup process...");
 
-    cleanup.start();
-
-    console.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
+        cleanup.start();
+        run();
+        console.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
+    }
 
     let {url} = await server.listen();
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Server is up and running at " + url);
 
-    if (fixOnStartup) {
-        await fixUsSeries();
-        await fixUsComics();
-    }
-
     if (migrateOnStartup) {
-        await migrationDatabase.authenticate();
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration Database is up and running");
-
-        await migrationDatabase.sync();
-        console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration Database is set up");
-
         console.log("[" + (new Date()).toUTCString() + "] 🚀 Starting migration...");
 
-        migrate()
-            .then(o => console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration done! See logfile for eventual errors."))
-            .catch((e) => {
-                console.log("[" + (new Date()).toUTCString() + "] 🚀 Migration failed! See logfile for errors.");
-            });
+        await migrate();
     }
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 All done, lets go!");

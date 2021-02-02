@@ -1,439 +1,592 @@
-const dateFormat = require('dateformat');
+import {notfound, notFoundLog, printError} from "../migration/core/migration";
+
+const request = require("request-promise");
 const cheerio = require('cheerio');
-const rp = require('request-promise');
 
-export async function crawlSeries(series) {
-    return new Promise(async (resolve, reject) => {
-        let url = generateMarvelDbSeriesUrl(series);
-        try {
-            const seriesOptions = {
-                uri: url,
-                transform: function (body) {
-                    return cheerio.load(body);
-                }
-            };
+export async function crawl(issueToCrawl) {
+    return new Promise(async resolve => {
+        let issue = JSON.parse(JSON.stringify(issueToCrawl));
+        issue.variants = [];
+        issue.individuals = [];
+        issue.stories = [];
+        issue.arcs = [];
+        issue.releasedate = new Date(0);
+        issue.edited = false;
+        issue.format = "Heft";
 
-            let $ = await rp(seriesOptions);
+        let options = {
+            uri: "https://marvel.fandom.com/index.php?action=render&title=" + generateSeriesUrl(issue.series),
+            transform: body => cheerio.load(body)
+        };
 
-            let messageBox = $('#messageBox').children()
-                .first().children()
-                .first().children()
-                .first().children()
-                .first();
+        let $;
 
-            let text = messageBox.text().substring();
-            text = text.substring(text.indexOf('('), text.lastIndexOf('.')).trim().replace('published by ', '');
-            text = text.substring(1, text.length - 1);
-            let splitted = text.split(')');
-            let startyear = 0;
-            let endyear = 0;
-            let publisher = 'Marvel Comics';
+        try{
+            $ = await request(options);
+        } catch (e) {
+            notfound.increment();
+            notfound.update(notfound.getTotal()+1, {name: "NF", filename: generateIssueUrl(issue)});
+            notfound.setTotal(notfound.getTotal()+1);
 
-            if (splitted.length > 0) {
-                let years = splitted[0].split('-');
+            printError("NF", issue, issue, "Issue not found", notFoundLog);
+            resolve(null);
+            return;
+        }
 
-                try {
-                    startyear = years[0] === '' || isNaN(years[0]) ? 0 : parseInt(years[0]);
-                } catch (e) {
-                    startyear = 0;
-                }
+        let publisher = $("span:contains('Publisher: ')");
+        if(publisher.length > 0)
+            issue.series.publisher = { name: $(publisher.get(0).nextSibling).text().trim(), original: 1 };
 
-                if (years.length === 2)
-                    try {
-                        endyear = years[1] === '' || isNaN(years[1]) ? 0 : parseInt((years[1]));
-                    } catch (e) {
-                        endyear = 0;
-                    }
+        let genre = $("span:contains('Genre: ')");
+        if(genre.length > 0)
+            issue.series.genre = $(genre.get(0).nextSibling).text().trim();
+
+        let publicationDate = $("span:contains('Publication Date: ')");
+        if(publicationDate.length > 0) {
+            let date = $(publicationDate.get(0).parent).text().replace(/[a-zA-Z :,]/g, "");
+
+            if(date.startsWith("—")) {
+                issue.series.startyear = Number.parseInt(date.substring(1));
+                issue.series.endyear = Number.parseInt(issue.series.startyear);
+            } else {
+                issue.series.startyear = Number.parseInt(date.substring(0, 4));
+
+                if(date.substring(5).length === 4)
+                    issue.series.endyear = Number.parseInt(date.substring(5));
+            }
+        }
+
+        options = {
+            uri: 'https://marvel.fandom.com/api.php?action=parse&format=json&prop=wikitext&page=' + generateIssueUrl(issue),
+            transform: function (body) {
+                return JSON.parse(body);
+            }
+        };
+
+        let infobox = await request(options);
+
+        if(infobox.error) {
+            notfound.increment();
+            notfound.update(notfound.getTotal()+1, {name: "NF", filename: generateIssueUrl(issue)});
+            notfound.setTotal(notfound.getTotal()+1);
+
+            printError("NF", issue, issue, "Issue not found", notFoundLog);
+            resolve(null);
+            return;
+        }
+
+        infobox = infobox.parse.wikitext['*'].split('\n');
+        let indexOfEqual = 0;
+
+        infobox.forEach((line, i) => {
+            line = line.trim();
+            if(indexOfEqual <= 0) indexOfEqual = line.indexOf("=");
+
+            //console.log(line);
+
+            if(line.startsWith("|") && (line.indexOf("=") > -1)) {
+                let type = line.substr(1, line.indexOf("=")-1).trim();
+                let content = line.substr(line.indexOf("=")+1).trim();
+
+                let count;
+                if(type.indexOf("_") > -1)
+                    count = type.substring(0, type.indexOf("_"));
+                else if(type.indexOf(" ") > -1)
+                    count = type.substring(0, type.indexOf(" "));
                 else
-                    endyear = startyear;
-            }
+                    count = type;
+                count = Number.parseInt(count.replace(/\D/g, ""));
 
-            if (splitted.length > 1 && splitted[1].indexOf("something that is not") === -1)
-                publisher = splitted[1].substring(2).trim();
+                if(type.startsWith("Image") && content.indexOf("Textless") === -1 && content.indexOf('from') === -1) {
+                    count = !isNaN(count) ? count : 1;
 
-            resolve({
-                title: series.title,
-                volume: series.volume,
-                startyear: startyear,
-                endyear: endyear,
-                addinfo: '',
-                publisher: {
-                    name: publisher,
-                    original: 1,
-                    addinfo: ''
+                    if(type.indexOf("Text") === -1) {
+                        issue.variants[count-1] = {
+                            url: content,
+                            individuals: []
+                        };
+
+                        if(count === 1)
+                            issue.variants[0].individuals = []
+                    } else {
+                        if(issue.variants[count-1] && content !== "") {
+                            while(content.indexOf("[[") !== -1)
+                                content = content.replace("[[", "");
+                            while(content.indexOf("]]") !== -1)
+                                content = content.replace("]]", "");
+                            content = content.substring(content.indexOf("|")+1).trim();
+
+                            while(content.startsWith("\""))
+                                content = content.replace("\"", "");
+                            while(content.endsWith("\""))
+                                content = content.replace("\"", "");
+                            while(content.startsWith("\'"))
+                                content = content.replace("\'", "");
+                            while(content.endsWith("\'"))
+                                content = content.replace("\'", "");
+                            while(content.startsWith("*"))
+                                content = content.replace("\*", "");
+
+                            content = content.replace("Variant", "").trim();
+
+                            issue.variants[count - 1].variant = content;
+                        }
+                    }
+                } else if(type.startsWith("Month")) {
+                    issue.releasedate.setMonth(content-1);
+                } else if(type.startsWith("Year")) {
+                    issue.releasedate.setFullYear(content);
+                } else if(type.startsWith("Editor")) {
+                    if(count > 0) {
+                        createStory(issue, count);
+                        if(!issue.stories[count-1].reprintOf)
+                            addIndividual(issue.stories[count-1].individuals, content, "EDITOR");
+                    } else {
+                        addIndividual(issue.individuals, content, "EDITOR");
+                    }
+                }  else if(type.startsWith("CoverArtist")) {
+                    createCover(issue, 1);
+                    addIndividual(issue.variants[0].individuals, content, "ARTIST");
+                } else if(type.startsWith("StoryTitle")) {
+                    createStory(issue, count);
+                    if(!issue.stories[count-1].reprintOf) {
+                            while(content.startsWith("\""))
+                                content = content.substring(1);
+
+                            while(content.endsWith("\""))
+                                content = content.substring(0, content.length-1);
+
+                        issue.stories[count-1].title = content;
+                    }
+                } else if (type.startsWith("Writer")) {
+                    createStory(issue, count);
+                    if(!issue.stories[count-1].reprintOf)
+                        addIndividual(issue.stories[count-1].individuals, content, "WRITER");
+                } else if (type.startsWith("Penciler")) {
+                    createStory(issue, count);
+                    addIndividual(issue.stories[count-1].individuals, content, "PENCILER");
+                } else if (type.startsWith("Inker")) {
+                    createStory(issue, count);
+                    addIndividual(issue.stories[count-1].individuals, content, "INKER");
+                } else if (type.startsWith("Letterer")) {
+                    createStory(issue, count);
+                    addIndividual(issue.stories[count-1].individuals, content, "LETTERER");
+                } else if (type.startsWith("Colourist")) {
+                    createStory(issue, count);
+                    addIndividual(issue.stories[count-1].individuals, content, "COLOURIST");
+                } else if (type.startsWith("AdaptedFrom")) {
+                    createStory(issue, count);
+                    addIndividual(issue.stories[count-1].individuals, content, "ORIGINAL");
+                } else if (type.startsWith("ReprintOf")) {
+                    createStory(issue, count);
+
+                    if(type.indexOf("Story") > 0) {
+                        issue.stories[count-1].reprintOf.story = content
+                    } else {
+                        let original = {
+                            series: {}
+                        };
+
+                        if(content.indexOf("Vol") === -1) {
+                            original.series.title = content.substring(0, content.indexOf("#")).trim();
+                            original.series.volume = 1;
+                            original.number = content.substring(content.lastIndexOf("#")+1).trim();
+                        } else if(content.indexOf("#") !== -1) {
+                            original.series.title = content.substring(0, content.indexOf("Vol")).trim();
+                            original.series.volume = Number.parseInt(content.substring(content.indexOf("Vol")+3, content.lastIndexOf(" ")));
+                            original.number = content.substring(content.lastIndexOf("#")+1).trim();
+                        } else {
+                            original.series.title = content.substring(0, content.indexOf("Vol")).trim();
+                            original.series.volume = Number.parseInt(content.substring(content.indexOf("Vol")+3, content.lastIndexOf(" ")));
+                            original.number = content.substring(content.lastIndexOf(" ")).trim();
+                        }
+
+                        createStory(issue, count);
+
+                        issue.stories[count-1].reprintOf = original;
+                        issue.stories[count-1].reprintOf.story = type.replace("ReprintOf", "");
+                    }
+                } else if (type.startsWith("Event")) {
+                    addArc(issue.arcs, {
+                        type: "EVENT",
+                        title: content.trim()
+                    });
+                } else if (type.startsWith("StoryArc")) {
+                    addArc(issue.arcs, {
+                        type: "STORYARC",
+                        title: content.trim()
+                    });
+                } else if (type.startsWith("StoryLine")) {
+                    addArc(issue.arcs, {
+                        type: "STORYLINE",
+                        title: content.trim()
+                    });
+                } else if (type.startsWith("OriginalPrice")) {
+                    issue.price = Number.parseFloat(content.substring(1));
+                } else if (type.startsWith("Appearing")) {
+                    //Sooooometimes (again...) there are no individuals defined, so we have to create the story during the
+                    //appearing block :(
+                    count -= 1;
+                    if(!issue.stories[count])
+                        createStory(issue, count+1);
+
+                    if(!issue.stories[count].title) {
+                        issue.stories[count].title = "";
+                    }
+
+                    if(issue.stories[count].reprintOf) {
+                        count++;
+                        return;
+                    }
+
+                    issue.stories[count].appearances = [];
+
+                    let  currentAppIdx = i+1;
+                    let currentLine = infobox[currentAppIdx++].trim();
+                    let currentType = "";
+                    while(!currentLine.startsWith('|') && currentLine.indexOf("=") === -1) {
+                        let firstApp = currentLine.indexOf("1st") > -1;
+
+                        if(currentLine.startsWith('\'\'\'')) {
+                            currentLine = currentLine.replace(/'''/g, "");
+                            currentLine = currentLine.replace(/:/g, "");
+                            currentLine = currentLine.trim();
+
+                            if(currentLine.indexOf(" ") > -1)
+                                currentType = currentLine.substring(0, currentLine.indexOf(" "));
+                            else
+                                currentType = currentLine.substring(0, currentLine.length-1);
+
+                            currentType = currentType.trim().toUpperCase();
+                        } else if (currentLine.startsWith("*")) {
+                            let apps = currentLine.match(/(?<=\[.)(.*?)(?=\])/g);
+
+                            if(!apps) {
+                                currentLine = currentLine.replace(/\*/g, "");
+                                currentLine = currentLine.trim();
+                                if(currentLine.indexOf("<br") !== -1 || currentLine.indexOf("-->") !== -1)
+                                    continue;
+                                apps = [];
+                                apps.push(currentLine);
+                            }
+                            else {
+                                apps.forEach((app, i) => {
+                                    if(app.indexOf("|") > -1) {
+                                        app = app.substr(0, app.indexOf("|"));
+
+                                        if(app.indexOf("Character Index") > -1) {
+                                            app = app.substr(app.indexOf("#") + 1);
+                                        }
+
+                                        if(app.indexOf("-->") === -1)
+                                            apps[i] = app;
+                                    }
+                                });
+                            }
+
+                            apps.forEach(app => {
+                                if(app.indexOf("{") > -1)
+                                    app = app.substr(0, app.indexOf("{"));
+
+                                if(app.indexOf("#") > -1)
+                                    app = app.substr(app.indexOf("#") + 1);
+
+                                if(app.indexOf("<small>") > -1)
+                                    app = app.substr(0, app.indexOf("<"));
+
+                                if(app.startsWith("\"") && app.endsWith("\""))
+                                    app = app.substr(1, app.length-1);
+
+                                if(app.startsWith("\'") && app.endsWith("\'"))
+                                    app = app.substr(1, app.length-1);
+
+                                getAppearances(issue.stories[count], currentType, app, firstApp);
+                            });
+                        }
+
+                        currentLine = infobox[currentAppIdx++];
+                        if(currentLine)
+                            currentLine = currentLine.trim();
+                        else
+                            break;
+                    }
+                } else {
+                    //console.log(type + " (#" + count + "): " + content)
                 }
-            });
-        } catch (e) {
-            reject(new Error("Serie " + series.title + " (Vol." + series.volume + ") nicht gefunden [" + url + "]"));
-        }
-    });
-}
+            }
+        });
 
-export async function crawlIssue(issue) {
-    return new Promise(async (resolve, reject) => {
-        let url = generateMarvelDbIssueUrl(issue);
-        try {
-            const issueOptions = {
-                uri: url,
+        //get covers
+        await asyncForEach(issue.variants, async (cover) => {
+            if(!cover)
+                return;
+
+            if(!cover.url || cover.url.trim() === "")
+                cover.url = generateIssueUrl(issue) + ".jpg";
+
+            options = {
+                uri: 'https://marvel.fandom.com/api.php?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' + encodeURI(cover.url),
                 transform: function (body) {
-                    return cheerio.load(body);
+                    return JSON.parse(body);
                 }
             };
 
-            let res = {stories: [], individuals: [], cover: {individuals: []}, variants: []};
-            let $ = await rp(issueOptions);
+            let url = await request(options);
+            if(Object.keys(url.query.pages)[0] === "-1")
+                return;
 
-            let infoBoxContent = $('.infobox').children();
-            infoBoxContent.each((i, c) => {
-                let html = $(c).html().trim();
+            cover.url = url.query.pages[Object.keys(url.query.pages)[0]].imageinfo[0].url;
+            cover.url = cover.url.substr(0, cover.url.indexOf("/revision/"))
+        });
 
-                if (html.indexOf('templateimage') !== -1) {
-                    let children = $(c).children();
-
-                    res.arcs = [];
-                    children.each((i, c) => {
-                        let text = $(c).text();
-
-                        if(text.trim() !== '' && i !== children.length-1) {
-                            text = text.replace("Part of the '", "");
-                            text = text.replace("Part of the \"", "");
-                            text = text.replace("', and '", "###");
-                            text = text.replace("', '", "###");
-                            text = text.replace("(Event)", "");
-                            text = text.replace("(event)", "");
-                            text = text.replace("(story arc)", "");
-                            text = text.replace("(Story arc)", "");
-                            text = text.replace("(story Arc)", "");
-                            text = text.replace("(Story Arc)", "");
-                            text = text.replace("(story line)", "");
-                            text = text.replace("(Story line)", "");
-                            text = text.replace("(story Line)", "");
-                            text = text.replace("(Story Line)", "");
-                            text = text.replace("(Story)", "");
-                            text = text.replace("(story)", "");
-                            text = text.trim();
-
-                            let titles;
-
-                            let i2 = text.lastIndexOf("\"");
-                            let i1 = text.lastIndexOf("'");
-
-                            let temp = "";
-                            if(text.lastIndexOf("'") !== -1 && i1 > i2)
-                                temp = text.substring(0, text.lastIndexOf("'"));
-                            else if(text.lastIndexOf("\"") !== -1)
-                                temp = text.substring(0, text.lastIndexOf("\""));
-
-                            temp = temp.replace('\', \'', '###');
-                            temp = temp.replace('\", \"', '###');
-                            temp = temp.replace('\' and \'', '###');
-                            temp = temp.replace('\" and \"', '###');
-                            titles = temp.split('###');
-
-                            let type;
-                            if(text.lastIndexOf("'") !== -1 && i1 > i2)
-                                type = text.substring(text.lastIndexOf("'") + 1);
-                            else if(text.lastIndexOf("\"") !== -1)
-                                type = text.substring(text.lastIndexOf("\"") + 1);
-
-                            type = type.replace(/ /g, "");
-                            type = type.toUpperCase();
-
-                            if (titles.length > 1)
-                                type = type.substr(0, type.length - 1);
-
-                            if(type.indexOf("STORYARC") !== -1)
-                                type = "STORYARC";
-                            else if(type.indexOf("STORYLINE") !== -1)
-                                type = "STORYLINE";
-                            else if(type.indexOf("EVENT") !== -1)
-                                type = "EVENT";
-
-                            titles.forEach(title => {
-                                if(title.trim() !== '')
-                                    res.arcs.push({title: title.trim(), type: type.trim()})
-                            });
-                        }
-                    });
-
-                    let coverChildren = children
-                        .last().children();
-
-                    let coverUrl = children
-                        .last().children()
-                        .first().children()
-                        .first().children().attr("href").trim();
-
-                    res.cover.url = coverUrl;
-
-                    let variantCoverChildren = coverChildren.last().children()
-                        .first().children()
-                        .last().children()
-                        .first().children();
-
-                    if (variantCoverChildren && variantCoverChildren.length !== 0) {
-                        variantCoverChildren.each((i, cover) => {
-                            let variantName = $(cover).text().substring($(cover).text().indexOf('>') + 1).trim();
-
-                            if (variantName !== '' && variantName.indexOf("Textless") === -1) {
-                                let exists = res.variants.find(v => v.variant == variantName);
-                                if(!exists) {
-                                    let variantUrl = $(cover).children().first().attr("href").trim();
-
-                                    if(variantUrl) {
-                                        variantUrl = variantUrl.trim();
-                                        res.variants.push({variant: variantName, cover: {url: variantUrl}});
-                                    }
-                                }
-                            }
-                        });
-                    }
-                } else if (html.indexOf('<div style="font-size:12px;text-align:center;line-height:2em;"><') === 0) {
-                    let dateChildren = $(c).children()
-                        .last().children();
-
-                    let releaseDate = '';
-                    if (dateChildren && dateChildren.length === 2) {
-                        releaseDate = dateChildren.eq(0).text().trim() + ', ' + dateChildren.eq(1).text().trim();
-                    } else {
-                        releaseDate = dateChildren.eq(3).text().trim();
-                    }
-
-                    res.releasedate = dateFormat(Date.parse(releaseDate), "yyyy-mm-dd");
-                } else if (html.indexOf('Editor-in-Chief') !== -1 || html.indexOf('Cover Artists') !== -1) {
-                    let editorElement;
-                    let artistElement;
-                    $(c).children().each((i, e) => {
-                        if ($(e).text().indexOf("Editor-in-Chief") !== -1)
-                            editorElement = e;
-                        else if ($(e).text().indexOf("Cover Artist") !== -1)
-                            artistElement = e;
-                    });
-
-                    if (editorElement) {
-                        let editorsInChief = $(editorElement).children().last().children();
-                        editorsInChief.each((i, e) => {
-
-                            let editorInChief = $(e).text().trim();
-
-                            if (editorInChief !== '') {
-                                let exists = res.individuals.find(v => v.name === editorInChief && v.type === 'EDITOR');
-                                if(!exists)
-                                    res.individuals.push({name: editorInChief, type: 'EDITOR'});
-                            }
-                        });
-                    }
-
-                    if (artistElement) {
-                        let coverArtists = $(artistElement).children().last().children();
-                        coverArtists.each((i, e) => {
-                            let coverArtist = $(e).text().trim();
-
-                            if (coverArtist !== '') {
-                                let exists = res.cover.individuals.find(v => v.name === coverArtist && v.type === 'ARTIST');
-                                if (!exists)
-                                    res.cover.individuals.push({name: coverArtist, type: 'ARTIST'});
-                            }
-                        });
-                    }
-                } else if ((html.indexOf('<table ') === 0 || html.indexOf('<tbody>') === 0) && html.indexOf('Issue Details') === -1) {
-                    let story = {};
-                    story.appearing = [];
-
-                    let storyChildren = $(c).children();
-
-                    if (storyChildren.first().html().indexOf('<tbody') === 0)
-                        storyChildren = storyChildren.first().children();
-
-                    storyChildren = storyChildren.first().children();
-
-                    if (i !== infoBoxContent.length - 1) {
-                        let storyName = storyChildren.first().children()
-                            .last().children()
-                            .first().children()
-                            .first().children().text().trim();
-
-                        if (storyName.indexOf('"') === 0)
-                            storyName = storyName.substring(1, storyName.length - 1);
-
-                        story.title = storyName;
-                        story.individuals = [];
-
-                        let storyDetailsChildren = storyChildren.last().children()
-                            .first().children();
-
-                        storyDetailsChildren.each((i, c) => {
-                            let type = $(c).children().first().children().last().text().trim();
-                            let individuals = $(c).children().last().children();
-                            individuals.each((i, e) => {
-                                let individual = $(e).text().trim();
-
-                                if (individual !== '') {
-                                    let exists = story.individuals.find(v => (v.name === individual && v.type === type.toUpperCase()));
-
-                                    if(!exists) {
-                                        story.individuals.push({
-                                            name: individual,
-                                            type: type.toUpperCase()
-                                        });
-                                    }
-                                }
-                            });
-                        });
-
-                        story.number = res.stories.length + 1;
-                        res.stories.push(story);
-                    }
-                }
-            });
-
-            let headers = $('[id^=AppearingHeader]');
-            let currentType = '';
-            let currentSubType = '';
-
-            headers.each((i, e) => {
-                let first = $(e);
-                let story = first.text().trim();
-
-                if(story.indexOf("Appearing in") === -1)
-                    return;
-
-                story = story.replace("Appearing in ", "");
-                if(story.indexOf("\"") === 0 || story.indexOf("'") === 0)
-                    story = story.substring(1, story.length-1);
-
-                let currentStory;
-                res.stories.forEach(s => {
-                    if(s.title === story)
-                        currentStory = s;
-                });
-
-                while(true) {
-                    let next = first.next();
-
-                    if(next) {
-                        if (next.attr('id') && next.attr('id').indexOf('StoryTitle') !== -1)
-                            break;
-
-                        if(next.is('p')) {
-                            let text = $(next).text().trim();
-                            text = text.replace(/ /g, "");
-                            text = text.substring(0, text.length - 2);
-                            if(text.indexOf("Races") !== -1)
-                                text = "Races";
-
-                            currentType = text.toUpperCase();
-
-                            if(currentType.indexOf('FEATUREDCHARACTER') !== -1 ||
-                                currentType.indexOf('WEDDINGGUEST') !== -1 ||
-                                currentType.indexOf('VISION') !== -1 ||
-                                currentType.indexOf('FEATUREDCHARACTER') !== -1) {
-                                currentSubType = "FEATURED";
-                                currentType = "CHARACTER";
-                            } else if(currentType.indexOf('ANTAGONIST') !== -1 ||
-                                currentType.indexOf('ANAGONIST') !== -1 ||
-                                currentType.indexOf('ANGATONIST') !== -1 ||
-                                currentType.indexOf('ANTAGONGIST') !== -1 ||
-                                currentType.indexOf('ANTAGONIS') !== -1 ||
-                                currentType.indexOf('ANTAGONIT') !== -1 ||
-                                currentType.indexOf('ANTAGONSIST') !== -1 ||
-                                currentType.indexOf('ANTAGONSIT') !== -1 ||
-                                currentType.indexOf('MAINCHARACTER') !== -1 ||
-                                currentType.indexOf('ANTAOGNIST') !== -1 ||
-                                currentType.indexOf('ANTAONIST') !== -1 ||
-                                currentType.indexOf('VILLAI') !== -1 ||
-                                currentType.indexOf('VILLAIN') !== -1 ||
-                                currentType.indexOf('VILLIA') !== -1 ||
-                                currentType.indexOf('VILLIAN') !== -1 ||
-                                currentType.indexOf('ANTAGONOIST') !== -1) {
-                                currentSubType = "ANTAGONIST";
-                                currentType = "CHARACTER";
-                            } else if(currentType.indexOf('SUPPORITINGCHARACTER') !== -1 ||
-                                currentType.indexOf('SUPPORTIN') !== -1) {
-                                currentSubType = "SUPPORTING";
-                                currentType = "CHARACTER";
-                            } else if(currentType.indexOf('GROUP') !== -1 ||
-                                currentType.indexOf('TEAM') !== -1) {
-                                currentType = "GROUP";
-                            } else if(currentType.indexOf('VEHICLE') !== -1 ||
-                                currentType.indexOf('VECHILE') !== -1 ||
-                                currentType.indexOf('VEHICE') !== -1 ||
-                                currentType.indexOf('VEHICL') !== -1 ||
-                                currentType.indexOf('VEHICLE') !== -1) {
-                                currentType = 'VEHICLE';
-                            } else if(currentType.indexOf('RACE') !== -1) {
-                                currentType = 'RACE';
-                            } else if(currentType.indexOf('LOCATI') !== -1) {
-                                currentType = 'LOCATION';
-                            } else if (currentType.indexOf('ANIMAL') !== -1) {
-                                currentType = 'ANIMAL';
-                            } else if (currentType.indexOf('ITE') !== -1) {
-                                currentType = 'ITEM';
-                            } else /*FLASHBACK AND OTHER*/ {
-                                currentSubType = "OTHER";
-                                currentType = "CHARACTER";
-                            }
-                        } else {
-                            if(next.is('ul'))
-                                crawlApps(next, $, currentType, currentSubType, currentStory)
-                        }
-
-                        first = next;
-                    } else {
-                        break;
-                    }
-                }
-            });
-
-            resolve(res);
-        } catch (e) {
-            reject(new Error("Ausgabe " + issue.series.title + " (Vol." + issue.series.volume + ") " + issue.number + " nicht gefunden [" + url + "]"));
+        issue.variants = issue.variants.filter(value => Object.keys(value).length !== 0);
+        if(issue.variants.length > 0) {
+            issue.cover = issue.variants[0];
+            issue.cover.number = 0;
+            issue.variants = issue.variants.splice(1);
+            issue.variants.forEach((v, i) => v.number = i+1);
         }
-    });
-}
 
-function crawlApps(e, $, currentType, currentSubType, currentStory) {
-    let l = $(e).children('li');
-
-    l.each((i, e) => {
-        let text = '';
-        if($(e).children('ul').length === 0) {
-            text += $(e).text();
-            text = text.replace("wikipedia:", "");
-            text = text.replace("w:c:dc:", "");
-            text = text.replace("(page does not exist)", "");
-            $(e).children('.image').each((i, e) => text = text.replace($(e).text()));
-            $(e).children('span').each((i, e) => text = text.replace($(e).text(), ""));
-            $(e).children('sup').each((i, e) => text = text.replace($(e).text(), ""));
-            text = text.replace('undefined', '');
-            text = text.replace('undefined', '');
-            text = text.trim();
-            if(text.startsWith("\""))
-                text = text.substring(1);
-
-            if(text.endsWith("\""))
-                text = text.substr(0, text.length-2);
-
-            if (text !== '' && text.indexOf("Appearance of") === -1 && text.indexOf("Index/") === -1) {
-                let exists = currentStory.appearing.find(v => v.name === text.trim() && v.type === currentType);
-                if(!exists)
-                    currentStory.appearing.push({name: text.trim(), type: currentType, role: currentSubType});
+        issue.variants.forEach((v, i) => {
+            let title = v.variant;
+            if(issue.variants.map(o => o.variant).includes(title)) {
+                title = title + " " + issue.variants.map(o => o.variant).filter(o => o === title).length+1;
             }
-        } else {
-            let ul = $(e).children('ul');
-            ul.each((i, e) => {
-                crawlApps(e, $, currentType, currentSubType, currentStory);
-            });
-        }
+
+            issue.variants[i]= {
+               number: issue.number,
+               variant: v.variant ? v.variant : getFromAlphabet(i),
+               format: "Heft",
+               series: issue.series,
+               cover: {
+                   number: 0,
+                   url: v.url
+               },
+                releasedate: issue.releasedate,
+                variants: [],
+                individuals: [],
+                stories: [],
+            arcs: [],
+            edited: false
+           }
+        });
+
+        issue.variants.forEach((v, i) => {
+            let duplicateCount = 0;
+
+            for(let j = i+1; j < issue.variants.length; j++) {
+                if(issue.variants[j].variant === v.variant) {
+                    issue.variants[j].variant += " " + getFromAlphabet(duplicateCount + 1);
+                    duplicateCount++;
+                }
+            }
+
+            if(duplicateCount > 0)
+                v.variant  += " " + getFromAlphabet(0);
+        });
+
+
+        let stories = [];
+        let storyIdx = 1;
+
+        //We do have some issues, that are missing stories in between, so we have to create dummies
+        issue.stories.forEach((story, idx) => {
+           while(story.number > storyIdx) {
+               issue.stories.push({
+                   number: storyIdx++,
+                   individuals: [],
+                   appearances: []
+               });
+           }
+
+           stories.push(story);
+           storyIdx++;
+        });
+
+        issue.stories = stories;
+
+        await asyncForEach(issue.stories, async (story, idx) => {
+            story.number = idx + 1;
+
+            story.appearances = story.appearances.filter((thing, index, self) =>
+                index === self.findIndex((t) => (
+                    t.name === thing.name
+                ))
+            );
+
+            if(story.reprintOf)
+                story.reprintOf = await crawl(story.reprintOf);
+        });
+
+        if (!issue.series.publisher)
+            issue.series.publisher = {
+                name: "Marvel Comics"
+            };
+
+        resolve(issue);
     });
 }
 
-function generateMarvelDbSeriesUrl(series) {
-    let url = "https://marvel.fandom.com/wiki/" + encodeURIComponent(series.title) + "_Vol_" + series.volume;
-    return url.replace(new RegExp(" ", 'g'), "_");
+function getAppearances(story, currentType, name, firstApp) {
+    let role = "";
+
+    if(currentType.indexOf('FEATUREDCHARACTER') !== -1 ||
+        currentType.indexOf('WEDDINGGUEST') !== -1 ||
+        currentType.indexOf('FEATURED') !== -1 ||
+        currentType.indexOf('VISION') !== -1 ||
+        currentType.indexOf('FEATUREDCHARACTER') !== -1) {
+        role = "FEATURED";
+        currentType = "CHARACTER";
+    } else if(currentType.indexOf('ANTAGONIST') !== -1 ||
+        currentType.indexOf('ANAGONIST') !== -1 ||
+        currentType.indexOf('ANGATONIST') !== -1 ||
+        currentType.indexOf('ANTAGONGIST') !== -1 ||
+        currentType.indexOf('ANTAGONIS') !== -1 ||
+        currentType.indexOf('ANTAGONIT') !== -1 ||
+        currentType.indexOf('ANTAGONSIST') !== -1 ||
+        currentType.indexOf('ANTAGONSIT') !== -1 ||
+        currentType.indexOf('MAINCHARACTER') !== -1 ||
+        currentType.indexOf('ANTAOGNIST') !== -1 ||
+        currentType.indexOf('ANTAONIST') !== -1 ||
+        currentType.indexOf('VILLAI') !== -1 ||
+        currentType.indexOf('VILLAIN') !== -1 ||
+        currentType.indexOf('VILLIA') !== -1 ||
+        currentType.indexOf('VILLIAN') !== -1 ||
+        currentType.indexOf('ANTAGONOIST') !== -1) {
+        role = "ANTAGONIST";
+        currentType = "CHARACTER";
+    } else if(currentType.indexOf('SUPPORITINGCHARACTER') !== -1 ||
+        currentType.indexOf('SUPPORTIN') !== -1) {
+        role = "SUPPORTING";
+        currentType = "CHARACTER";
+    } else if(currentType.indexOf('GROUP') !== -1 ||
+        currentType.indexOf('TEAM') !== -1) {
+        currentType = "GROUP";
+    } else if(currentType.indexOf('VEHICLE') !== -1 ||
+        currentType.indexOf('VECHILE') !== -1 ||
+        currentType.indexOf('VEHICE') !== -1 ||
+        currentType.indexOf('VEHICL') !== -1 ||
+        currentType.indexOf('VEHICLE') !== -1) {
+        currentType = 'VEHICLE';
+    } else if(currentType.indexOf('RACE') !== -1) {
+        currentType = 'RACE';
+    } else if(currentType.indexOf('LOCATI') !== -1) {
+        currentType = 'LOCATION';
+    } else if (currentType.indexOf('ANIMAL') !== -1) {
+        currentType = 'ANIMAL';
+    } else if (currentType.indexOf('ITE') !== -1) {
+        currentType = 'ITEM';
+    } else /*FLASHBACK AND OTHER*/ {
+        role = "OTHER";
+        currentType = "CHARACTER";
+    }
+
+    let app = {
+        type: currentType,
+        role: role,
+        name: name.trim()
+    };
+
+    if(firstApp)
+        app.firstApp = firstApp;
+
+    if(app.name && app.name.length > 0)
+        addAppearance(story.appearances, app);
 }
 
-function generateMarvelDbIssueUrl(issue) {
-    let url = "https://marvel.fandom.com/wiki/" + encodeURIComponent(issue.series.title) + "_Vol_" + issue.series.volume + "_" + issue.number;
-    return url.replace(new RegExp(" ", 'g'), "_");
+export function generateIssueUrl(issue) {
+    return generateSeriesUrl(issue.series) + encodeURIComponent("_" + issue.number.trim());
+}
+
+function generateSeriesUrl(series) {
+    return encodeURIComponent(series.title.trim().replace(/\s/g, "_") + "_Vol_" + series.volume);
+}
+
+export function generateIssueName(issue) {
+    return generateSeriesName(issue.series) + " " + issue.number.trim();
+}
+
+function generateSeriesName(series) {
+    return series.title.trim() + " Vol " + series.volume;
+}
+
+function removeBraces(string) {
+    if(string.endsWith(")"))
+        return removeBraces(string.substring(0, string.lastIndexOf("(")).trim());
+
+    return string;
+}
+
+async function asyncForEach(array, callback) {
+    for (let index = 0; index < array.length; index++) {
+        await callback(array[index], index, array);
+    }
+}
+
+function createStory(issue, count) {
+    if(!issue.stories[count-1]) {
+        issue.stories[count-1] = {
+            individuals: [],
+            appearances: [],
+            number: count,
+        };
+    }
+}
+
+function createCover(issue, count) {
+    if(!issue.variants[count-1]) {
+        issue.variants[count-1] = {
+            individuals: []
+        };
+    }
+}
+
+function addArc(arcs, arc) {
+    if(arc.title.trim() === "")
+        return;
+
+    let contains = arcs.find(i => i.title.toLowerCase() === arc.title.toLowerCase() && i.type === arc.type);
+
+    if(!contains)
+        arcs.push(arc)
+}
+
+function addAppearance(apps, app) {
+    if(app.name.trim() === "")
+        return;
+
+    let contains = apps.find(i => i.name.toLowerCase() === app.name.toLowerCase() && i.type === app.type);
+
+    if(!contains)
+        apps.push(app)
+}
+
+function addIndividual(individuals, name, type) {
+    if(name.trim() === "")
+        return;
+
+    let contains = individuals.find(i => i.name.toLowerCase() === name.toLowerCase());
+
+    if(contains) {
+        if(!contains.type.includes(type))
+            contains.type.push(type);
+    } else {
+        individuals.push({
+            name: name,
+            type: [type]
+        })
+    }
+}
+
+const alphabet = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
+
+function getFromAlphabet(idx) {
+    let a = "";
+
+    if(idx > 25) {
+        idx -= 25;
+        return alphabet[idx % idx] + getFromAlphabet(idx) + a;
+    }
+
+    return alphabet[idx];
 }

@@ -1,15 +1,27 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import {findOrCrawlIssue} from "./Issue";
+import {create as createIssue, findOrCrawlIssue} from "./Issue";
 import {asyncForEach, romanize} from "../util/util";
+import {create as createPublisher} from "./Publisher";
+import {create as createSeries} from "./Series";
 
 class Story extends Model {
     static tableName = 'Story';
 
     static associate(models) {
-        Story.hasMany(models.Story, {as: {singular: 'Children', plural: 'Parent'}, foreignKey: 'fk_parent'});
+        Story.hasMany(models.Story, {
+            as: 'children',
+            foreignKey: 'fk_parent'
+        });
 
+        Story.hasMany(models.Story, {
+            as: 'reprints',
+            foreignKey: 'fk_reprint'
+        });
+
+        Story.belongsTo(models.Story, { as: 'parent', foreignKey: 'fk_parent' });
+        Story.belongsTo(models.Story, { as: 'original', foreignKey: 'fk_reprint' });
         Story.belongsTo(models.Issue, {foreignKey: 'fk_issue'});
         Story.belongsToMany(models.Individual, {through: models.Story_Individual, foreignKey: 'fk_story', unique: false});
         Story.belongsToMany(models.Appearance, {through: models.Story_Appearance, foreignKey: 'fk_story'});
@@ -32,7 +44,7 @@ class Story extends Model {
         });
     }
 
-    async associateAppearance(name, type, role, transaction) {
+    async associateAppearance(name, type, role, firstapp, transaction) {
         return new Promise(async (resolve, reject) => {
             try {
                 models.Appearance.findOrCreate({
@@ -42,7 +54,7 @@ class Story extends Model {
                     },
                     transaction: transaction
                 }).then(async ([appearance, created]) => {
-                    resolve(await models.Story_Appearance.create({fk_story: this.id, fk_appearance: appearance.id, role: role ? role : ""}, {transaction: transaction}));
+                    resolve(await models.Story_Appearance.create({fk_story: this.id, fk_appearance: appearance.id, role: role ? role : "", firstapp: firstapp}, {transaction: transaction}));
                 }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
@@ -68,10 +80,57 @@ export default (sequelize) => {
             type: Sequelize.INTEGER,
             allowNull: false,
         },
+        pages: {
+            type: Sequelize.STRING(255),
+        },
+        coloured: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 1
+        },
         addinfo: {
             type: Sequelize.STRING(255),
             allowNull: false,
             defaultValue: ''
+        },
+        onlyapp: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        firstapp: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        firstpartly: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        firstcomplete: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        firstmonochrome: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        firstcoloured: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        onlytb: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        onlyoneprint: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        onlypartly: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
+        },
+        onlymonochrome: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: 0
         }
     }, {
         indexes: [{
@@ -95,6 +154,8 @@ export const typeDef = gql`
     appearances: [AppearanceInput],
     title: String,
     addinfo: String,
+    pages: [Int],
+    coloured: Boolean,
     exclusive: Boolean
   }
   
@@ -103,14 +164,27 @@ export const typeDef = gql`
     title: String,
     number: Int,
     addinfo: String,
+    pages: [Int],
+    coloured: Boolean,
     issue: Issue,
     parent: Story,
     children: [Story],
+    original: Story,
+    reprints: [Story],
+    
+    exclusive: Boolean,
+    
     onlyapp: Boolean, 
     firstapp: Boolean,
+    firstpartly: Boolean,
+    firstcomplete: Boolean,
+    firstmonochrome: Boolean,
+    firstcoloured: Boolean,
     onlytb: Boolean,
-    exclusive: Boolean,
     onlyoneprint: Boolean,
+    onlypartly: Boolean,
+    onlymonochrome: Boolean,
+    
     appearances: [Appearance],
     individuals: [Individual] 
   }
@@ -122,6 +196,8 @@ export const resolvers = {
         title: (parent) => parent.title,
         number: (parent) => parent.number,
         addinfo: (parent) => parent.addinfo,
+        pages: (parent) => parent.pages ? parent.pages.split('#').filter(x => x !== '').map(x => +x) : [],
+        coloured: (parent) => parent.coloured,
         issue: async (parent) => {
             let issue = await models.Issue.findById(parent.fk_issue);
             return await models.Issue.findOne({
@@ -148,97 +224,54 @@ export const resolvers = {
                 order: [[models.Issue, 'releasedate', 'ASC']]
             });
         },
-        onlyapp: async (parent) => {
-            if(parent.fk_parent === null)
-                return true;
+        original: async (parent) => await models.Story.findById(parent.fk_reprint),
+        reprints: async (parent) => {
+            if(parent.fk_reprint !== null)
+                return [];
 
-            let stories = await models.Story.findAll({
-                where: {fk_parent: parent.fk_parent},
-                include: [models.Issue],
+            return await models.Story.findAll({
+                where: {fk_reprint: parent.id},
+                include: [{model: models.Issue,
+                    attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
+                        [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
+                        [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
+                        'number', 'fk_series']}],
                 group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
+                order: [[models.Issue, 'releasedate', 'ASC']]
             });
-
-            return stories.length === 1;
+        },
+        onlyapp: async (parent) => {
+            return parent.onlyapp;
         },
         firstapp: async (parent) => {
-            if(parent.fk_parent === null)
-                return true;
-
-            let stories = await models.Story.findAll({
-                where: {fk_parent: parent.fk_parent},
-                include: [models.Issue],
-                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
-            });
-
-            let firstapp = false;
-            if(stories.length > 0 && stories[0]['Issue']) {
-                if(stories[0]['Issue'].id === parent.fk_issue)
-                    firstapp = true;
-                else {
-                    let issue = await models.Issue.findOne({
-                        where: {id: parent.fk_issue}
-                    });
-
-                    if(issue.number === stories[0]['Issue'].number && issue.fk_series === stories[0]['Issue'].fk_series)
-                        firstapp = true;
-                }
-            }
-
-            return firstapp;
+            return parent.firstapp;
         },
-        onlytb: async (parent) => {
-            let onlytb = false;
-            let storiesTb = await models.Story.findAll({
-                where: {
-                    fk_parent: parent.fk_parent ? parent.fk_parent : parent.id,
-                    '$Issue.format$': 'Taschenbuch',
-                },
-                include: [
-                    {
-                        model: models.Issue
-                    }],
-                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
-            });
-
-            if (storiesTb.length > 0) {
-                let isTbStory;
-                if(parent.fk_parent) {
-                    storiesTb.forEach(story => {
-                        if(story.id === parent.id)
-                            isTbStory = true;
-                    });
-                }
-
-                if(!isTbStory) {
-                    let stories = await models.Story.findAll({
-                        where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
-                        include: [models.Issue],
-                        group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                        order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
-                    });
-
-                    onlytb = stories.length === storiesTb.length + (parent.fk_parent ? 1 : 0);
-                }
-            }
-
-            return onlytb;
+        firstpartly: async (parent) => {
+            return parent.firstpartly;
         },
-        onlyoneprint: async (parent) => {
-            let onlyoneprint = false;
-
-            let stories = await models.Story.findAll({
-                where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
-                include: [models.Issue],
-                group: ['id']
-            });
-
-            return stories.length === 1;
+        firstcomplete: async (parent) => {
+            return parent.firstcomplete;
+        },
+        firstmonochrome: async (parent) => {
+            return parent.firstmonochrome;
+        },
+        firstcoloured: async (parent) => {
+            return parent.firstcoloured;
         },
         exclusive: async (parent) => {
             return parent.fk_parent === null;
+        },
+        onlytb: async (parent) => {
+            return parent.onlytb;
+        },
+        onlyoneprint: async (parent) => {
+            return parent.onlyoneprint;
+        },
+        onlymonochrome: async (parent) => {
+            return parent.onlymonochrome;
+        },
+        onlypartly: async (parent) => {
+            return parent.onlypartly;
         },
         individuals: async (parent) => {
             if(parent.fk_parent !== null)
@@ -274,6 +307,8 @@ export async function create(story, issue, transaction, us) {
                     number: !isNaN(story.number) ? story.number : 1,
                     title: story.title ? story.title.trim() : '',
                     addinfo: story.addinfo,
+                    pages: pagesArrayToString(story.pages),
+                    coloured: story.coloured,
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
@@ -288,14 +323,67 @@ export async function create(story, issue, transaction, us) {
                 if(story.appearances)
                     await asyncForEach(story.appearances, async appearance => {
                         if(appearance.name && appearance.name.trim() !== '')
-                            await resStory.associateAppearance(appearance.name.trim(), appearance.type, appearance.role, transaction);
+                            await resStory.associateAppearance(appearance.name.trim(), appearance.type, appearance.role, appearance.firstApp, transaction);
                     });
+
+                if(story.reprintOf) {
+                    let pub = await models.Publisher.findOne({
+                        where: {
+                            name: story.reprintOf.series.publisher.name
+                        }, transaction: transaction
+                    });
+
+                    if(!pub) {
+                        pub =await createPublisher(story.reprintOf.series.publisher, transaction);
+                    }
+
+                    let series = await models.Series.findOne({
+                        where: {
+                            title: story.reprintOf.series.title,
+                            volume: story.reprintOf.series.volume,
+                            fk_publisher: pub.id
+                        }, transaction: transaction
+                    });
+
+                    if(!series) {
+                        series = await createSeries(story.reprintOf.series, transaction);
+                    }
+
+                    let o = await models.Issue.findOne({
+                        where: {
+                            '$Series->Publisher.original$': us,
+                            '$Series.title$': story.reprintOf.series.title,
+                            '$Series.volume$': story.reprintOf.series.volume,
+                            'number': story.reprintOf.number
+                        },
+                        group: ['fk_series', 'number'],
+                        include: [
+                            {
+                                model: models.Series,
+                                include: [
+                                    models.Publisher
+                                ]
+                            }
+                        ], transaction: transaction
+                    });
+
+                    if(!o) {
+                        o = await createIssue(story.reprintOf, transaction);
+                    }
+
+                    let os = await o.getStories({transaction: transaction});
+
+                    if(os[Number.parseInt(story.reprintOf.story-1)])
+                        resStory.fk_reprint = os[Number.parseInt(story.reprintOf.story-1)].id;
+                   else
+                        resStory.fk_reprint = os[0].id;
+                }
 
                 await resStory.save({transaction: transaction});
             } else {
                 let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
 
-                let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
+                let oStories = await resIssue.getStories({transaction: transaction});
                 let oStory;
 
                 oStories.forEach(e => {
@@ -305,11 +393,16 @@ export async function create(story, issue, transaction, us) {
 
                 if (!oStory)
                     throw new Error("Geschichte " + story.parent.issue.series.title + " (Vol." + story.parent.issue.series.volume + ") " + story.parent.issue.number + " [" + romanize(story.parent.number) + "] nicht gefunden");
+                else if(oStory.fk_reprint) {
+                    oStory = await oStory.getOriginal({transaction: transaction});
+                }
 
                 let newStory = await models.Story.create({
                     title: story.title && story.title.trim() ? story.title.trim() : '',
                     number: !isNaN(story.number) ? story.number : 1,
                     addinfo: story.addinfo ? story.addinfo : '',
+                    pages: pagesArrayToString(story.pages),
+                    coloured: story.coloured,
                     fk_parent: oStory.id
                 }, {transaction: transaction});
 
@@ -331,6 +424,7 @@ export async function create(story, issue, transaction, us) {
                 await newStory.save({transaction: transaction});
             }
 
+            story.pages = pagesArrayToString(story.pages);
             resolve(story);
         } catch (e) {
             reject(e);
@@ -451,7 +545,13 @@ export function equals(a, b) {
     if(a.exclusive !== b.exclusive)
         return false;
 
+    if(a.coloured !== b.coloured)
+        return false;
+
     if(a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo)
+        return false;
+
+    if(JSON.stringify(a.pages) !== JSON.stringify(b.pages))
         return false;
 
     if(a.individuals && !b.individuals)
@@ -497,4 +597,15 @@ export function equals(a, b) {
     } else {
         return found
     }
+}
+
+function pagesArrayToString(pages) {
+    if(!pages || pages.length === 0)
+        return null;
+
+    let res = "";
+
+    pages.forEach(p => res += ("#" + p + "#"));
+
+    return res;
 }

@@ -1,35 +1,33 @@
 import Sequelize, {Model} from 'sequelize';
 
-class Story_Appearance extends Model {
-    static tableName = 'Story_Appearance';
+/*
+ARTIST
+*/
+class Cover_Individual extends Model {
+    static tableName = 'Cover_Individual';
 }
 
 export default (sequelize) => {
-    Story_Appearance.init({
-        fk_appearance: {
+    Cover_Individual.init({
+        fk_cover: {
             type: Sequelize.INTEGER,
             primaryKey: true,
             allowNull: false
         },
-        fk_story: {
+        fk_individual: {
             type: Sequelize.INTEGER,
             primaryKey: true,
             allowNull: false
         },
-        role: {
+        type: {
             type: Sequelize.STRING,
             primaryKey: true,
             allowNull: false
-        },
-        firstapp: {
-            type: Sequelize.BOOLEAN,
-            allowNull: false,
-            defaultValue: false
         }
     }, {
         sequelize,
-        tableName: Story_Appearance.tableName
+        tableName: Cover_Individual.tableName
     });
 
-    return Story_Appearance;
+    return Cover_Individual;
 };
