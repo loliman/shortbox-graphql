@@ -1,0 +1,4 @@
+enum FeatureIndividualTypes {
+  WRITER,
+  TRANSLATOR,
+}
