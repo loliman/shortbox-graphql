@@ -31,7 +31,7 @@
     "match-sorter": "^6.2.0",
     "mysql": "^2.18.1",
     "mysql2": "^2.2.5",
-    "objection": "^2.2.14",
+    "objection": "^2.2.16",
     "objection-unique": "^1.2.1",
     "request": "^2.88.2",
     "request-promise": "^4.2.6",
