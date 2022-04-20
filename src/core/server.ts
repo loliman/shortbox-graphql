@@ -1,4 +1,4 @@
-import {ApolloServer} from 'apollo-server';
+import {ApolloServer, AuthenticationError} from 'apollo-server';
 const ConstraintDirective = require('apollo-server-constraint-directive');
 
 import {
@@ -35,6 +35,8 @@ import {resolvers as PublisherResolvers} from '../graphql/PublisherGQL';
 import {resolvers as SeriesResolvers} from '../graphql/SeriesGQL';
 import {resolvers as StoryResolvers} from '../graphql/StoryGQL';
 import {resolvers as UserResolvers} from '../graphql/UserGQL';
+import {knex} from './database';
+import {User} from '../database/User';
 
 const server = new ApolloServer({
   typeDefs: [
@@ -69,29 +71,29 @@ const server = new ApolloServer({
   ],
   schemaDirectives: {constraint: ConstraintDirective},
   context: async ({req}) => {
-    //TODO
-    /*let loggedIn = false;
-        if (req.headers.authorization) {
-            let userid = req.headers.authorization.split(/:(.+)/)[0];
-            let sessionid = req.headers.authorization.split(/:(.+)/)[1];
+    let loggedIn = false;
+    if (req.headers.authorization) {
+      let userid = req.headers.authorization.split(/:(.+)/)[0];
+      let sessionid = req.headers.authorization.split(/:(.+)/)[1];
 
-            let user = await models.OldUser.count({where: {id: userid, sessionid: sessionid}});
-            if (user === 1)
-                loggedIn = true;
-            else
-                throw new AuthenticationError("Ungültige Session");
-        }
+      let user: User = await User.query().findOne({
+        id: userid,
+        sessionid: sessionid,
+      });
 
-        const dataloader = createContext(models.sequelize);
+      if (user === null) throw new AuthenticationError('Ungültige Session');
 
-        let isMutation = req.body.query.indexOf('mutation') === 0;
+      loggedIn = true;
+    }
 
-        if(isMutation) {
-            const transaction = await models.sequelize.transaction();
-            return {loggedIn, dataloader, transaction};
-        } else {
-            return {loggedIn, dataloader};
-        }*/
+    let isMutation = req.body.query.indexOf('mutation') === 0;
+
+    if (isMutation) {
+      const transaction = await knex.transaction();
+      return {loggedIn, transaction};
+    } else {
+      return {loggedIn};
+    }
   },
   uploads: {
     maxFileSize: 10000000, //10 MB

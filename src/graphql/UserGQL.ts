@@ -1,5 +1,7 @@
 import {User} from '../database/User';
-import {gql} from 'apollo-server';
+import {AuthenticationError, gql} from 'apollo-server';
+import {Context} from 'vm';
+import {knex} from '../core/database';
 
 export const typeDef = gql`
   extend type Mutation {
@@ -25,56 +27,64 @@ export const resolvers = {
     id: (parent: User): number => parent.id,
     sessionid: (parent: User): string => parent.sessionid,
   },
-  /*TODO
-    Mutation: {
-        login: async (_, {user}, context) => {
-            const {loggedIn, transaction} = context;
+  Mutation: {
+    login: async (_: any, parent: any, context: Context) => {
+      const {loggedIn, transaction} = context;
 
-            try {
-                if (loggedIn)
-                    throw new Error("Du bist bereits eingeloggt");
+      try {
+        if (loggedIn) throw new Error('Du bist bereits eingeloggt');
 
-                var sessionid = "";
-                var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?%.,;:-_&$(){}[]";
+        let user: User = await User.query(transaction).findOne({
+          name: parent.user.name,
+        });
 
-                for (var i = 0; i < 255; i++)
-                    sessionid += possible.charAt(Math.floor(Math.random() * possible.length));
+        if (user === null) throw new AuthenticationError('Unbekannter User');
 
-                let res = await models.OldUser.update(
-                    {sessionid: sessionid},
-                    {where: {name: user.name.trim(), password: user.password}},
-                    transaction
-                );
+        var sessionid = '';
+        var possible =
+          'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?%.,;:-_&$(){}[]';
 
-                if (res[0] === 0)
-                    throw new Error();
+        for (var i = 0; i < 255; i++)
+          sessionid += possible.charAt(
+            Math.floor(Math.random() * possible.length)
+          );
 
-                await transaction.commit();
-                return {id: res[0], sessionid: sessionid};
-            } catch (e) {
-                await transaction.rollback();
-                throw e;
-            }
-        },
-        logout: async (_, {user}, context) => {
-            const {loggedIn, transaction} = context;
+        let res: User = await user
+          .$query()
+          .patchAndFetch({sessionid: sessionid})
+          .where({
+            name: parent.user.name.trim(),
+            password: parent.user.password,
+          });
 
-            try {
-                if (!loggedIn)
-                    throw new Error("Du bist nicht eingeloggt");
+        if (res === null) throw new Error();
 
-                let res = await models.OldUser.update(
-                    {sessionid: null},
-                    {where: {id: user.id, sessionid: user.sessionid}},
-                    transaction
-                );
+        await transaction.commit();
+        return {id: res.id, sessionid: res.sessionid};
+      } catch (e) {
+        await transaction.rollback();
+        throw e;
+      }
+    },
+    logout: async (_: any, parent: any, context: Context) => {
+      const {loggedIn, transaction} = context;
 
-                await transaction.commit();
-                return res[0] !== 0;
-            } catch (e) {
-                await transaction.rollback();
-                throw e;
-            }
-        }
-    },*/
+      try {
+        if (!loggedIn) throw new Error('Du bist nicht eingeloggt');
+
+        let res: number = await User.query(transaction)
+          .patch({sessionid: undefined})
+          .where({
+            id: parent.user.id,
+            sessionid: parent.user.sessionid,
+          });
+
+        await transaction.commit();
+        return res !== 0;
+      } catch (e) {
+        await transaction.rollback();
+        throw e;
+      }
+    },
+  },
 };

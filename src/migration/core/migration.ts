@@ -10,16 +10,18 @@ import {knex} from '../../core/database';
 import {Transaction} from 'objection';
 import {Individual} from '../../database/Individual';
 import {Appearance} from '../../database/Appearance';
-import {Arc} from '../../database/Arc';
 import {Publisher} from '../../database/Publisher';
 import {Series} from '../../database/Series';
 import {Story} from '../../database/Story';
 import * as fs from 'fs';
 import {WriteStream} from 'fs';
+import {IssueService} from '../../service/IssueService';
 
 let log: WriteStream;
 let migrationLog: WriteStream;
 let crawlerLog: WriteStream;
+
+let issueService: IssueService = new IssueService();
 
 function initLogs() {
   log = fs.createWriteStream('logs/error.log', {flags: 'a'});
@@ -357,7 +359,15 @@ async function migrateIssue(
           }
 
           if (imported || issueCrawled?.stories.length == storiesUs.length) {
-            await handleIssue(issueCrawled, trx);
+            console.log(
+              '[ISSUE] %s Vol. %i #%s (%s)',
+              issue.series.title,
+              issue.series.volume,
+              issue.number,
+              issue.series.publisher ? issue.series.publisher.name : '???'
+            );
+
+            await issueService.handleIssue(issueCrawled, trx);
 
             exists = await Issue.query(trx)
               .leftJoinRelated('[series.publisher]')
@@ -384,7 +394,16 @@ async function migrateIssue(
     );
 
     prepareIssueBeforeInsertion(issue);
-    await handleIssue(issue, trx);
+
+    console.log(
+      '[ISSUE] %s Vol. %i #%s (%s)',
+      issue.series.title,
+      issue.series.volume,
+      issue.number,
+      issue.series.publisher ? issue.series.publisher.name : '???'
+    );
+
+    await issueService.handleIssue(issue, trx);
 
     await trx.commit();
   } catch (e) {
@@ -405,21 +424,25 @@ export async function migrate() {
     .withGraphFetched('stories.[parent.[issue.[stories, series.[publisher]]]]')
     .withGraphFetched('series.[publisher]');
 
-  await asyncForEach(
+  /*await asyncForEach(
     issues,
     async (issue: OldIssue, i: number, array: any[]) => {
       await migrateIssue(issue, i, array, false);
     }
-  );
+  );*/
 
   try {
     const path = './import.csv';
 
     if (fs.existsSync(path)) {
       let allFileContents = fs.readFileSync(path, 'utf-8');
-      let issuesFromFile: OldIssue[] = [];
+      let issuesFromFile: Issue[] = [];
 
       allFileContents.split(/\r?\n/).forEach(line => {
+        if (line.trim() == '') {
+          return;
+        }
+
         let issue = JSON.parse(line);
         issue.releasedate = new Date(issue.releasedate);
         issuesFromFile.push(issue);
@@ -427,8 +450,16 @@ export async function migrate() {
 
       await asyncForEach(
         issuesFromFile,
-        async (issue: OldIssue, i: number, array: any[]) => {
-          await migrateIssue(issue, i, array, true);
+        async (issue: Issue, i: number, array: any[]) => {
+          console.log(
+            '[ISSUE] %s Vol. %i #%s (%s)',
+            issue.series.title,
+            issue.series.volume,
+            issue.number,
+            issue.series.publisher ? issue.series.publisher.name : '???'
+          );
+
+          await issueService.createIssue(issue);
         }
       );
     }
@@ -448,234 +479,10 @@ function setStoriesInOldIssue(oldStory: any, usIssue: any) {
   return story;
 }
 
-const dbFnIndividuals = async (o: Individual, trx: Transaction) => {
-  let individual: Individual = await Individual.query(trx)
-    .where('name', o.name)
-    .first();
-  return individual ? individual.id : individual;
-};
-
-const dbFnAppearance = async (o: Appearance, trx: Transaction) => {
-  let app: Appearance = await Appearance.query(trx)
-    .where('name', o.name)
-    .where('type', o.type)
-    .first();
-  return app ? app.id : app;
-};
-
-const dbFnArcs = async (o: Arc, trx: Transaction) => {
-  let arc: Arc = await Arc.query(trx)
-    .where('title', o.title)
-    .where('type', o.type)
-    .first();
-  return arc ? arc.id : arc;
-};
-
-async function markIssue(issue: any, trx: Transaction) {
-  issue.series.id = undefined;
-  if (issue.series.publisher) {
-    issue.series.publisher.id = undefined;
-    if (issue.series.publisher.original != undefined) {
-      issue.series.publisher.us = issue.series.publisher.original;
-      issue.series.publisher.original = undefined;
-    }
-  }
-
-  let publisher: Publisher = await Publisher.query(trx)
-    .where('name', issue.series.publisher.name)
-    .where('us', issue.series.publisher.us)
-    .first();
-
-  if (publisher) {
-    issue.series.publisher = {};
-    issue.series.publisher['#dbRef'] = publisher.id;
-
-    let s: Series = await Series.query(trx)
-      .where('title', issue.series.title)
-      .where('volume', issue.series.volume)
-      .where('fk_publisher', publisher.id)
-      .first();
-
-    if (s) {
-      issue.series = {};
-      issue.series['#dbRef'] = s.id;
-
-      let i: Issue = await Issue.query(trx)
-        .where('number', issue.number)
-        .where('fk_series', s.id)
-        .where('variant', issue.variant ? issue.variant : '')
-        .first();
-
-      if (i) {
-        issue = {};
-        issue['#dbRef'] = i.id;
-      }
-    }
-  }
-
-  return issue;
-}
-
-async function markDuplicatesForIssue(issue: any, trx: Transaction) {
-  let individuals: Map<string, string> = new Map();
-  let apps: Map<string, string> = new Map();
-  let arcs: Map<string, string> = new Map();
-
-  issue = await markIssue(JSON.parse(JSON.stringify(issue)), trx);
-
-  if (issue['#dbRef']) {
-    return issue;
-  }
-
-  await markDuplicates(
-    individuals,
-    issue.individuals,
-    (o: Individual) => o.name,
-    dbFnIndividuals,
-    trx
-  );
-
-  await markDuplicates(
-    arcs,
-    issue.arcs,
-    (o: Arc) => o.title + ' ' + o.type,
-    dbFnArcs,
-    trx
-  );
-
-  if (issue.cover) {
-    await markDuplicates(
-      individuals,
-      issue.cover.individuals,
-      (o: Individual) => o.name,
-      dbFnIndividuals,
-      trx
-    );
-  }
-
-  await asyncForEach(issue.stories, async (story: any) => {
-    await markDuplicates(
-      individuals,
-      story.individuals,
-      (o: Individual) => o.name,
-      dbFnIndividuals,
-      trx
-    );
-
-    await markDuplicates(
-      apps,
-      story.appearances,
-      (o: Appearance) => o.name + ' ' + o.type,
-      dbFnAppearance,
-      trx
-    );
-  });
-
-  return issue;
-}
-
-async function markDuplicates(
-  ids: Map<string, string>,
-  array: any[],
-  keyFn: any,
-  dbFn: any,
-  trx: Transaction
-) {
-  await asyncForEach(array, async (o: any, i: number) => {
-    let idFromDb: number = await dbFn(o, trx);
-    if (idFromDb) {
-      let type = array[i].type;
-      let role = array[i].role;
-      array[i] = {};
-      array[i]['type'] = type;
-      array[i]['role'] = role;
-      array[i]['#dbRef'] = idFromDb;
-    } else {
-      let key = keyFn(o);
-
-      if (!ids.has(key)) {
-        let id = key.replaceAll(' ', '').toLowerCase();
-        ids.set(key, id);
-        o['#id'] = id;
-      } else {
-        let id = ids.get(key);
-        let type = array[i].type;
-        let role = array[i].role;
-        array[i] = {};
-        array[i]['type'] = type;
-        array[i]['role'] = role;
-        array[i]['#ref'] = id;
-      }
-    }
-  });
-}
-
 function generateIssueName(issue: any) {
   return generateSeriesName(issue.series) + ' ' + issue.number.trim();
 }
 
 function generateSeriesName(series: any) {
   return series.title.trim() + ' Vol ' + series.volume;
-}
-
-async function handleIssue(issue: any, trx: Transaction) {
-  console.log(
-    '\t\t[ISSUE] %s Vol. %i #%s (%s)',
-    issue.series.title,
-    issue.series.volume,
-    issue.number,
-    issue.series.publisher ? issue.series.publisher.name : '???'
-  );
-
-  if (issue.id !== undefined) {
-    issue.id = undefined;
-  }
-
-  await asyncForEach(issue.stories, async (s: any) => {
-    if (s.reprintOf) {
-      let query = Story.query(trx)
-        .leftJoinRelated('[issue.series.publisher]')
-        .where('story.number', s.reprintOf.number)
-        .where('issue.number', s.reprintOf.issue.number)
-        .where('issue.variant', '')
-        .where('issue:series:publisher.us', 1)
-        .where('issue:series.title', s.reprintOf.issue.series.title)
-        .where('issue:series.volume', s.reprintOf.issue.series.volume);
-
-      await handleIssue(s.reprintOf.issue, trx);
-
-      let originalStory = await query.first();
-
-      s.reprintOf = {};
-      s.reprintOf['#dbRef'] = originalStory.id;
-    }
-  });
-
-  let variants: Issue[] = issue.variants ? issue.variants : [];
-
-  issue.variants = undefined;
-  issue = await markDuplicatesForIssue(issue, trx);
-
-  if (issue['#dbRef']) return;
-
-  issue.releasedate = issue.releasedate.replace('T', ' ').replace('Z', '');
-
-  await Issue.query(trx).insertGraph(issue, {
-    allowRefs: true,
-    relate: true,
-  });
-
-  await asyncForEach(variants, async (v: Issue, n: number, a: any[]) => {
-    console.log('\t\t\t[VARIANT] [%i/%i] %s', n + 1, a.length, v.variant);
-
-    v.variants = undefined;
-    v = await markIssue(v, trx);
-
-    v.releasedate = v.releasedate.replace('T', ' ').replace('Z', '');
-
-    await Issue.query(trx).insertGraph(v, {
-      allowRefs: true,
-      relate: true,
-    });
-  });
 }

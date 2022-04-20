@@ -89,6 +89,7 @@ export const resolvers = {
     stories: (parent: Issue): Story[] => parent.stories,
     limitation: (parent: Issue): number | undefined => parent.limitation,
     cover: (parent: Issue): Cover => parent.cover,
+    covers: (parent: Issue): Cover[] => (parent.covers ? parent.covers : []),
     price: (parent: Issue): number | undefined => parent.price,
     currency: (parent: Issue): string | undefined => parent.currency,
     pages: (parent: Issue): number | undefined => parent.pages,

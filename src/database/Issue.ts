@@ -29,6 +29,7 @@ export class Issue extends Base {
   variants?: Issue[];
   individuals!: Individual[];
   stories!: Story[];
+  covers!: Cover[];
   features!: Feature[];
   arcs!: Arc[];
 
@@ -101,6 +102,14 @@ export class Issue extends Base {
       join: {
         from: 'issue.id',
         to: 'story.fk_issue',
+      },
+    },
+    covers: {
+      relation: Model.HasManyRelation,
+      modelClass: 'Cover',
+      join: {
+        from: 'issue.id',
+        to: 'cover.fk_issue',
       },
     },
     features: {

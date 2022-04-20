@@ -6,7 +6,7 @@ export class Config {
   static readonly DB_USER = 'root';
   static readonly DB_PASSWORD = '';
 
-  static readonly MIGRATE_ON_STARTUP = true;
+  static readonly MIGRATE_ON_STARTUP = false;
   static readonly MIGRATION_DB_NAME = 'shortbox_alt';
   static readonly MIGRATION_DB_USER = 'root';
   static readonly MIGRATION_DB_PASSWORD = '';
