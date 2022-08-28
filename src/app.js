@@ -2,9 +2,10 @@ import sequelize from './core/database'
 import server from "./core/server";
 import fs from "fs";
 import {coverDir, fixOnStartup, migrateOnStartup, wwwDir} from "./config/config";
-import {cleanup, run} from './core/cleanup';
+import {cleanup, run as runCleanup} from './core/cleanup';
 import migrationDatabase from "./migration/core/database";
-import {fixUsComics, fixUsSeries, migrate} from "./migration/core/migration";
+import {migrate} from "./migration/core/migration";
+
 const shell = require('shelljs');
 
 async function start() {
@@ -67,8 +68,9 @@ async function start() {
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Server is up and running at " + url);
 
     if (fixOnStartup) {
-        await fixUsSeries();
-        await fixUsComics();
+        //await fixUsSeries();
+        //await fixUsComics();
+        await runCleanup();
     }
 
     if (migrateOnStartup) {

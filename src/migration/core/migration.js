@@ -1,30 +1,53 @@
 import migration from "../models";
 import models from "../../models";
-import {asyncForEach, romanize} from "../../util/util";
+import {asyncForEach} from "../../util/util";
 import fs from 'fs';
 import {create} from "../../models/Issue";
-import {create as createArc} from "../../models/Arc";
 import {crawlIssue, crawlSeries} from "../../core/crawler";
 import {afterFirstMigration} from "../../config/config";
 
 var stream;
+var out;
 
 export async function fixUsSeries() {
     return new Promise(async (resolve, reject) => {
         try {
+            stream = fs.createWriteStream("fixing.log", {flags: 'a'});
+            out = fs.createWriteStream("out.log", {flags: 'a'});
+
             let series = await models.Series.findAll({
-                where: {startyear: 0}
+                where: {
+                    '$Publisher.original$': 1,
+                },
+                include: [
+                    models.Publisher
+                ]
             });
 
             await asyncForEach(series, async (s, i, a) => {
-                console.log("[" + (new Date()).toUTCString() + "] Fixing series " + (i+1) + " of " + a.length);
+                let issue = {series: s};
 
-                let crawledSeries = await crawlSeries(s);
+                try {
+                    out.write("[" + (new Date()).toUTCString() + "] Fixing series " + (i + 1) + " of " + a.length +
+                        " (" + issue.series.title + " (Vol. " + issue.series.volume + "))\n");
 
-                s.startyear = crawledSeries.startyear;
-                s.endyear = crawledSeries.endyear;
 
-                await s.save();
+                    await crawlSeries(issue);
+
+                    s.startyear = issue.series.startyear;
+                    s.endyear = issue.series.endyear;
+
+                    await s.save();
+                } catch (e) {
+                    if (issue.series && issue.series.publisher)
+                        stream.write("[" + (new Date()).toUTCString() + "] ERROR Fixing series "
+                            + issue.series.title + " (Vol. " + issue.series.volume
+                            + ") (" + issue.series.publisher.name + ")\n");
+                    else
+                        stream.write("[" + (new Date()).toUTCString() + "] ERROR Fixing series "
+                            + issue.series.title + " (Vol. " + issue.series.volume
+                            + ") (series not found)\n");
+                }
             });
 
             console.log("[" + (new Date()).toUTCString() + "] Done fixing series.");
@@ -33,6 +56,11 @@ export async function fixUsSeries() {
             console.log(e);
             //Don't reject, errors are okay
             resolve(false);
+        } finally {
+            if (stream)
+                stream.end();
+            if (out)
+                out.end();
         }
     });
 }
@@ -40,8 +68,14 @@ export async function fixUsSeries() {
 export async function fixUsComics() {
     return new Promise(async (resolve, reject) => {
         try {
+            stream = fs.createWriteStream("fixing.log", {flags: 'a'});
+            out = fs.createWriteStream("out.log", {flags: 'a'});
+
             let issues = await models.Issue.findAll({
                 where: {
+                    //number: '39',
+                    '$Series.title$': 'Spider-Gwen',
+                    //'$Series.volume$': 1,
                     '$Series->Publisher.original$': 1,
                     variant: ''
                 },
@@ -56,114 +90,132 @@ export async function fixUsComics() {
             });
 
             await asyncForEach(issues, async (i, idx, a) => {
+                let transaction = await models.sequelize.transaction();
+                let crawledIssue;
+
                 try {
-                    i.series = await models.Series.findOne({where: {id: i.fk_series}});
+                    i.series = await models.Series.findOne({where: {id: i.fk_series}, transaction});
 
-                    console.log("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx+1) + " of " + a.length + " " +
-                        "(" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")");
+                    out.write("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx + 1) + " of " + a.length + " " +
+                        "(" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")\n");
 
-                    let crawledIssue = await crawlIssue(i).catch(() => {/*ignore errors while crawling*/});
+                    crawledIssue = await crawlIssue(i.number, i.series.title, i.series.volume).catch(() => {/*ignore errors while crawling*/
+                    });
 
-                    await asyncForEach(crawledIssue.variants, async variant => {
-                        let res = await models.Issue.findAll({
+                    let res = await models.Issue.findOne({
+                        where: {
+                            number: crawledIssue.number.trim(),
+                            variant: '',
+                            '$Series.title$': crawledIssue.series.title.trim(),
+                            '$Series.volume$': crawledIssue.series.volume,
+                            '$Series->Publisher.name$': crawledIssue.series.publisher.name.trim()
+                        },
+                        include: [
+                            {
+                                model: models.Series,
+                                include: [
+                                    models.Publisher
+                                ]
+                            }
+                        ],
+                        transaction
+                    });
+
+                    await fixIssue(res, crawledIssue, transaction);
+
+                    let variants = await models.Issue.findAll({
+                        where: {
+                            number: crawledIssue.number.trim(),
+                            '$Series.title$': crawledIssue.series.title.trim(),
+                            '$Series.volume$': crawledIssue.series.volume,
+                            '$Series->Publisher.name$': crawledIssue.series.publisher.name.trim()
+                        },
+                        include: [
+                            {
+                                model: models.Series,
+                                include: [
+                                    models.Publisher
+                                ]
+                            }
+                        ],
+                        transaction
+                    });
+
+                    await asyncForEach(variants, async (variant) => {
+                        if (variant.variant !== '') {
+                            await variant.delete(transaction);
+                        }
+                    });
+
+                    await asyncForEach(crawledIssue.variants, async (variant) => {
+                        let res = await models.Issue.findOne({
                             where: {
-                                fk_series: i.fk_series,
-                                number: i.number,
+                                number: variant.number.trim(),
                                 variant: variant.variant,
-                            }
+                                '$Series.title$': variant.series.title.trim(),
+                                '$Series.volume$': variant.series.volume,
+                                '$Series->Publisher.name$': variant.series.publisher.name.trim()
+                            },
+                            include: [
+                                {
+                                    model: models.Series,
+                                    include: [
+                                        models.Publisher
+                                    ]
+                                }
+                            ],
+                            transaction
                         });
 
-                        if(!res) {
-                            console.log("[" + (new Date()).toUTCString() + "] " + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number +
-                                " is missing variant " + variant.variant);
+                        if (!res) {
+                            let releasedate = variant.releasedate;
+                            if (parseInt(releasedate.toLocaleString().substring(0, 4)) < variant.series.startyear)
+                                releasedate.setFullYear(variant.series.startyear);
 
-                            let newVariant = await models.Issue.create({title: '',
-                                number: i.number,
-                                format: 'Heft',
-                                variant: variant.variant,
-                                fk_series: i.fk_series,
-                                releasedate: i.releasedate,
-                                limitation: 0,
-                                pages: 0,
-                                price: 0,
-                                currency: i.currency ? i.currency : 'USD',
-                                addinfo: ''
-                            });
+                            res = await models.Issue.create({
+                                title: variant.title ? variant.title.trim() : '',
+                                fk_series: i.series.id,
+                                number: variant.number.trim(),
+                                format: variant.format ? variant.format.trim() : '',
+                                variant: variant.variant ? variant.variant.trim() : '',
+                                limitation: !isNaN(variant.limitation) ? variant.limitation : 0,
+                                pages: !isNaN(variant.pages) ? variant.pages : 0,
+                                releasedate: releasedate,
+                                price: !isNaN(variant.price) && variant.price !== '' ? variant.price : '0',
+                                currency: variant.currency ? variant.currency.trim() : '',
+                                addinfo: variant.addinfo
+                            }, {transaction: transaction});
 
-                            await asyncForEach(crawledIssue.editors, async (editor) => {
-                                await newVariant.associateIndividual(editor.name.trim(), 'EDITOR');
-                            });
-                            await newVariant.save();
+                            res = await res.save({transaction: transaction});
 
-                            let newCover = await models.Cover.create({
-                                url: crawledVariant.cover.url,
+                            let cover = await models.Cover.create({
                                 number: 0,
-                                addinfo: ''
-                            });
+                                url: variant.cover.url
+                            }, {transaction: transaction});
 
-                            await newCover.setIssue(newVariant);
-                            await newCover.save();
-                        }
-                    });
+                            cover = await cover.save({transaction: transaction});
 
-                    if(crawledIssue.arcs && crawledIssue.arcs.length > 0) {
-                        await asyncForEach(crawledIssue.arcs, async arc => {
-                            try {
-                                await createArc(arc, i);
-                            } catch (e) {
-                                //ignore, might already exist
-                            }
-                        });
-                    }
-
-                    let stories = await models.Story.findAll({
-                        where: {fk_issue: i.id}
-                    });
-
-                    if(stories.length > 0 && crawledIssue.stories.length !== stories.length) {
-                        let failed = false;
-
-                        for(let i = 0; i < stories.length; i++) {
-                            if (stories[i].title !== crawledIssue.stories[i].title) {
-                                console.log("[" + (new Date()).toUTCString() + "] " + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number +
-                                    " is missing story as story in between [" + romanize(i + 1) + "]");
-
-                                failed = true;
-                            }
+                            await cover.setIssue(res, {transaction: transaction});
+                            await cover.save({transaction: transaction});
                         }
 
-                        if(!failed) {
-                            await Promise.all(crawledIssue.stories.map(async (crawledStory) => {
-                                if(stories.length >= crawledStory.number)
-                                    return;
+                        variant.individuals = crawledIssue.individuals;
 
-                                let newStory = await models.Story.create({
-                                    title: crawledStory.title ? crawledStory.title : '',
-                                    number: !isNaN(crawledStory.number) ? crawledStory.number : 1,
-                                    addinfo: ''
-                                });
+                        await fixIssue(res, variant, transaction);
+                    })
 
-                                await asyncForEach(crawledStory.individuals, async (individual) => {
-                                    await newStory.associateIndividual(individual.name.trim(), individual.type, null);
-                                });
-
-                                await newStory.setIssue(i);
-                                await newStory.save();
-
-                                return newStory;
-                            }));
-                        }
-                    } else if(stories.length > 0 && crawledIssue.stories.length > 0) {
-                        await asyncForEach(crawledIssue.stories, async (crawledStory, i) => {
-                            if(crawledStory.appearing && crawledStory.appearing.length > 0) {
-                                await asyncForEach(crawledStory.appearing, async appearance => {
-                                    await stories[i].associateAppearance(appearance.name, appearance.type, appearance.role, null);
-                                });
-                            }
-                        });
-                    }
+                    await transaction.commit();
                 } catch (e) {
-                    /*ignore errors while crawling*/
+                    if (crawledIssue && crawledIssue.series && crawledIssue.series.publisher)
+                        stream.write("[" + (new Date()).toUTCString() + "] ERROR Fixing issue "
+                            + crawledIssue.series.title + " (Vol. " + crawledIssue.series.volume
+                            + ") #" + crawledIssue.number + " (" + crawledIssue.series.publisher.name + ")\n");
+                    else
+                        stream.write("[" + (new Date()).toUTCString() + "] ERROR Fixing issue "
+                            + i.series.title + " (Vol. " + i.series.volume
+                            + ") #" + i.number + " (issue not found)\n");
+
+                    await transaction.rollback();
                 }
             });
 
@@ -173,8 +225,96 @@ export async function fixUsComics() {
             console.log(e);
             //Don't reject, errors are okay
             resolve(false);
+        } finally {
+            if (stream)
+                stream.end();
+            if (out)
+                out.end();
         }
     });
+}
+
+async function fixIssue(res, crawledIssue, transaction) {
+    try {
+        res.title = crawledIssue.title ? crawledIssue.title.trim() : '';
+        res.number = crawledIssue.number.trim();
+        res.format = crawledIssue.format ? crawledIssue.format.trim() : 'Heft';
+        res.variant = crawledIssue.variant ? crawledIssue.variant.trim() : '';
+        res.limitation = crawledIssue.limitation;
+        res.pages = crawledIssue.pages;
+        res.releasedate = crawledIssue.releasedate;
+        res.price = !isNaN(crawledIssue.price) && crawledIssue.price !== '' ? crawledIssue.price : '0';
+        res.currency = crawledIssue.currency ? crawledIssue.currency.trim() : '';
+        res = await res.save({transaction: transaction});
+
+        await models.Issue_Individual.destroy({where: {fk_issue: res.id}, transaction});
+
+        await asyncForEach(crawledIssue.individuals, async individual => {
+            if (individual.name && individual.name.trim() !== '') {
+                await res.associateIndividual(individual.name.trim(), individual.type, transaction);
+                await res.save({transaction: transaction});
+            }
+        });
+
+        let cover = await models.Cover.findOne({where: {fk_issue: res.id, number: 0}, transaction});
+
+        if (!cover) {
+            cover = await models.Cover.create({
+                url: crawledIssue.cover.url,
+                number: 0,
+                addinfo: ''
+            }, {transaction: transaction});
+
+            cover.setIssue(res, {transaction: transaction});
+        } else {
+            cover.url = crawledIssue.cover.url;
+        }
+
+        cover = await cover.save({transaction: transaction});
+        await models.Cover_Individual.destroy({where: {fk_cover: cover.id}, transaction});
+
+        await asyncForEach(crawledIssue.cover.individuals ? crawledIssue.cover.individuals : [], async (artist) => {
+            await cover.associateIndividual(artist.name.trim(), 'ARTIST', transaction);
+            await cover.save({transaction: transaction});
+        });
+
+        await models.Issue_Arc.destroy({where: {fk_issue: res.id}, transaction});
+
+        await asyncForEach(crawledIssue.arcs, async arc => {
+            if (arc.title && arc.title.trim() !== '')
+                await res.associateArc(arc.title.trim(), arc.type, transaction);
+        });
+
+        await res.save({transaction: transaction});
+
+        let stories = await models.Story.findAll({
+            where: {fk_issue: res.id},
+            order: [['number', 'ASC']],
+            transaction
+        });
+
+        if (crawledIssue.stories && stories.length === crawledIssue.stories.length) {
+            await asyncForEach(stories, async (story, i) => {
+                story.name = crawledIssue.name;
+                await story.save({transaction: transaction});
+
+                await models.Story_Individual.destroy({where: {fk_story: story.id}, transaction});
+
+                await asyncForEach(crawledIssue.stories[i].individuals, async (individual) => {
+                    await story.associateIndividual(individual.name.trim(), individual.type, transaction);
+                });
+
+                await models.Story_Appearance.destroy({where: {fk_story: story.id}, transaction});
+
+                await asyncForEach(crawledIssue.stories[i].appearances, async appearance => {
+                    if (appearance.name && appearance.name.trim() !== '')
+                        await story.associateAppearance(appearance.name.trim(), appearance.type, appearance.role, transaction);
+                });
+            });
+        }
+    } catch (e) {
+        throw e;
+    }
 }
 
 export async function migrate() {
@@ -236,19 +376,19 @@ async function migrateIssues() {
 
                     let series;
                     let publisher;
-                    if(afterFirstMigration) {
+                    if (afterFirstMigration) {
                         series = await models.Series.findOne({
                             where: {id: issue.fk_series}
                         });
 
-                        if(!series)
+                        if (!series)
                             return;
 
                         publisher = await models.Publisher.findOne({
                             where: {id: series.fk_publisher}
                         });
 
-                        if(!publisher)
+                        if (!publisher)
                             return;
                     } else {
                         series = await migration.Series.findOne({
@@ -268,7 +408,7 @@ async function migrateIssues() {
                         }
                     };
 
-                    console.log("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " (" + (index+1) + " of " + array.length + ")");
+                    console.log("[" + (new Date()).toUTCString() + " ID#" + issue.id + "] Migrating issue " + issueToCreate.series.title + " (Vol." + issueToCreate.series.volume + ") " + issueToCreate.number + variant + " (" + (index + 1) + " of " + array.length + ")");
 
                     issueToCreate.stories = [];
                     let stories = await migration.Story.findAll({
@@ -293,9 +433,9 @@ async function migrateIssues() {
                             }
                         });
 
-                        if(!parent)
-                            throw Error('No parent found for story ' + story.number  + " [ID#" + story.id + "]");
-                        
+                        if (!parent)
+                            throw Error('No parent found for story ' + story.number + " [ID#" + story.id + "]");
+
                         let parentIssue;
                         let parentIssues = await parent.getIssues();
                         await asyncForEach(parentIssues, async p => {
@@ -307,10 +447,10 @@ async function migrateIssues() {
                             where: {id: parentIssue.fk_series}
                         });
 
-                        if(!parentIssue)
+                        if (!parentIssue)
                             throw Error('No issue found for parent ' + parentSeries.title + " (Vol." + parentSeries.volume + ") [ID#" + parentIssue.id + "]");
 
-                        if(parentIssue.number === '')
+                        if (parentIssue.number === '')
                             throw Error('No issue number found for parent ' + parentSeries.title + " (Vol." + parentSeries.volume + ") [ID#" + parentIssue.id + "]");
 
                         let storyObj = {
@@ -336,7 +476,7 @@ async function migrateIssues() {
                         number: issueToCreate.number
                     };
 
-                    if(afterFirstMigration) {
+                    if (afterFirstMigration) {
                         switch (issueToCreate.format) {
                             case "Heft/Variant":
                                 where.format = "Heft";
@@ -376,7 +516,7 @@ async function migrateIssues() {
                             await transaction.rollback();
                         });
 
-                        if(res)
+                        if (res)
                             await transaction.commit();
                     }
                 } catch (e) {
@@ -409,7 +549,7 @@ async function migratePublishers() {
             await asyncForEach(publishers, async publisher => {
                 let p = await models.Publisher.findOne({where: {id: publisher.id}, transaction: transaction});
 
-                if(!p)
+                if (!p)
                     await models.Publisher.create({
                         id: publisher.id,
                         name: publisher.name,
@@ -440,7 +580,7 @@ async function migrateSeries() {
             await asyncForEach(series, async series => {
                 let s = await models.Series.findOne({where: {id: series.id}, transaction: transaction});
 
-                if(!s)
+                if (!s)
                     await models.Series.create({
                         id: series.id,
                         title: series.title,

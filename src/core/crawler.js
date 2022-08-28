@@ -3,7 +3,7 @@ import request from 'request-promise';
 
 const BASE_URI = 'https://marvel.fandom.com';
 const INDEX_URI =
-        BASE_URI + '/index.php';
+    BASE_URI + '/index.php';
 const API_URI = BASE_URI + '/api.php';
 
 export async function crawlIssue(number, title, volume) {
@@ -39,10 +39,19 @@ export async function crawlIssue(number, title, volume) {
 
     await finalizeStories(issue);
 
+    //until shortbox 2.0 we have to cut the reprints to avoid a whole rewrite of the code...
+    issue.stories.forEach(story => {
+        if (story.reprintOf) {
+            story.title = story.reprintOf.title;
+            story.individuals = story.reprintOf.individuals;
+            story.appearances = story.reprintOf.appearances;
+        }
+    })
+
     return issue;
 }
 
-async function  finalizeStories(issue) {
+async function finalizeStories(issue) {
     await asyncForEach(
         issue.stories,
         async (story, idx) => {
@@ -60,8 +69,8 @@ async function  finalizeStories(issue) {
     );
 }
 
-async function  crawlReprint(story) {
-    let issue = await crawl(
+async function crawlReprint(story) {
+    let issue = await crawlIssue(
         story.reprintOf.issue.number,
         story.reprintOf.issue.series.title,
         story.reprintOf.issue.series.volume
@@ -248,6 +257,26 @@ async function crawlCover(cover, issue) {
             });
         }
 
+        if (Object.keys($.query.pages)[0] === '-1') {
+            $ = await request({
+                uri:
+                    API_URI +
+                    '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
+                    encodeURI(cover.url.replace('.jpg', '.gif')),
+                transform: (body) => JSON.parse(body),
+            });
+        }
+
+        if (Object.keys($.query.pages)[0] === '-1') {
+            $ = await request({
+                uri:
+                    API_URI +
+                    '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
+                    decodeURI(cover.url.replace('.jpg', '.gif')),
+                transform: (body) => JSON.parse(body),
+            });
+        }
+
         cover.url = $.query.pages[Object.keys($.query.pages)[0]].imageinfo[0].url;
         cover.url = cover.url.substring(0, cover.url.indexOf('/revision/'));
     } catch (e) {
@@ -256,22 +285,24 @@ async function crawlCover(cover, issue) {
 }
 
 async function crawlInfobox(issue) {
-    let $ = await request({
-        uri:
-            API_URI +
-            '?action=parse&format=json&prop=wikitext&page=' +
-            generateIssueUrl(issue),
-        transform: function(body) {
-            return JSON.parse(body);
-        },
-    });
+    let $;
+
+    try {
+        $ = await request({
+            uri:
+                API_URI +
+                '?action=parse&format=json&prop=wikitext&page=' +
+                generateIssueUrl(issue),
+            transform: function (body) {
+                return JSON.parse(body);
+            },
+        });
+    } catch (e) {
+        throw new Error("Cannot find issue " + generateIssueUrl(issue));
+    }
 
     if (!$.parse) {
-        throw new Error(
-            '[CRAWLER] ' +
-            generateIssueName(issue) +
-            ' - Not found'
-        );
+        throw new Error("Cannot find issue " + generateIssueUrl(issue));
     }
 
     $ = $.parse.wikitext['*'].split('\n');
@@ -468,6 +499,10 @@ function extractAppearances(
 
                 app = app.trim();
                 while (app.startsWith('*')) app = app.replace('*', '');
+                if (app.startsWith("w:c")) {
+                    app = app.replace("w:c:", "");
+                    app = app.substring(app.indexOf(":") + 1);
+                }
                 app = app.trim();
 
                 getAppearances(issue.stories[count], currentType, app, firstApp);
@@ -680,7 +715,7 @@ function extractNumberOfInfoboxLine(type) {
     }
 }
 
-export async function  crawlSeries(issue) {
+export async function crawlSeries(issue) {
     try {
         let $ = await request({
             uri:
@@ -694,25 +729,37 @@ export async function  crawlSeries(issue) {
         extractGenre($, issue);
         extractDates($, issue);
     } catch (e) {
-        //Nothing
+        throw new Error("Cannot find series " + generateSeriesUrl(issue.series));
     }
 }
 
 function extractDates($, issue) {
     let publicationDate = $("span:contains('Publication Date: ')");
     if (publicationDate.length > 0) {
-        let date = $(publicationDate.get(0).parent)
-            .text()
-            .replace(/[a-zA-Z :,]/g, '');
+        let text = $(publicationDate.get(0).parent)
+            .text();
 
-        if (date.startsWith('—')) {
-            issue.series.startyear = Number.parseInt(date.substring(1));
+        let date = text;
+        if (text.indexOf("Next Release") !== -1) {
+            date = date.substring(0, text.indexOf("Next Release: "))
+        }
+        if (text.indexOf("Relaunched in") !== -1) {
+            date = date.substring(0, text.indexOf("Relaunched in: "))
+        }
+
+        date = date.replace(/[a-zA-Z :,—]/g, '');
+
+        let finished = text.substring(0, text.indexOf("Publication Date: "))
+            .replace("Status: ", "") === "Finished";
+
+        issue.series.startyear = date.substring(0, 4);
+
+        if (date.length === 8) {
+            issue.series.endyear = date.substring(4, 8);
+        } else if (finished) {
             issue.series.endyear = issue.series.startyear;
         } else {
-            issue.series.startyear = Number.parseInt(date.substring(0, 4));
-
-            if (date.substring(5).length === 4)
-                issue.series.endyear = Number.parseInt(date.substring(5));
+            issue.series.endyear = 0;
         }
     }
 }
@@ -727,6 +774,9 @@ function extractGenre($, issue) {
 
 function extractPublisher($, issue) {
     let publisher = $("span:contains('Publisher: ')");
+    if (!issue.series.publisher) {
+        issue.series.publisher = {};
+    }
     if (publisher.length > 0) {
         issue.series.publisher.name = $(publisher.get(0).nextSibling)
             .text()

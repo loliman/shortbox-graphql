@@ -35,7 +35,11 @@ class Issue extends Model {
                     },
                     transaction: transaction
                 }).then(async ([individual, created]) => {
-                    resolve(await models.Issue_Individual.create({fk_issue: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
+                    resolve(await models.Issue_Individual.create({
+                        fk_issue: this.id,
+                        fk_individual: individual.id,
+                        type: type
+                    }, {transaction: transaction}));
                 }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
@@ -53,7 +57,10 @@ class Issue extends Model {
                     },
                     transaction: transaction
                 }).then(async ([arc, created]) => {
-                    resolve(await models.Issue_Arc.create({fk_issue: this.id, fk_arc: arc.id}, {transaction: transaction}));
+                    resolve(await models.Issue_Arc.create({
+                        fk_issue: this.id,
+                        fk_arc: arc.id
+                    }, {transaction: transaction}));
                 }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
@@ -65,8 +72,8 @@ class Issue extends Model {
         return new Promise(async (resolve, reject) => {
             try {
                 let cover = await models.Cover.findOne({where: {fk_issue: this.id, number: 0}, transaction});
-                if(cover)
-                    if(!cover.url.indexOf('http') === 0)
+                if (cover)
+                    if (!cover.url.indexOf('http') === 0)
                         deleteFile(cover.url);
 
                 await models.Story.destroy({where: {fk_issue: this.id}, transaction});
@@ -221,7 +228,7 @@ export const typeDef = gql`
 export const resolvers = {
     Query: {
         issues: async (_, {pattern, series, offset, filter}) => {
-            if(!filter) {
+            if (!filter) {
                 let res = await models.Issue.findAll({
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
                         [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
@@ -263,17 +270,18 @@ export const resolvers = {
                     number: i.issuenumber,
                     fk_series: i.seriesid,
                     format: i.issueformat,
-                    variant: i.issuevariant}));
+                    variant: i.issuevariant
+                }));
                 return issues.sort((a, b) => naturalCompare(a.number, b.number));
             }
         },
         lastEdited: async (_, {filter, offset}) => {
             let where = {};
             where['$Series->Publisher.original$'] = filter.us;
-            if(filter.publishers && filter.publishers[0] && filter.publishers[0].name) {
+            if (filter.publishers && filter.publishers[0] && filter.publishers[0].name) {
                 where['$Series->Publisher.name$'] = filter.publishers[0].name;
 
-                if(filter.series && filter.series[0] && filter.series[0].title && filter.series[0].volume) {
+                if (filter.series && filter.series[0] && filter.series[0].title && filter.series[0].volume) {
                     where['$Series.title$'] = filter.series[0].title;
                     where['$Series.volume$'] = filter.series[0].volume;
                 }
@@ -321,7 +329,7 @@ export const resolvers = {
                 ]
             });
 
-            if(res)
+            if (res)
                 res.edit = (edit === true);
             return res;
         }
@@ -335,7 +343,11 @@ export const resolvers = {
                     throw new Error("Du bist nicht eingeloggt");
 
                 let series = await models.Series.findOne({
-                    where: {title: item.series.title.trim(), volume: item.series.volume, '$Publisher.name$': item.series.publisher.name.trim()},
+                    where: {
+                        title: item.series.title.trim(),
+                        volume: item.series.volume,
+                        '$Publisher.name$': item.series.publisher.name.trim()
+                    },
                     include: [models.Publisher],
                     transaction
                 });
@@ -403,7 +415,7 @@ export const resolvers = {
                     transaction
                 });
 
-                if(oldPub.original !== newPub.original)
+                if (oldPub.original !== newPub.original)
                     throw new Error("You must not change to another publisher type");
 
                 let where = {
@@ -443,8 +455,6 @@ export const resolvers = {
                 });
 
                 let releasedate = item.releasedate;
-                if(parseInt(releasedate.toLocaleString().substring(0, 4)) < newSeries.startyear)
-                    releasedate.setFullYear(newSeries.startyear);
 
                 res.title = item.title ? item.title.trim() : '';
                 res.number = item.number.trim();
@@ -464,15 +474,15 @@ export const resolvers = {
 
                 let coverUrl = '';
 
-                if(item.cover === '') { //Cover has been deleted
+                if (item.cover === '') { //Cover has been deleted
                     if (cover) {
-                        if(!cover.url.indexOf('http') === 0)
+                        if (!cover.url.indexOf('http') === 0)
                             deleteFile(cover.url);
                         await cover.destroy({transaction});
                     }
-                } else if(item.cover instanceof Promise) { //Cover has been changed
-                    if(cover) {
-                        if(!cover.url.indexOf('http') === 0)
+                } else if (item.cover instanceof Promise) { //Cover has been changed
+                    if (cover) {
+                        if (!cover.url.indexOf('http') === 0)
                             deleteFile(cover.url);
                         await cover.destroy({transaction});
                     }
@@ -486,20 +496,18 @@ export const resolvers = {
                     await models.Issue_Individual.destroy({where: {fk_issue: res.id}, transaction});
 
                     await asyncForEach(item.individuals, async individual => {
-                        if(individual.name && individual.name.trim() !== '')
-                            await asyncForEach(individual.type, async type => {
-                                  await res.associateIndividual(individual.name.trim(), type, transaction);
-                            });
+                        if (individual.name && individual.name.trim() !== '')
+                            await res.associateIndividual(individual.name.trim(), individual.type, transaction);
                     });
 
                     await res.save({transaction: transaction});
                 }
 
-                if(us && item.arcs && item.arcs.length > 0) {
+                if (us && item.arcs && item.arcs.length > 0) {
                     await models.Issue_Arc.destroy({where: {fk_issue: res.id}, transaction});
 
                     await asyncForEach(item.arcs, async arc => {
-                        if(arc.title && arc.title.trim() !== '')
+                        if (arc.title && arc.title.trim() !== '')
                             await res.associateArc(arc.title.trim(), arc.type, transaction);
                     });
 
@@ -511,15 +519,15 @@ export const resolvers = {
                 let deletedStories = oldStories.filter(o => {
                     let found = false;
                     item.stories.forEach(n => {
-                        if(!found)
+                        if (!found)
                             found = storyEquals(o, n);
                     });
                     return !found;
                 });
 
-                if(us)
+                if (us)
                     deletedStories.forEach(deletedStory => {
-                        if(!deletedStory.exclusive)
+                        if (!deletedStory.exclusive)
                             throw Error('You must not delete original stories with children');
                     });
 
@@ -538,7 +546,7 @@ export const resolvers = {
                 let newStories = item.stories.filter(n => {
                     let found = false;
                     oldStories.forEach(o => {
-                        if(!found)
+                        if (!found)
                             found = storyEquals(n, o);
                     });
                     return !found;
@@ -547,14 +555,18 @@ export const resolvers = {
                 if (item.stories) {
                     let stories = [];
                     await asyncForEach(newStories, async (story) => {
-                        if(story.parent && story.parent.number === 0) {
+                        if (story.parent && story.parent.number === 0) {
                             let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
-                            let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
+                            let oStories = await models.Story.findAll({
+                                where: {fk_issue: resIssue.id},
+                                order: [['number', 'ASC']],
+                                transaction
+                            });
 
-                            for(let i = 0; i < oStories.length; i++) {
+                            for (let i = 0; i < oStories.length; i++) {
                                 stories.push({
-                                    number: stories.length+1,
-                                    parent: {number: i+1, issue: story.parent.issue},
+                                    number: stories.length + 1,
+                                    parent: {number: i + 1, issue: story.parent.issue},
                                     translators: story.translators,
                                     addinfo: '',
                                     exclusive: false
@@ -568,13 +580,13 @@ export const resolvers = {
                     await asyncForEach(stories, async (story) => await createStory(story, res, transaction, us));
                 }
 
-                if(!us) {
+                if (!us) {
                     let oldFeatures = await getFeatures(res, transaction);
 
                     let deletedFeatures = oldFeatures.filter(o => {
                         let found = false;
                         item.features.forEach(n => {
-                            if(!found)
+                            if (!found)
                                 found = featureEquals(o, n);
                         });
                         return !found;
@@ -593,7 +605,7 @@ export const resolvers = {
                     let newFeatures = item.features.filter(n => {
                         let found = false;
                         oldFeatures.forEach(o => {
-                            if(!found)
+                            if (!found)
                                 found = featureEquals(n, o);
                         });
                         return !found;
@@ -607,19 +619,19 @@ export const resolvers = {
                 let deletedCovers = oldCovers.filter(o => {
                     let found = false;
                     item.covers.forEach(n => {
-                        if(!found)
+                        if (!found)
                             found = coverEquals(o, n);
                     });
 
-                    if(o.number === 0 && coverUrl !== '')
+                    if (o.number === 0 && coverUrl !== '')
                         found = true;
 
                     return !found;
                 });
 
-                if(us)
+                if (us)
                     deletedCovers.forEach(deletedCover => {
-                        if(!deletedCover.exclusive)
+                        if (!deletedCover.exclusive)
                             throw Error('You must not delete original covers with children');
                     });
 
@@ -638,11 +650,11 @@ export const resolvers = {
                 let newCovers = item.covers.filter(n => {
                     let found = false;
                     oldCovers.forEach(o => {
-                        if(!found)
+                        if (!found)
                             found = coverEquals(n, o);
                     });
 
-                    if(n.number === 0 && coverUrl !== '')
+                    if (n.number === 0 && coverUrl !== '')
                         found = false;
 
                     return !found;
@@ -650,11 +662,11 @@ export const resolvers = {
 
                 let url;
                 newCovers.forEach(cover => {
-                    if(cover.number === 0)
+                    if (cover.number === 0)
                         url = '';
                 });
 
-                if(url === '') {
+                if (url === '') {
                     deletedCovers.forEach(cover => {
                         if (cover.number === 0)
                             url = cover.url;
@@ -662,7 +674,7 @@ export const resolvers = {
                 }
 
                 await asyncForEach(newCovers, async cover => {
-                    if(url && url !== '' && cover.number === 0)
+                    if (url && url !== '' && cover.number === 0)
                         coverUrl = url;
 
                     await createCover(cover, res, coverUrl, transaction, us);
@@ -733,12 +745,12 @@ export const resolvers = {
         },
         variant: (parent) => parent.variant,
         features: async (parent) => {
-            if((await (await parent.getSeries()).getPublisher()).original)
+            if ((await (await parent.getSeries()).getPublisher()).original)
                 return [];
 
             let features = await models.Feature.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]});
 
-            if(features.length === 0 && !parent.edit) {
+            if (features.length === 0 && !parent.edit) {
                 let issue = await models.Issue.findOne({
                     where: {fk_series: parent.fk_series, number: parent.number},
                     order: [['releasedate', 'ASC'], ['createdAt', 'ASC'], ['variant', 'ASC']]
@@ -752,16 +764,19 @@ export const resolvers = {
         stories: async (parent, context) => {
             let stories = await models.Story.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]});
 
-            if(stories.length === 0 && !parent.edit) {
+            if (stories.length === 0 && !parent.edit) {
                 let issues = await models.Issue.findAll({
                     where: {fk_series: parent.fk_series, number: parent.number},
                     order: [['createdAt', 'ASC']]
                 });
 
                 await asyncForEach(issues, async issue => {
-                    let issueStories = await models.Story.findAll({where: {fk_issue: issue.id}, order: [['number', 'ASC']]});
+                    let issueStories = await models.Story.findAll({
+                        where: {fk_issue: issue.id},
+                        order: [['number', 'ASC']]
+                    });
 
-                    if(issueStories.length > 0 && stories.length === 0)
+                    if (issueStories.length > 0 && stories.length === 0)
                         stories = issueStories;
                 });
             }
@@ -779,7 +794,7 @@ export const resolvers = {
             await asyncForEach(issues, async issue => {
                 let issueCovers = await models.Cover.findAll({where: {fk_issue: issue.id}, order: [['number', 'ASC']]});
 
-                if(issueCovers.length > 0 && covers.length === 0)
+                if (issueCovers.length > 0 && covers.length === 0)
                     covers = issueStories;
             });
 
@@ -794,7 +809,7 @@ export const resolvers = {
         verified: (parent) => parent.verified,
         addinfo: (parent) => parent.addinfo,
         arcs: async (parent) => {
-            if(!(await (await parent.getSeries()).getPublisher()).original)
+            if (!(await (await parent.getSeries()).getPublisher()).original)
                 return [];
 
             let issues = await models.Issue.findAll({
@@ -812,7 +827,7 @@ export const resolvers = {
             })
         },
         individuals: async (parent) => {
-            if(!(await (await parent.getSeries()).getPublisher()).original)
+            if (!(await (await parent.getSeries()).getPublisher()).original)
                 return [];
 
             return await models.Individual.findAll({
@@ -843,8 +858,6 @@ export async function create(item, transaction) {
             });
 
             let releasedate = item.releasedate;
-            if(parseInt(releasedate.toLocaleString().substring(0, 4)) < series.startyear)
-                releasedate.setFullYear(series.startyear);
 
             let res = await models.Issue.create({
                 title: item.title ? item.title.trim() : '',
@@ -869,9 +882,7 @@ export async function create(item, transaction) {
             if (us && item.individuals.length > 0) {
                 await asyncForEach(item.individuals, async individual => {
                     if (individual.name && individual.name.trim() !== '')
-                        await asyncForEach(individual.type, async type => {
-                            await res.associateIndividual(individual.name.trim(), type, transaction);
-                        });
+                        await res.associateIndividual(individual.name.trim(), individual.type, transaction);
                 });
 
                 await res.save({transaction: transaction});
@@ -880,21 +891,25 @@ export async function create(item, transaction) {
             if (item.stories) {
                 let stories = [];
                 await asyncForEach(item.stories, async (story) => {
-                    if(story.parent && story.parent.number === 0) {
+                    if (story.parent && story.parent.number === 0) {
                         let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
-                        let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
+                        let oStories = await models.Story.findAll({
+                            where: {fk_issue: resIssue.id},
+                            order: [['number', 'ASC']],
+                            transaction
+                        });
 
-                        for(let i = 0; i < oStories.length; i++) {
+                        for (let i = 0; i < oStories.length; i++) {
                             stories.push({
-                                number: stories.length+1,
-                                parent: {number: i+1, issue: story.parent.issue},
+                                number: stories.length + 1,
+                                parent: {number: i + 1, issue: story.parent.issue},
                                 translators: story.translators,
                                 addinfo: '',
                                 exclusive: false
                             });
                         }
                     } else {
-                        story.number = stories.length+1;
+                        story.number = stories.length + 1;
                         stories.push(story);
                     }
                 });
@@ -947,15 +962,15 @@ export function findOrCrawlIssue(i, transaction) {
                 transaction
             });
 
-            if(!series) {
-                let crawledSeries = await crawlSeries(i.series);
+            if (!series) {
+                await crawlSeries(i);
 
                 let [publisher] = await models.Publisher.findOrCreate({
                     where: {
-                        name: crawledSeries.publisher.name
+                        name: i.series.publisher.name
                     },
                     defaults: {
-                        name: crawledSeries.publisher.name,
+                        name: i.series.publisher.name,
                         addinfo: '',
                         original: 1,
                     },
@@ -963,10 +978,10 @@ export function findOrCrawlIssue(i, transaction) {
                 });
 
                 series = await models.Series.create({
-                    title: crawledSeries.title,
-                    volume: crawledSeries.volume,
-                    startyear: !isNaN(crawledSeries.startyear) ? crawledSeries.startyear : 0,
-                    endyear: !isNaN(crawledSeries.endyear) ? crawledSeries.endyear : 0,
+                    title: i.series.title,
+                    volume: i.series.volume,
+                    startyear: !isNaN(i.series.startyear) ? i.series.startyear : 0,
+                    endyear: !isNaN(i.series.endyear) ? i.series.endyear : 0,
                     addinfo: '',
                     fk_publisher: publisher.id
                 }, {transaction: transaction});
@@ -974,8 +989,8 @@ export function findOrCrawlIssue(i, transaction) {
 
             let crawledIssue;
 
-            if(!issue) {
-                crawledIssue = await crawlIssue(i);
+            if (!issue) {
+                crawledIssue = await crawlIssue(i.number, i.series.title, i.series.volume);
                 issue = await models.Issue.create({
                     title: '',
                     number: i.number,
@@ -1016,7 +1031,8 @@ export function findOrCrawlIssue(i, transaction) {
                 await newCover.save({transaction: transaction});
 
                 await Promise.all(crawledIssue.variants.map(async (crawledVariant) => {
-                    let variant = await models.Issue.create({title: '',
+                    let variant = await models.Issue.create({
+                        title: '',
                         number: i.number,
                         format: 'Heft',
                         variant: crawledVariant.variant,
@@ -1056,6 +1072,11 @@ export function findOrCrawlIssue(i, transaction) {
                     await asyncForEach(crawledStory.individuals, async (individual) => {
                         await newStory.associateIndividual(individual.name.trim(), individual.type, transaction);
                     });
+
+                    await asyncForEach(crawledStory.appearances, async appearance => {
+                        await newStory.associateAppearance(appearance.name.trim(), appearance.type, appearance.role, transaction);
+                    });
+
                     await newStory.setIssue(issue, {transaction: transaction});
                     await newStory.save({transaction: transaction});
 
@@ -1080,13 +1101,13 @@ async function createCoverForIssue(cover, covers, issue, transaction) {
             let coverUrl = '/' + coverDir + '/' + hash;
 
             let isCoverInArray;
-            if(covers)
+            if (covers)
                 covers.forEach(e => {
-                    if(e.number === 0)
+                    if (e.number === 0)
                         isCoverInArray = true;
                 });
 
-            if(!isCoverInArray) {
+            if (!isCoverInArray) {
                 let res = await models.Cover.create({
                     url: coverUrl,
                     number: 0,
