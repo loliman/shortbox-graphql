@@ -130,6 +130,11 @@ export default (sequelize) => {
             allowNull: true,
             defaultValue: 0
         },
+        comicguideid: {
+            type: Sequelize.INTEGER,
+            allowNull: true,
+            defaultValue: 0
+        },
         price: {
             type: Sequelize.FLOAT,
             allowNull: true
@@ -196,7 +201,8 @@ export const typeDef = gql`
     stories: [StoryInput],
     features: [FeatureInput],
     covers: [CoverInput],
-    arcs: [ArcInput]
+    arcs: [ArcInput],
+    comicguideid: Int
   }
   
   type Issue {
@@ -220,6 +226,7 @@ export const typeDef = gql`
     verified: Boolean,
     addinfo: String,
     individuals: [Individual],
+    comicguideid: Int,
     createdAt: DateTime,
     updatedAt: DateTime
   }
@@ -467,6 +474,7 @@ export const resolvers = {
                 res.price = !isNaN(item.price) && item.price !== '' ? item.price : '0';
                 res.currency = item.currency ? item.currency.trim() : '';
                 res.addinfo = item.addinfo;
+                res.comicguideid = item.comicguideid;
 
                 res = await res.save({transaction: transaction});
 
@@ -808,6 +816,7 @@ export const resolvers = {
         releasedate: (parent) => parent.releasedate,
         verified: (parent) => parent.verified,
         addinfo: (parent) => parent.addinfo,
+        comicguideid: (parent) => parent.comicguideid,
         arcs: async (parent) => {
             if (!(await (await parent.getSeries()).getPublisher()).original)
                 return [];
@@ -870,7 +879,8 @@ export async function create(item, transaction) {
                 releasedate: releasedate,
                 price: !isNaN(item.price) && item.price !== '' ? item.price : '0',
                 currency: item.currency ? item.currency.trim() : '',
-                addinfo: item.addinfo
+                addinfo: item.addinfo,
+                comicguideid: item.comicguideid
             }, {transaction: transaction});
 
             let coverUrl = '';
