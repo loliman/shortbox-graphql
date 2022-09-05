@@ -123,9 +123,10 @@ export const typeDef = gql`
 export const resolvers = {
     Query: {
         series: async (_, {pattern, publisher, offset, filter}) => {
-            if(!filter) {
+            if (!filter) {
                 let options = {
-                    order: [['title', 'ASC'], ['volume', 'ASC']],
+                    order: [[models.sequelize.fn('sortabletitle', models.sequelize.col('title')), 'ASC'],
+                        ['volume', 'ASC']],
                     include: [models.Publisher],
                     offset: offset,
                     limit: 50
@@ -137,7 +138,7 @@ export const resolvers = {
                 if (publisher.us !== undefined)
                     options.where = {'$Publisher.original$': publisher.us ? 1 : 0};
 
-                if(pattern !== '') {
+                if (pattern !== '') {
                     options.where.title = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
                     options.order = [[models.sequelize.literal("CASE " +
                         "   WHEN title LIKE '" + pattern + "' THEN 1 " +
@@ -252,7 +253,7 @@ export const resolvers = {
                     transaction
                 });
 
-                if(oldPub.original !== newPub.original)
+                if (oldPub.original !== newPub.original)
                     throw new Error("You must not change to another publisher type");
 
                 let res = await models.Series.findOne({
