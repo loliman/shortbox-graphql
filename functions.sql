@@ -1,5 +1,20 @@
 DELIMITER $$
 
+CREATE FUNCTION `sortabletitle`(title     VARCHAR(256)) RETURNS varchar(1000) CHARSET utf8mb3
+begin
+  DECLARE label VARCHAR(1000) DEFAULT title;
+
+  SET label := LOWER(label);
+  SET label := REGEXP_REPLACE(label, '/Der |Die |Das |The /g', '');
+  SET label := REGEXP_REPLACE(label, '[ä]+', 'a');
+  SET label := REGEXP_REPLACE(label, '[ü]+', 'u');
+  SET label := REGEXP_REPLACE(label, '[ö]+', 'o');
+  SET label := REGEXP_REPLACE(label, '[ß]+', 'ss');
+  SET label := REGEXP_REPLACE(label, '[^0-9a-zA-Z]+', '');
+
+  RETURN label;
+end
+
 CREATE function 
   createissuelabel(title     VARCHAR(256), 
                    name      VARCHAR(256), 
