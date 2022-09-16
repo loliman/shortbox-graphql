@@ -821,8 +821,6 @@ export const resolvers = {
                 let isImage = await request({
                     uri: url,
                     transform: (body, response) => {
-                        console.log(response.headers['content-type']);
-                        
                         return response.headers['content-type'] === 'image/jpeg';
                     },
                 });
