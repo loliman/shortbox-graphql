@@ -9,6 +9,7 @@ import {create as createCover, equals as coverEquals, getCovers} from "./Cover";
 import {create as createFeature, equals as featureEquals, getFeatures} from "./Feature";
 import {create as createArc} from "./Arc";
 import {createFilterQuery} from "../graphql/Filter";
+import request from "request-promise";
 
 class Issue extends Model {
     static tableName = 'Issue';
@@ -809,7 +810,30 @@ export const resolvers = {
             return covers;
         },
         limitation: (parent) => parent.limitation,
-        cover: async (parent) => await models.Cover.findOne({where: {fk_issue: parent.id, number: 0}}),
+        cover: async (parent) => {
+            let cover = await models.Cover.findOne({where: {fk_issue: parent.id, number: 0}});
+            if (cover)
+                return cover;
+
+            if (parent.comicguideid && parent.comicguideid !== 0) {
+                let url = "https://www.comicguide.de/pics/large/" + parent.comicguideid + ".jpg";
+
+                let isImage = await request({
+                    uri: url,
+                    transform: (body, response) => {
+                        if (response.headers['content-type'] === 'image/jpeg') {
+                            return true;
+                        }
+                    },
+                });
+
+                if (isImage)
+                    return {
+                        url: url
+                    };
+                else return null;
+            }
+        },
         price: (parent) => (typeof parent.price === 'string') ? parent.price : parent.price.toFixed(2).toString(),
         currency: (parent) => parent.currency,
         pages: (parent) => parent.pages,
