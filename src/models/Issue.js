@@ -785,7 +785,7 @@ export const resolvers = {
                         order: [['number', 'ASC']]
                     });
 
-                    if (issueStories.length > 0 && stories.length === 0)
+                    if (issueStories && issueStories.length > 0 && stories.length === 0)
                         stories = issueStories;
                 });
             }
@@ -795,7 +795,7 @@ export const resolvers = {
         covers: async (parent) => {
             let covers = await models.Cover.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]});
 
-            let issues = await models.Issue.findAll({
+            /*let issues = await models.Issue.findAll({
                 where: {fk_series: parent.fk_series, number: parent.number},
                 order: [['createdAt', 'ASC']]
             });
@@ -804,8 +804,8 @@ export const resolvers = {
                 let issueCovers = await models.Cover.findAll({where: {fk_issue: issue.id}, order: [['number', 'ASC']]});
 
                 if (issueCovers.length > 0 && covers.length === 0)
-                    covers = issueStories;
-            });
+                    covers = issueCovers;
+            });*/
 
             return covers;
         },
