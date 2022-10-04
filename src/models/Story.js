@@ -11,7 +11,11 @@ class Story extends Model {
         Story.hasMany(models.Story, {as: {singular: 'Children', plural: 'Parent'}, foreignKey: 'fk_parent'});
 
         Story.belongsTo(models.Issue, {foreignKey: 'fk_issue'});
-        Story.belongsToMany(models.Individual, {through: models.Story_Individual, foreignKey: 'fk_story', unique: false});
+        Story.belongsToMany(models.Individual, {
+            through: models.Story_Individual,
+            foreignKey: 'fk_story',
+            unique: false
+        });
         Story.belongsToMany(models.Appearance, {through: models.Story_Appearance, foreignKey: 'fk_story'});
     }
 
@@ -24,7 +28,11 @@ class Story extends Model {
                     },
                     transaction: transaction
                 }).then(async ([individual, created]) => {
-                    resolve(await models.Story_Individual.create({fk_story: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
+                    resolve(await models.Story_Individual.create({
+                        fk_story: this.id,
+                        fk_individual: individual.id,
+                        type: type
+                    }, {transaction: transaction}));
                 }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
@@ -42,7 +50,11 @@ class Story extends Model {
                     },
                     transaction: transaction
                 }).then(async ([appearance, created]) => {
-                    resolve(await models.Story_Appearance.create({fk_story: this.id, fk_appearance: appearance.id, role: role ? role : ""}, {transaction: transaction}));
+                    resolve(await models.Story_Appearance.create({
+                        fk_story: this.id,
+                        fk_appearance: appearance.id,
+                        role: role ? role : ""
+                    }, {transaction: transaction}));
                 }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
@@ -134,22 +146,24 @@ export const resolvers = {
         },
         parent: async (parent) => await models.Story.findById(parent.fk_parent),
         children: async (parent) => {
-            if(parent.fk_parent !== null)
+            if (parent.fk_parent !== null)
                 return [];
 
             return await models.Story.findAll({
                 where: {fk_parent: parent.id},
-                include: [{model: models.Issue,
+                include: [{
+                    model: models.Issue,
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
                         [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
                         [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
-                        'number', 'fk_series']}],
+                        'number', 'fk_series']
+                }],
                 group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
                 order: [[models.Issue, 'releasedate', 'ASC']]
             });
         },
         onlyapp: async (parent) => {
-            if(parent.fk_parent === null)
+            if (parent.fk_parent === null)
                 return true;
 
             let stories = await models.Story.findAll({
@@ -162,7 +176,7 @@ export const resolvers = {
             return stories.length === 1;
         },
         firstapp: async (parent) => {
-            if(parent.fk_parent === null)
+            if (parent.fk_parent === null)
                 return true;
 
             let stories = await models.Story.findAll({
@@ -173,15 +187,15 @@ export const resolvers = {
             });
 
             let firstapp = false;
-            if(stories.length > 0 && stories[0]['Issue']) {
-                if(stories[0]['Issue'].id === parent.fk_issue)
+            if (stories.length > 0 && stories[0]['Issue']) {
+                if (stories[0]['Issue'].id === parent.fk_issue)
                     firstapp = true;
                 else {
                     let issue = await models.Issue.findOne({
                         where: {id: parent.fk_issue}
                     });
 
-                    if(issue.number === stories[0]['Issue'].number && issue.fk_series === stories[0]['Issue'].fk_series)
+                    if (issue.number === stories[0]['Issue'].number && issue.fk_series === stories[0]['Issue'].fk_series)
                         firstapp = true;
                 }
             }
@@ -205,14 +219,14 @@ export const resolvers = {
 
             if (storiesTb.length > 0) {
                 let isTbStory;
-                if(parent.fk_parent) {
+                if (parent.fk_parent) {
                     storiesTb.forEach(story => {
-                        if(story.id === parent.id)
+                        if (story.id === parent.id)
                             isTbStory = true;
                     });
                 }
 
-                if(!isTbStory) {
+                if (!isTbStory) {
                     let stories = await models.Story.findAll({
                         where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
                         include: [models.Issue],
@@ -241,9 +255,6 @@ export const resolvers = {
             return parent.fk_parent === null;
         },
         individuals: async (parent) => {
-            if(parent.fk_parent !== null)
-                return [];
-
             return await models.Individual.findAll({
                 include: [{
                     model: models.Story
@@ -277,17 +288,17 @@ export async function create(story, issue, transaction, us) {
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                if(story.individuals)
+                if (story.individuals)
                     await asyncForEach(story.individuals, async individual => {
-                        if(individual.name && individual.name.trim() !== '')
+                        if (individual.name && individual.name.trim() !== '')
                             await asyncForEach(individual.type, async type => {
                                 await resStory.associateIndividual(individual.name.trim(), type, transaction);
                             });
                     });
 
-                if(story.appearances)
+                if (story.appearances)
                     await asyncForEach(story.appearances, async appearance => {
-                        if(appearance.name && appearance.name.trim() !== '')
+                        if (appearance.name && appearance.name.trim() !== '')
                             await resStory.associateAppearance(appearance.name.trim(), appearance.type, appearance.role, transaction);
                     });
 
@@ -295,7 +306,11 @@ export async function create(story, issue, transaction, us) {
             } else {
                 let resIssue = await findOrCrawlIssue(story.parent.issue, transaction);
 
-                let oStories = await models.Story.findAll({where: {fk_issue: resIssue.id}, order: [['number', 'ASC']], transaction});
+                let oStories = await models.Story.findAll({
+                    where: {fk_issue: resIssue.id},
+                    order: [['number', 'ASC']],
+                    transaction
+                });
                 let oStory;
 
                 oStories.forEach(e => {
@@ -313,17 +328,17 @@ export async function create(story, issue, transaction, us) {
                     fk_parent: oStory.id
                 }, {transaction: transaction});
 
-                if(story.individuals)
+                if (story.individuals)
                     await asyncForEach(story.individuals, async individual => {
-                        if(individual.name && individual.name.trim() !== '')
+                        if (individual.name && individual.name.trim() !== '')
                             await asyncForEach(individual.type, async type => {
                                 await newStory.associateIndividual(individual.name.trim(), type, transaction);
                             });
                     });
 
-                if(story.appearances)
+                if (story.appearances)
                     await asyncForEach(story.appearances, async appearance => {
-                        if(appearance.name && appearance.name.trim() !== '')
+                        if (appearance.name && appearance.name.trim() !== '')
                             await newStory.associateAppearance(appearance.name.trim(), appearance.type, appearance.role, transaction);
                     });
 
@@ -382,7 +397,7 @@ export async function getStories(issue, transaction) {
                     });
 
                     rawStory.individuals = [];
-                    if(individuals) {
+                    if (individuals) {
                         individuals.forEach(individual => {
                             let i = rawStory.individuals.find(n => n.name === individual.name);
 
@@ -407,11 +422,11 @@ export async function getStories(issue, transaction) {
                     });
 
                     rawStory.individuals = [];
-                    if(individuals)
+                    if (individuals)
                         individuals.forEach(individual => {
                             let i = rawStory.individuals.find(n => n.name === individual.name);
 
-                            if(!i) {
+                            if (!i) {
                                 i = {name: individual.name, type: []};
                                 rawStory.individuals.push(i);
                             }
@@ -431,9 +446,13 @@ export async function getStories(issue, transaction) {
                     });
 
                     rawStory.appearances = [];
-                    if(appearances)
+                    if (appearances)
                         appearances.forEach(appearance => {
-                            let a = {name: appearance.name, type: appearance.type, role: appearance["Stories.Story_Appearance.role"]};
+                            let a = {
+                                name: appearance.name,
+                                type: appearance.type,
+                                role: appearance["Stories.Story_Appearance.role"]
+                            };
                             rawStory.appearances.push(a);
                         });
                 }
@@ -448,34 +467,34 @@ export async function getStories(issue, transaction) {
 }
 
 export function equals(a, b) {
-    if(a.exclusive !== b.exclusive)
+    if (a.exclusive !== b.exclusive)
         return false;
 
-    if(a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo)
+    if (a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo)
         return false;
 
-    if(a.individuals && !b.individuals)
+    if (a.individuals && !b.individuals)
         return false;
 
-    if(a.appearances && !b.appearances)
+    if (a.appearances && !b.appearances)
         return false;
 
-    if(!a.individuals && b.individuals)
+    if (!a.individuals && b.individuals)
         return false;
 
-    if(!a.appearances && b.appearances)
+    if (!a.appearances && b.appearances)
         return false;
 
-    if((a.individuals && b.individuals) && (a.individuals.length !== b.individuals.length))
+    if ((a.individuals && b.individuals) && (a.individuals.length !== b.individuals.length))
         return false;
 
-    if((a.appearances && b.appearances) && (a.appearances.length !== b.appearances.length))
+    if ((a.appearances && b.appearances) && (a.appearances.length !== b.appearances.length))
         return false;
 
     let found = a.individuals.every(aIndividual => {
         let r = b.individuals.find(bIndividual => aIndividual.name === bIndividual.name);
 
-        if(r)
+        if (r)
             return aIndividual.type.every(aType => r.type.some(bType => aType === bType));
 
         return false;
@@ -487,12 +506,12 @@ export function equals(a, b) {
         });
     });
 
-    if(!a.exclusive) {
+    if (!a.exclusive) {
         return (found &&
-          a.parent.number === b.number &&
-          a.parent.issue.number === b.parent.issue.number &&
-          a.parent.issue.series.title === b.parent.issue.series.title &&
-          a.parent.issue.series.volume === b.parent.issue.series.volume
+            a.parent.number === b.number &&
+            a.parent.issue.number === b.parent.issue.number &&
+            a.parent.issue.series.title === b.parent.issue.series.title &&
+            a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
         return found

@@ -576,7 +576,7 @@ export const resolvers = {
                                 stories.push({
                                     number: stories.length + 1,
                                     parent: {number: i + 1, issue: story.parent.issue},
-                                    translators: story.translators,
+                                    individuals: story.individuals,
                                     addinfo: '',
                                     exclusive: false
                                 });
