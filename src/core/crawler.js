@@ -277,6 +277,16 @@ async function crawlCover(cover, issue) {
             });
         }
 
+        if (Object.keys($.query.pages)[0] === '-1') {
+            $ = await request({
+                uri:
+                    API_URI +
+                    '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
+                    decodeURI(cover.url.replace(':', '')),
+                transform: (body) => JSON.parse(body),
+            });
+        }
+
         cover.url = $.query.pages[Object.keys($.query.pages)[0]].imageinfo[0].url;
         cover.url = cover.url.substring(0, cover.url.indexOf('/revision/'));
     } catch (e) {

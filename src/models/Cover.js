@@ -23,7 +23,11 @@ class Cover extends Model {
                     },
                     transaction: transaction
                 }).then(async ([individual, created]) => {
-                    resolve(await models.Cover_Individual.create({fk_cover: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
+                    resolve(await models.Cover_Individual.create({
+                        fk_cover: this.id,
+                        fk_individual: individual.id,
+                        type: type
+                    }, {transaction: transaction}));
                 }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
@@ -100,7 +104,7 @@ export const resolvers = {
         parent: async (parent) => await models.Cover.findById(parent.fk_parent),
         issue: async (parent) => await models.Issue.findById(parent.fk_issue),
         children: async (parent) => {
-            if(parent.fk_parent !== null)
+            if (parent.fk_parent !== null)
                 return [];
 
             return await models.Cover.findAll({
@@ -111,7 +115,7 @@ export const resolvers = {
             })
         },
         onlyapp: async (parent) => {
-            if(parent.fk_parent === null)
+            if (parent.fk_parent === null)
                 return true;
 
             let covers = await models.Cover.findAll({
@@ -124,7 +128,7 @@ export const resolvers = {
             return covers.length === 1;
         },
         firstapp: async (parent) => {
-            if(parent.fk_parent === null)
+            if (parent.fk_parent === null)
                 return true;
 
             let cover = await models.Cover.findAll({
@@ -135,15 +139,15 @@ export const resolvers = {
             });
 
             let firstapp = false;
-            if(cover.length > 0) {
-                if(cover[0]['Issue'].id === parent.fk_issue)
+            if (cover.length > 0) {
+                if (cover[0]['Issue'].id === parent.fk_issue)
                     firstapp = true;
                 else {
                     let issue = await models.Issue.findOne({
                         where: {id: parent.fk_issue}
                     });
 
-                    if(issue.number === cover[0]['Issue'].number && issue.fk_series === cover[0]['Issue'].fk_series)
+                    if (issue.number === cover[0]['Issue'].number && issue.fk_series === cover[0]['Issue'].fk_series)
                         firstapp = true;
                 }
             }
@@ -155,7 +159,7 @@ export const resolvers = {
         },
         addinfo: (parent) => parent.addinfo,
         individuals: async (parent) => {
-            if(parent.fk_parent !== null)
+            if (parent.fk_parent !== null)
                 return [];
 
             return await models.Individual.findAll({
@@ -181,9 +185,9 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
-                if(cover.individuals)
+                if (cover.individuals)
                     await asyncForEach(cover.individuals, async individual => {
-                        if(individual.name && individual.name.trim() !== '')
+                        if (individual.name && individual.name.trim() !== '')
                             await asyncForEach(individual.type, async type => {
                                 await resCover.associateIndividual(individual.name.trim(), type, transaction);
                             });
@@ -211,7 +215,7 @@ export async function create(cover, issue, coverUrl, transaction, us) {
                 if (!oVariant)
                     throw new Error("Variant " + cover.parent.issue.series.title + " (Vol." + cover.parent.issue.series.volume + ") " + cover.parent.issue.number + " [" + cover.parent.issue.variant + "] nicht gefunden");
 
-                let oCover = await models.Cover.findOne({where: {fk_issue: oVariant.id}}, transaction);
+                let oCover = await models.Cover.findOne({where: {fk_issue: oVariant.id}, transaction});
                 let newCover = await models.Cover.create({
                     url: cover.number === 0 ? coverUrl : '',
                     number: !isNaN(cover.number) ? cover.number : 1,
@@ -243,7 +247,7 @@ export async function getCovers(issue, transaction) {
 
                 rawCover.exclusive = cover.fk_parent === null;
 
-                if(cover.fk_parent !== null) {
+                if (cover.fk_parent !== null) {
                     let rawParent = await models.Cover.findOne({where: {id: cover.fk_parent}, transaction});
                     let rawIssue = await models.Issue.findOne({where: {id: rawParent.fk_issue}, transaction});
                     let rawSeries = await models.Series.findOne({where: {id: rawIssue.fk_series}, transaction});
@@ -272,7 +276,7 @@ export async function getCovers(issue, transaction) {
                     });
 
                     rawCover.individuals = [];
-                    if(individuals) {
+                    if (individuals) {
                         individuals.forEach(individual => {
                             let i = rawCover.individuals.find(n => n.name === individual.name);
 
@@ -297,13 +301,13 @@ export async function getCovers(issue, transaction) {
 }
 
 export function equals(a, b) {
-    if(a.exclusive !== b.exclusive)
+    if (a.exclusive !== b.exclusive)
         return false;
 
-    if(a.number !== b.number || a.addinfo !== b.addinfo)
+    if (a.number !== b.number || a.addinfo !== b.addinfo)
         return false;
 
-    if(!a.exclusive) {
+    if (!a.exclusive) {
         return (
             a.parent.issue.number === b.parent.issue.number &&
             a.parent.issue.variant === b.parent.issue.variant &&
@@ -311,13 +315,13 @@ export function equals(a, b) {
             a.parent.issue.series.volume === b.parent.issue.series.volume
         );
     } else {
-        if(a.individuals.length !== b.individuals.length)
+        if (a.individuals.length !== b.individuals.length)
             return false;
 
         return a.individuals.every(aIndividual => {
             let r = b.individuals.find(bIndividual => aIndividual.name === bIndividual.name);
 
-            if(r)
+            if (r)
                 return aIndividual.type.every(aType => r.type.some(bType => aType === bType));
 
             return false;

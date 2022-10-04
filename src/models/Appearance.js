@@ -1,7 +1,6 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import matchSorter from 'match-sorter';
 
 class Appearance extends Model {
     static tableName = 'Appearance';
@@ -65,7 +64,7 @@ export const resolvers = {
             let where = {};
             let order = [['name', 'ASC']];
 
-            if(pattern !== '') {
+            if (pattern !== '') {
                 where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
                 order = [[models.sequelize.literal("CASE " +
                     "   WHEN name LIKE '" + pattern + "' THEN 1 " +
@@ -74,8 +73,8 @@ export const resolvers = {
                     "   ELSE 3 " +
                     "END"), 'ASC']];
             }
-            
-            if(type)
+
+            if (type)
                 where.type = {[Sequelize.Op.like]: type.toUpperCase()};
 
             return await models.Appearance.findAll({
