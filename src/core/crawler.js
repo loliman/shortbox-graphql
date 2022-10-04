@@ -870,8 +870,7 @@ function getAppearances(
 function generateIssueUrl(issue) {
     return (
         generateSeriesUrl(issue.series) +
-        encodeURIComponent('_' + issue.number.trim())
-    );
+        encodeURIComponent('_') + issue.number.trim());
 }
 
 function generateSeriesUrl(series) {
