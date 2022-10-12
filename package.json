@@ -16,7 +16,7 @@
   "dependencies": {
     "@types/cheerio": "^0.22.28",
     "@types/request-promise": "^4.1.47",
-    "apollo-server": "^2.19.2",
+    "apollo-server": "^2.25.4",
     "apollo-server-constraint-directive": "^1.2.7",
     "cheerio": "^1.0.0-rc.5",
     "cli-progress": "^3.9.0",
