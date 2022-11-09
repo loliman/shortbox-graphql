@@ -27,9 +27,9 @@ export const typeDef = gql`
     publishers: [PublisherInput],
     series: [SeriesInput],
     numbers: [NumberFilter],
-    arcs: [ArcInput],
+    arcs: String,
     individuals: [IndividualInput],
-    appearances: [AppearanceInput],
+    appearances: String,
     firstPrint: Boolean,
     onlyPrint: Boolean,
     otherTb: Boolean,
@@ -326,26 +326,26 @@ function getType(type) {
     }
 }
 
-export function createFilterQuery(selected, filter, offset, print) {
+export function createFilterQuery(selected, filter, offset, print, overview, order) {
     let type = filter.story ? "story" : filter.cover ? "cover" : "feature";
     let us = filter.us ? 1 : 0;
 
     let columns = "p.name as publishername, p.id as publisherid, " +
         "s.title as seriestitle, s.volume as seriesvolume, s.startyear as seriesstartyear, s.endyear as seriesendyear, s.id as seriesid, " +
-        "i.number as issuenumber, i.variant as issuevariant, i.id as issueid, i.format as issueformat, i.pages as issuepages, i.releasedate as issuereleasedate, i.price as issueprice, i.currency as issuecurrency ";
+        "i.comicguideid as comicguideid, i.updatedAt as updatedAt, i.createdAt as createdAt, i.title as issuetitle, i.number as issuenumber, i.variant as issuevariant, i.id as issueid, i.format as issueformat, i.pages as issuepages, i.releasedate as issuereleasedate, i.price as issueprice, i.currency as issuecurrency ";
 
     let groupby = "";
     let where = "";
 
-    if (print)
+    if (print && !overview)
         groupby = "i.number, s.title, s.volume, p.name";
-    else if (selected.publisher) {
+    else if (selected.publisher && !overview) {
         groupby = "i.number";
         where = " and s.title = '" + escapeSqlString(selected.title) + "' and s.volume = " + selected.volume + " and p.name = '" + escapeSqlString(selected.publisher.name) + "' ";
-    } else if (selected.name) {
+    } else if (selected.name && !overview) {
         groupby = "s.title, s.volume";
         where = " and p.name = '" + escapeSqlString(selected.name) + "' ";
-    } else
+    } else if (!overview)
         groupby = "p.name";
 
     if (filter.formats && filter.formats.length > 0) {
@@ -369,8 +369,10 @@ export function createFilterQuery(selected, filter, offset, print) {
         " left join series s on i.fk_series = s.id" +
         " left join publisher p on s.fk_publisher = p.id" +
         " where p.original = " + us + where +
-        " %INTERSECT% " +
-        " group by " + groupby;
+        " %INTERSECT% ";
+
+    if (!overview)
+        rawQuery += " group by " + groupby;
 
     let intersect = "";
 
@@ -389,11 +391,11 @@ export function createFilterQuery(selected, filter, offset, print) {
                 " where i.id is not null " +
                 " and (";
 
-            filter.appearances.map((app, i) => {
-                if (i > 0)
-                    intersect += " OR ";
-                intersect += " (app.name = '" + escapeSqlString(app.name) + "' and app.type = '" + app.type + "')";
-            });
+            //filter.appearances.map((app, i) => {
+            //    if (i > 0)
+            //        intersect += " OR ";
+            intersect += " (app.name = '" + escapeSqlString(filter.appearances) + "')";
+            //});
 
             intersect += ")";
 
@@ -451,17 +453,17 @@ export function createFilterQuery(selected, filter, offset, print) {
             " where i.id is not null " +
             " and (";
 
-        filter.arcs.map((arc, i) => {
-            if (i > 0)
-                intersect += " OR ";
-            //intersect += " (a.title = '" + escapeSqlString(arc.title) + "' and a.type = '" + arc.type + "')";
-            intersect += " (a.title = '" + escapeSqlString(arc.title) + "')";
-        });
+        //filter.arcs.map((arc, i) => {
+        //    if (i > 0)
+        //        intersect += " OR ";
+        //intersect += " (a.title = '" + escapeSqlString(arc.title) + "' and a.type = '" + arc.type + "')";
+        intersect += " (a.title = '" + escapeSqlString(filter.arcs) + "')";
+        //});
 
         intersect += ") group by i.id) ";
     }
 
-    if (filter.publishers && filter.publishers.length > 0) {
+    if (filter.publishers && filter.publishers.filter(p => p.us !== filter.us).length > 0) {
         intersect += " AND i.id IN (" +
             "select i.id " +
             " from publisher p " +
@@ -475,7 +477,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " where i.id is not null " +
             " and (";
 
-        filter.publishers.map((publisher, i) => {
+        filter.publishers.filter(p => p.us === filter.us).map((publisher, i) => {
             if (i > 0)
                 intersect += " OR ";
             intersect += " (pjoin.name = '" + escapeSqlString(publisher.name) + "')";
@@ -484,7 +486,19 @@ export function createFilterQuery(selected, filter, offset, print) {
         intersect += ") group by i.id) ";
     }
 
-    if (filter.series && filter.series.length > 0) {
+    if (filter.publishers && filter.publishers.filter(p => p.us === filter.us).length > 0) {
+        intersect += " AND (";
+
+        filter.publishers.filter(p => p.us === filter.us).map((publisher, i) => {
+            if (i > 0)
+                intersect += " OR ";
+            intersect += " (p.name = '" + escapeSqlString(publisher.name) + "')";
+        });
+
+        intersect += ") ";
+    }
+
+    if (filter.series && filter.series.filter(p => p.publisher.us !== filter.us).length > 0) {
         intersect += " AND i.id IN (" +
             "select i.id " +
             " from publisher p " +
@@ -498,13 +512,25 @@ export function createFilterQuery(selected, filter, offset, print) {
             " where i.id is not null " +
             " and (";
 
-        filter.series.map((series, i) => {
+        filter.series.filter(p => p.publisher.us !== filter.us).map((series, i) => {
             if (i > 0)
                 intersect += " OR ";
             intersect += " (sjoin.title = '" + escapeSqlString(series.title) + "' and sjoin.volume = " + series.volume + " and pjoin.name = '" + escapeSqlString(series.publisher.name) + "')";
         });
 
         intersect += ") group by i.id) ";
+    }
+
+    if (filter.series && filter.series.filter(p => p.publisher.us === filter.us).length > 0) {
+        intersect += " AND (";
+
+        filter.series.filter(p => p.publisher.us === filter.us).map((series, i) => {
+            if (i > 0)
+                intersect += " OR ";
+            intersect += " (s.title = '" + escapeSqlString(series.title) + "' and s.volume = " + series.volume + ")";
+        });
+
+        intersect += ") ";
     }
 
     if (filter.numbers && filter.numbers.length > 0) {
@@ -648,8 +674,26 @@ export function createFilterQuery(selected, filter, offset, print) {
         intersect += " and i.id " + (filter.reprint ? "not in" : "in") + " (" + intersectContains + ")";
 
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
+
+    if (order)
+        switch (order) {
+            case 'releasedate':
+            case 'updatedAt':
+            case 'createdAt':
+                rawQuery += " ORDER BY i." + order + " DESC";
+                break;
+            case 'series':
+                rawQuery += " ORDER BY s.title, s.volume, i.number DESC";
+                break;
+            case 'publisher':
+                rawQuery += " ORDER BY p.name, s.title, s.volume, i.number DESC";
+                break;
+        }
+
     if (!print)
         rawQuery += " LIMIT " + offset + ", 50";
+
+    //console.log(rawQuery);
 
     return rawQuery;
 }

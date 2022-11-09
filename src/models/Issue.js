@@ -180,7 +180,7 @@ export const typeDef = gql`
   
   extend type Query {
     issues(pattern: String, series: SeriesInput!, offset: Int, filter: Filter): [Issue], 
-    lastEdited(filter: Filter, offset: Int): [Issue],
+    lastEdited(filter: Filter, offset: Int, order: String): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }
     
@@ -283,33 +283,23 @@ export const resolvers = {
                 return issues.sort((a, b) => naturalCompare(a.number, b.number));
             }
         },
-        lastEdited: async (_, {filter, offset}) => {
-            let where = {};
-            where['$Series->Publisher.original$'] = filter.us;
-            if (filter.publishers && filter.publishers[0] && filter.publishers[0].name) {
-                where['$Series->Publisher.name$'] = filter.publishers[0].name;
+        lastEdited: async (_, {filter, offset, order}) => {
+            let rawQuery = createFilterQuery(filter.us, filter, offset, false, true, order);
 
-                if (filter.series && filter.series[0] && filter.series[0].title && filter.series[0].volume) {
-                    where['$Series.title$'] = filter.series[0].title;
-                    where['$Series.volume$'] = filter.series[0].volume;
-                }
-            }
+            let res = await models.sequelize.query(rawQuery);
+            let issues = [];
+            res[0].forEach(i => issues.push({
+                comicguideid: i.comicguideid,
+                number: i.issuenumber,
+                updatedAt: i.updatedAt,
+                createdAt: i.createdAt,
+                title: i.issuetitle,
+                fk_series: i.seriesid,
+                format: i.issueformat,
+                variant: i.issuevariant
+            }));
 
-
-            return await models.Issue.findAll({
-                where: where,
-                include: [
-                    {
-                        model: models.Series,
-                        include: [
-                            models.Publisher
-                        ]
-                    }
-                ],
-                order: [['updatedAt', 'DESC']],
-                offset: offset,
-                limit: 25
-            })
+            return issues;
         },
         issue: async (_, {issue, edit}) => {
             let where = {
