@@ -78,8 +78,8 @@ export const resolvers = {
                 let publisherLabel = await generateLabel(publisher);
                 let seriesLabel = await generateLabel(series);
 
-                if(publisherLabel in response) {
-                    if(seriesLabel in response[publisherLabel])
+                if (publisherLabel in response) {
+                    if (seriesLabel in response[publisherLabel])
                         response[publisherLabel][seriesLabel].push(issue);
                     else {
                         response[publisherLabel][seriesLabel] = [];
@@ -103,7 +103,7 @@ export const resolvers = {
                 }).sort()];
             }).sort();
 
-            if(type === "txt") {
+            if (type === "txt") {
                 return JSON.stringify(await convertFilterToTxt(filter) + await resultsToTxt(sortedResponse));
             } else if (type === "csv") {
                 return JSON.stringify(await resultsToCsv(sortedResponse));
@@ -121,7 +121,7 @@ async function resultsToCsv(results) {
         p[1].forEach(s => {
             s[1].forEach(i => {
                 responseString += i.series.publisher.name + "\t;"
-                    + i.series.title  + "\t;" + i.series.volume + "\t;" + i.series.startyear + "\t;" + i.series.endyear + "\t;"
+                    + i.series.title + "\t;" + i.series.volume + "\t;" + i.series.startyear + "\t;" + i.series.endyear + "\t;"
                     + i.number + "\t;" + i.variant + "\t;" + i.format + "\t;" + i.pages + "\t;" + i.releasedate + "\t;" + (i.price + "").replace(".", ",") + "\t;" + i.currency + "\n";
             })
         });
@@ -342,26 +342,24 @@ export function createFilterQuery(selected, filter, offset, print) {
     else if (selected.publisher) {
         groupby = "i.number";
         where = " and s.title = '" + escapeSqlString(selected.title) + "' and s.volume = " + selected.volume + " and p.name = '" + escapeSqlString(selected.publisher.name) + "' ";
-    }
-    else if(selected.name) {
+    } else if (selected.name) {
         groupby = "s.title, s.volume";
         where = " and p.name = '" + escapeSqlString(selected.name) + "' ";
-    }
-    else
+    } else
         groupby = "p.name";
 
-    if(filter.formats && filter.formats.length > 0) {
+    if (filter.formats && filter.formats.length > 0) {
         where += " and i.format in (";
         filter.formats.map(format => where += "'" + format + "',");
-        where = where.substr(0, where.length-1);
+        where = where.substr(0, where.length - 1);
         where += ") "
     }
 
-    if(filter.releasedates && filter.releasedates.length > 0) {
+    if (filter.releasedates && filter.releasedates.length > 0) {
         filter.releasedates.map(releasedate => where += " and i.releasedate " + releasedate.compare + " '" + (dateFormat(new Date(releasedate.date), "yyyy-mm-dd")) + "' ");
     }
 
-    if(filter.withVariants) {
+    if (filter.withVariants) {
         where += " and i.variant != '' ";
     }
 
@@ -376,10 +374,10 @@ export function createFilterQuery(selected, filter, offset, print) {
 
     let intersect = "";
 
-    if(filter.appearances && filter.appearances.length > 0 && (filter.cover || filter.story)) {
+    if (filter.appearances && filter.appearances.length > 0 && (filter.cover || filter.story)) {
         intersect += " AND i.id IN (";
 
-        for(let i = 2; i > 0; i--) {
+        for (let i = 2; i > 0; i--) {
             intersect +=
                 "select i.id " +
                 " from publisher p " +
@@ -392,24 +390,24 @@ export function createFilterQuery(selected, filter, offset, print) {
                 " and (";
 
             filter.appearances.map((app, i) => {
-                if(i > 0)
+                if (i > 0)
                     intersect += " OR ";
                 intersect += " (app.name = '" + escapeSqlString(app.name) + "' and app.type = '" + app.type + "')";
             });
 
             intersect += ")";
 
-            if(i === 2)
+            if (i === 2)
                 intersect += " UNION "
         }
 
         intersect += " group by i.id) ";
     }
 
-    if(filter.individuals && filter.individuals.length > 0) {
+    if (filter.individuals && filter.individuals.length > 0) {
         intersect += " AND i.id IN (";
 
-        for(let i = 2; i > 0; i--) {
+        for (let i = 2; i > 0; i--) {
             intersect +=
                 "select i.id " +
                 " from publisher p " +
@@ -422,21 +420,21 @@ export function createFilterQuery(selected, filter, offset, print) {
                 " and (";
 
             filter.individuals.map((individual, i) => {
-                if(i > 0)
+                if (i > 0)
                     intersect += " OR ";
                 intersect += " (indi.name = '" + escapeSqlString(individual.name) + "' and stindi.type = '" + individual.type + "')";
             });
 
             intersect += ")";
 
-            if(i === 2)
+            if (i === 2)
                 intersect += " UNION "
         }
 
         intersect += " group by i.id) ";
     }
 
-    if(filter.arcs && filter.arcs.length > 0) {
+    if (filter.arcs && filter.arcs.length > 0) {
         intersect += " AND i.id IN (" +
             "select i.id " +
             " from publisher p " +
@@ -454,15 +452,16 @@ export function createFilterQuery(selected, filter, offset, print) {
             " and (";
 
         filter.arcs.map((arc, i) => {
-            if(i > 0)
+            if (i > 0)
                 intersect += " OR ";
-            intersect += " (a.title = '" + escapeSqlString(arc.title) + "' and a.type = '" + arc.type + "')";
+            //intersect += " (a.title = '" + escapeSqlString(arc.title) + "' and a.type = '" + arc.type + "')";
+            intersect += " (a.title = '" + escapeSqlString(arc.title) + "')";
         });
 
         intersect += ") group by i.id) ";
     }
 
-    if(filter.publishers && filter.publishers.length > 0) {
+    if (filter.publishers && filter.publishers.length > 0) {
         intersect += " AND i.id IN (" +
             "select i.id " +
             " from publisher p " +
@@ -477,7 +476,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " and (";
 
         filter.publishers.map((publisher, i) => {
-            if(i > 0)
+            if (i > 0)
                 intersect += " OR ";
             intersect += " (pjoin.name = '" + escapeSqlString(publisher.name) + "')";
         });
@@ -485,7 +484,7 @@ export function createFilterQuery(selected, filter, offset, print) {
         intersect += ") group by i.id) ";
     }
 
-    if(filter.series && filter.series.length > 0) {
+    if (filter.series && filter.series.length > 0) {
         intersect += " AND i.id IN (" +
             "select i.id " +
             " from publisher p " +
@@ -500,7 +499,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " and (";
 
         filter.series.map((series, i) => {
-            if(i > 0)
+            if (i > 0)
                 intersect += " OR ";
             intersect += " (sjoin.title = '" + escapeSqlString(series.title) + "' and sjoin.volume = " + series.volume + " and pjoin.name = '" + escapeSqlString(series.publisher.name) + "')";
         });
@@ -508,7 +507,7 @@ export function createFilterQuery(selected, filter, offset, print) {
         intersect += ") group by i.id) ";
     }
 
-    if(filter.numbers && filter.numbers.length > 0) {
+    if (filter.numbers && filter.numbers.length > 0) {
         intersect += " AND i.id IN (" +
             "select i.id " +
             " from publisher p " +
@@ -521,7 +520,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " and (";
 
         filter.numbers.map((number, i) => {
-            if(i > 0)
+            if (i > 0)
                 intersect += " OR ";
             intersect += " (cast(ijoin.number as unsigned) " + number.compare + "cast('" + number.number + "' as unsigned))";
         });
@@ -530,7 +529,7 @@ export function createFilterQuery(selected, filter, offset, print) {
     }
 
     let intersectContains = "";
-    if((filter.reprint || filter.exclusive) && !us && (filter.cover || filter.story)) {
+    if ((filter.reprint || filter.exclusive) && !us && (filter.cover || filter.story)) {
         intersectContains +=
             "select i.id " +
             " from publisher p " +
@@ -542,7 +541,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " and st.id is not null and st.fk_parent is null group by i.id ";
     }
 
-    if((filter.reprint || filter.otherTb) && !us && (filter.cover || filter.story)) {
+    if ((filter.reprint || filter.otherTb) && !us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, i.format " +
@@ -559,7 +558,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " and i.format != 'Taschenbuch') a ";
     }
 
-    if((filter.reprint || filter.onlyPrint) && !us && (filter.cover || filter.story)) {
+    if ((filter.reprint || filter.onlyPrint) && !us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, i.format " +
@@ -574,7 +573,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " HAVING count(distinct concat(s.id, '#', i.number)) = 1) a ";
     }
 
-    if((filter.reprint || filter.firstPrint) && !us && (filter.cover || filter.story)) {
+    if ((filter.reprint || filter.firstPrint) && !us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "SELECT i.id FROM publisher p " +
             " LEFT JOIN series s ON p.id = s.fk_publisher " +
@@ -594,7 +593,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             "   GROUP BY stjoin.id) ";
     }
 
-    if(filter.onlyTb && us && (filter.cover || filter.story)) {
+    if (filter.onlyTb && us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, ijoin.format " +
@@ -612,7 +611,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " AND ijoin.format = 'Taschenbuch') a ";
     }
 
-    if(filter.onlyOnePrint && us && (filter.cover || filter.story)) {
+    if (filter.onlyOnePrint && us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id " +
@@ -629,7 +628,7 @@ export function createFilterQuery(selected, filter, offset, print) {
             " ) a ";
     }
 
-    if(filter.noPrint && us && (filter.cover || filter.story)) {
+    if (filter.noPrint && us && (filter.cover || filter.story)) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, i.format " +
@@ -645,11 +644,11 @@ export function createFilterQuery(selected, filter, offset, print) {
             " ) a ";
     }
 
-    if(intersectContains !== "")
-        intersect += " and i.id " + (filter.reprint ? "not in" : "in" ) + " (" + intersectContains + ")";
+    if (intersectContains !== "")
+        intersect += " and i.id " + (filter.reprint ? "not in" : "in") + " (" + intersectContains + ")";
 
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
-    if(!print)
+    if (!print)
         rawQuery += " LIMIT " + offset + ", 50";
 
     return rawQuery;
