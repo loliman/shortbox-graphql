@@ -39,15 +39,6 @@ export async function crawlIssue(number, title, volume) {
 
     await finalizeStories(issue);
 
-    //until shortbox 2.0 we have to cut the reprints to avoid a whole rewrite of the code...
-    issue.stories.forEach(story => {
-        if (story.reprintOf) {
-            story.title = story.reprintOf.title;
-            story.individuals = story.reprintOf.individuals;
-            story.appearances = story.reprintOf.appearances;
-        }
-    })
-
     return issue;
 }
 

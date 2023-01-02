@@ -18,9 +18,6 @@ export const typeDef = gql`
   
   input Filter {
     us: Boolean!,
-    story: Boolean,
-    cover: Boolean,
-    feature: Boolean,
     formats: [String],
     withVariants: Boolean,
     releasedates: [DateFilter],
@@ -32,10 +29,10 @@ export const typeDef = gql`
     appearances: String,
     firstPrint: Boolean,
     onlyPrint: Boolean,
-    otherTb: Boolean,
+    onlyTb: Boolean,
     exclusive: Boolean,
     reprint: Boolean,
-    onlyTb: Boolean,
+    otherOnlyTb: Boolean,
     noPrint: Boolean,
     onlyOnePrint: Boolean
   }
@@ -172,25 +169,18 @@ async function convertFilterToTxt(filter) {
     if (!filter.formats && !filter.withVariants && !filter.releasedates)
         s += "\t\t-\n";
 
-    if (filter.story)
-        s += "\tFiltern nach Geschichte\n";
-    if (filter.cover)
-        s += "\tFiltern nach Cover\n";
-    if (filter.feature)
-        s += "\tFiltern nach sonstigen Inhalten\n";
-
     s += "\tEnthält\n";
     if (filter.firstPrint)
         s += "\t\tErstausgabe\n";
     if (filter.onlyPrint)
         s += "\t\tEinzige Ausgabe\n";
-    if (filter.otherTb)
-        s += "\t\tSonst nur in TB\n";
+    if (filter.onlyTb)
+        s += "\t\tNur in TB\n";
     if (filter.exclusive)
         s += "\t\tExclusiv\n";
     if (filter.reprint)
         s += "\t\tReiner Nachdruck\n";
-    if (filter.onlyTb)
+    if (filter.otherOnlyTb)
         s += "\t\tNur in TB\n";
     if (filter.onlyOnePrint)
         s += "\t\tNur einfach auf deutsch erschienen\n";
@@ -237,7 +227,7 @@ async function convertFilterToTxt(filter) {
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (!filter.firstPrint && !filter.onlyPrint && !filter.otherTb && !filter.exclusive && !filter.reprint && !filter.onlyTb && !filter.noPrint && !filter.onlyOnePrint)
+    if (!filter.firstPrint && !filter.onlyPrint && !filter.onlyTb && !filter.exclusive && !filter.reprint && !filter.otherOnlyTb && !filter.noPrint && !filter.onlyOnePrint)
         s += "\t\t-\n";
 
     s += "\tMitwirkende\n";
@@ -327,7 +317,7 @@ function getType(type) {
 }
 
 export function createFilterQuery(selected, filter, offset, print, overview, order) {
-    let type = filter.story ? "story" : filter.cover ? "cover" : "feature";
+    let type = "story";
     let us = filter.us ? 1 : 0;
 
     let columns = "p.name as publishername, p.id as publisherid, " +
@@ -356,7 +346,7 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
     }
 
     if (filter.releasedates && filter.releasedates.length > 0) {
-        filter.releasedates.map(releasedate => where += " and i.releasedate " + releasedate.compare + " '" + (dateFormat(new Date(releasedate.date), "yyyy-mm-dd")) + "' ");
+        filter.releasedates.map(releasedate => where += " and '" + (dateFormat(new Date(releasedate.date), "yyyy-mm-dd")) + "' " + releasedate.compare + " i.releasedate ");
     }
 
     if (filter.withVariants) {
@@ -376,7 +366,7 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
 
     let intersect = "";
 
-    if (filter.appearances && filter.appearances.length > 0 && (filter.cover || filter.story)) {
+    if (filter.appearances && filter.appearances.length > 0) {
         intersect += " AND i.id IN (";
 
         for (let i = 2; i > 0; i--) {
@@ -389,15 +379,7 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
                 " left join story_appearance stapp on " + (i === 2 ? "st.id" : "st.fk_parent") + " = stapp.fk_story " +
                 " left join appearance app on stapp.fk_appearance = app.id " +
                 " where i.id is not null " +
-                " and (";
-
-            //filter.appearances.map((app, i) => {
-            //    if (i > 0)
-            //        intersect += " OR ";
-            intersect += " (app.name = '" + escapeSqlString(filter.appearances) + "')";
-            //});
-
-            intersect += ")";
+                " and ((app.name = '" + escapeSqlString(filter.appearances) + "'))";
 
             if (i === 2)
                 intersect += " UNION "
@@ -453,12 +435,7 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
             " where i.id is not null " +
             " and (";
 
-        //filter.arcs.map((arc, i) => {
-        //    if (i > 0)
-        //        intersect += " OR ";
-        //intersect += " (a.title = '" + escapeSqlString(arc.title) + "' and a.type = '" + arc.type + "')";
         intersect += " (a.title = '" + escapeSqlString(filter.arcs) + "')";
-        //});
 
         intersect += ") group by i.id) ";
     }
@@ -548,14 +525,14 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
         filter.numbers.map((number, i) => {
             if (i > 0)
                 intersect += " OR ";
-            intersect += " (cast(ijoin.number as unsigned) " + number.compare + "cast('" + number.number + "' as unsigned))";
+            intersect += " (cast('" + number.number + "' as unsigned) " + number.compare + "cast(ijoin.number as unsigned))";
         });
 
         intersect += ") group by i.id) ";
     }
 
     let intersectContains = "";
-    if ((filter.reprint || filter.exclusive) && !us && (filter.cover || filter.story)) {
+    if ((filter.reprint || filter.exclusive) && !us) {
         intersectContains +=
             "select i.id " +
             " from publisher p " +
@@ -567,7 +544,7 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
             " and st.id is not null and st.fk_parent is null group by i.id ";
     }
 
-    if ((filter.reprint || filter.otherTb) && !us && (filter.cover || filter.story)) {
+    if ((filter.reprint || filter.otherOnlyTb) && !us) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, i.format " +
@@ -577,14 +554,12 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
             " left join " + type + " st on i.id = st.fk_issue " +
             " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
             " where i.id is not null " +
+            " AND st.otheronlytb = 1 " +
             " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.fk_parent" +
-            " HAVING count(DISTINCT i.id) - count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) = 1 " +
-            " AND count(DISTINCT CASE WHEN i.format = 'Taschenbuch' THEN i.id ELSE NULL END) > 0" +
-            " and i.format != 'Taschenbuch') a ";
+            " GROUP BY  st.fk_parent) a ";
     }
 
-    if ((filter.reprint || filter.onlyPrint) && !us && (filter.cover || filter.story)) {
+    if ((filter.reprint || filter.onlyPrint) && !us) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, i.format " +
@@ -594,12 +569,12 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
             " left join " + type + " st on i.id = st.fk_issue " +
             " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
             " where i.id is not null " +
+            " AND st.onlyapp = 1 " +
             " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.fk_parent" +
-            " HAVING count(distinct concat(s.id, '#', i.number)) = 1) a ";
+            " GROUP BY  st.fk_parent) a ";
     }
 
-    if ((filter.reprint || filter.firstPrint) && !us && (filter.cover || filter.story)) {
+    if ((filter.reprint || filter.firstPrint) && !us) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "SELECT i.id FROM publisher p " +
             " LEFT JOIN series s ON p.id = s.fk_publisher " +
@@ -607,19 +582,11 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
             " LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
             " LEFT JOIN " + type + " stjoin ON st.fk_parent = stjoin.id " +
             " WHERE  i.id IS NOT NULL " +
-            " AND stjoin.id IS NOT NULL " +
-            " AND Concat(stjoin.id, '#', i.releasedate) IN ( " +
-            "   SELECT Concat(stjoin.id, '#', Min(i.releasedate)) FROM publisher p " +
-            "   LEFT JOIN series s ON p.id = s.fk_publisher " +
-            "   LEFT JOIN issue i ON s.id = i.fk_series " +
-            "   LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
-            "   LEFT JOIN " + type + " stjoin ON st.fk_parent = stjoin.id " +
-            "   WHERE i.id IS NOT NULL " +
-            "   AND stjoin.id IS NOT NULL " +
-            "   GROUP BY stjoin.id) ";
+            " AND st.firstapp = 1 " +
+            " AND stjoin.id IS NOT NULL ";
     }
 
-    if (filter.onlyTb && us && (filter.cover || filter.story)) {
+    if (filter.onlyTb && us) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, ijoin.format " +
@@ -631,13 +598,11 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
             " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
             " where i.id is not null " +
             " and (i.variant IS NULL OR i.variant = '') " +
-            " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.id" +
-            " HAVING count(*) = 1 " +
-            " AND ijoin.format = 'Taschenbuch') a ";
+            " AND st.onlytb = 1 " +
+            " AND stjoin.id IS NOT NULL) a ";
     }
 
-    if (filter.onlyOnePrint && us && (filter.cover || filter.story)) {
+    if (filter.onlyOnePrint && us) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id " +
@@ -648,13 +613,11 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
             " left join " + type + " stjoin ON st.id = stjoin.fk_parent" +
             " where i.id is not null " +
             " and (i.variant IS NULL OR i.variant = '') " +
-            " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.id " +
-            " HAVING count(*) = 1 " +
-            " ) a ";
+            " AND st.onlyoneprint = 1 " +
+            " AND stjoin.id IS NOT NULL) a ";
     }
 
-    if (filter.noPrint && us && (filter.cover || filter.story)) {
+    if (filter.noPrint && us) {
         intersectContains += (intersectContains !== "" ? " UNION " : "") +
             "select id from ( " +
             " select i.id as id, i.format " +
@@ -670,12 +633,23 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
             " ) a ";
     }
 
+    //negated in query
+    if (filter.reprint && !us) {
+        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+            "SELECT i.id FROM publisher p " +
+            " LEFT JOIN series s ON p.id = s.fk_publisher " +
+            " LEFT JOIN issue i ON s.id = i.fk_series " +
+            " LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
+            " where i.id is not null " +
+            " and st.id IS NULL ";
+    }
+
     if (intersectContains !== "")
         intersect += " and i.id " + (filter.reprint ? "not in" : "in") + " (" + intersectContains + ")";
 
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
 
-    if (order)
+    if (order) {
         switch (order) {
             case 'releasedate':
             case 'updatedAt':
@@ -689,6 +663,16 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
                 rawQuery += " ORDER BY p.name, s.title, s.volume, i.number DESC";
                 break;
         }
+    } else {
+        if (!selected) {
+            rawQuery += " ORDER BY p.name, s.title, s.volume, cast(i.number as unsigned) DESC";
+        } else if (selected.name) {
+            rawQuery += " ORDER BY s.title, s.volume, p.name, cast(i.number as unsigned) DESC";
+        } else if (selected.title) {
+            rawQuery += " ORDER BY cast(i.number as unsigned), s.title, s.volume, p.name DESC";
+        }
+
+    }
 
     if (!print)
         rawQuery += " LIMIT " + offset + ", 50";

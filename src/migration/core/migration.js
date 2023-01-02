@@ -2,12 +2,149 @@ import migration from "../models";
 import models from "../../models";
 import {asyncForEach} from "../../util/util";
 import fs from 'fs';
-import {create} from "../../models/Issue";
-import {crawlIssue, crawlSeries} from "../../core/crawler";
+import {create, findOrCrawlIssue, updateStoryTags} from "../../models/Issue";
+import {crawlIssue, crawlSeries} from "../../crawler/crawler_marvel";
 import {afterFirstMigration} from "../../config/config";
 
 var stream;
 var out;
+
+export async function updateTags() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            out = fs.createWriteStream("logs/out.log", {flags: 'a'});
+
+            let issues = await models.Issue.findAll({
+                where: {
+                    '$Series->Publisher.original$': 0
+                },
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            });
+
+            await asyncForEach(issues, async (i, idx, a) => {
+                let transaction = await models.sequelize.transaction();
+                let crawledIssue;
+
+                try {
+                    i.series = await models.Series.findOne({where: {id: i.fk_series}, transaction});
+
+                    out.write("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx + 1) + " of " + a.length + " " +
+                        "(" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")\n");
+
+                    await updateStoryTags(i, transaction);
+
+                    await transaction.commit();
+                } catch (e) {
+                    if (crawledIssue && crawledIssue.series && crawledIssue.series.publisher)
+                        out.write("[" + (new Date()).toUTCString() + "] ERROR Fixing issue "
+                            + crawledIssue.series.title + " (Vol. " + crawledIssue.series.volume
+                            + ") #" + crawledIssue.number + " (" + crawledIssue.series.publisher.name + ")\n");
+                    else
+                        out.write("[" + (new Date()).toUTCString() + "] ERROR Fixing issue "
+                            + i.series.title + " (Vol. " + i.series.volume
+                            + ") #" + i.number + " (issue not found)\n");
+
+                    await transaction.commit();
+                }
+            })
+        } catch (e) {
+            console.log(e);
+            //Don't reject, errors are okay
+            resolve(false);
+        } finally {
+            if (out)
+                out.end();
+        }
+    });
+}
+
+export async function addReprints() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            out = fs.createWriteStream("logs/out.log", {flags: 'a'});
+
+            let issues = await models.Issue.findAll({
+                where: {
+                    '$Series->Publisher.original$': 1,
+                    variant: ''
+                },
+                include: [
+                    {
+                        model: models.Series,
+                        include: [
+                            models.Publisher
+                        ]
+                    }
+                ]
+            });
+
+            await asyncForEach(issues, async (i, idx, a) => {
+                let transaction = await models.sequelize.transaction();
+                let crawledIssue;
+
+                try {
+                    i.series = await models.Series.findOne({where: {id: i.fk_series}, transaction});
+
+                    out.write("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx + 1) + " of " + a.length + " " +
+                        "(" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")\n");
+
+                    crawledIssue = await crawlIssue(i.number, i.series.title, i.series.volume).catch(() => {/*ignore errors while crawling*/
+                    });
+
+                    let stories = await models.Story.findAll({
+                        where: {fk_issue: i.id},
+                        order: [['number', 'ASC']],
+                        transaction
+                    })
+
+                    if (stories.length === crawledIssue.stories.length) {
+                        await asyncForEach(crawledIssue.stories, async (story, i) => {
+                            if (story.reprintOf) {
+                                console.log("Reprint found!");
+                                let crawledReprint = await findOrCrawlIssue(story.reprintOf.issue, transaction);
+                                let crawledStories = await models.Story.findAll({
+                                    where: {fk_issue: crawledReprint.id},
+                                    order: [['number', 'ASC']],
+                                    transaction
+                                })
+
+                                stories[i].fk_reprint = crawledStories[story.reprintOf.number - 1].id;
+                                await stories[i].save({transaction: transaction});
+                            }
+                        });
+                    }
+
+                    await transaction.commit();
+                } catch (e) {
+                    if (crawledIssue && crawledIssue.series && crawledIssue.series.publisher)
+                        out.write("[" + (new Date()).toUTCString() + "] ERROR Fixing issue "
+                            + crawledIssue.series.title + " (Vol. " + crawledIssue.series.volume
+                            + ") #" + crawledIssue.number + " (" + crawledIssue.series.publisher.name + ")\n");
+                    else
+                        out.write("[" + (new Date()).toUTCString() + "] ERROR Fixing issue "
+                            + i.series.title + " (Vol. " + i.series.volume
+                            + ") #" + i.number + " (issue not found)\n");
+
+                    await transaction.rollback();
+                }
+            });
+        } catch (e) {
+            console.log(e);
+            //Don't reject, errors are okay
+            resolve(false);
+        } finally {
+            if (out)
+                out.end();
+        }
+    });
+}
 
 export async function fixUsSeries() {
     return new Promise(async (resolve, reject) => {

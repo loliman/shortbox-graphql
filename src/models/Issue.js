@@ -2,7 +2,7 @@ import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
 import {asyncForEach, deleteFile, naturalCompare, storeFile} from "../util/util";
-import {crawlIssue, crawlSeries} from "../core/crawler";
+import {crawlIssue, crawlSeries} from "../crawler/crawler_marvel";
 import {coverDir} from "../config/config";
 import {create as createStory, equals as storyEquals, getStories} from "./Story";
 import {create as createCover, equals as coverEquals, getCovers} from "./Cover";
@@ -276,6 +276,7 @@ export const resolvers = {
                 let issues = [];
                 res[0].forEach(i => issues.push({
                     number: i.issuenumber,
+                    title: i.issuetitle,
                     fk_series: i.seriesid,
                     format: i.issueformat,
                     variant: i.issuevariant
@@ -285,7 +286,6 @@ export const resolvers = {
         },
         lastEdited: async (_, {filter, offset, order}) => {
             let rawQuery = createFilterQuery(filter.us, filter, offset, false, true, order);
-
             let res = await models.sequelize.query(rawQuery);
             let issues = [];
             res[0].forEach(i => issues.push({
@@ -384,6 +384,9 @@ export const resolvers = {
                     throw new Error("Du bist nicht eingeloggt");
 
                 let res = await create(item, transaction);
+
+                if (!item.series.publisher.us)
+                    await updateStoryTags(res, transaction);
 
                 await transaction.commit();
                 return res;
@@ -568,6 +571,7 @@ export const resolvers = {
                                     parent: {number: i + 1, issue: story.parent.issue},
                                     individuals: story.individuals,
                                     addinfo: '',
+                                    part: '',
                                     exclusive: false
                                 });
                             }
@@ -679,6 +683,9 @@ export const resolvers = {
                     await createCover(cover, res, coverUrl, transaction, us);
                 });
 
+                if (!item.series.publisher.us)
+                    await updateStoryTags(res, transaction);
+
                 await transaction.commit();
                 return res;
             } catch (e) {
@@ -783,21 +790,8 @@ export const resolvers = {
             return stories;
         },
         covers: async (parent) => {
-            let covers = await models.Cover.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]});
-
-            /*let issues = await models.Issue.findAll({
-                where: {fk_series: parent.fk_series, number: parent.number},
-                order: [['createdAt', 'ASC']]
-            });
-
-            await asyncForEach(issues, async issue => {
-                let issueCovers = await models.Cover.findAll({where: {fk_issue: issue.id}, order: [['number', 'ASC']]});
-
-                if (issueCovers.length > 0 && covers.length === 0)
-                    covers = issueCovers;
-            });*/
-
-            return covers;
+            return await models.Cover.findAll({where: {fk_issue: parent.id}, order: [['number', 'ASC']]});
+            ;
         },
         limitation: (parent) => parent.limitation,
         cover: async (parent) => {
@@ -865,6 +859,198 @@ export const resolvers = {
     }
 };
 
+export async function updateStoryTags(issue, transaction) {
+    let stories = await models.Story.findAll({where: {fk_issue: issue.id}, transaction});
+
+    await asyncForEach(stories, async (story) => {
+        let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+
+        if (!parentStory)
+            return;
+
+        //DE
+        await updateOnlyAppTag(story, transaction);
+        await updateFirstAppTag(story, transaction);
+        await updateOtherOnlyTbTag(story, transaction);
+
+        //US
+        await updateOnlyOnePrintTag(story, transaction);
+        await updateOnlyTbTag(story, transaction);
+
+        await updatePartly(story, transaction);
+    });
+}
+
+async function updatePartly(story, transaction) {
+    let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+
+    let stories = await getAllChildrenFromTree(parentStory, transaction);
+
+    let firstApp = stories.filter(story => story.firstapp)[0];
+    if (firstApp.part) {
+        let of = firstApp.part.split("/")[1];
+        let amount = 0;
+
+        await asyncForEach(stories, async (story) => {
+            let ofInner = story.part ? story.part.split("/")[1] : 0;
+
+            if (of === ofInner) {
+                amount++;
+                story.firstapp = true;
+            } else {
+                story.firstapp = false;
+            }
+
+            await story.save({transaction: transaction});
+        });
+
+        if (of === 'x' || amount !== of) {
+            let firstComplete = stories.filter(story => !story.part || story.part === "")[0];
+            firstComplete.firstapp = true;
+            await firstComplete.save({transaction: transaction});
+        }
+
+        if (amount === stories.length) {
+            await asyncForEach(stories, async (story) => {
+                story.onlyapp = true;
+                await story.save({transaction: transaction});
+            });
+
+            parentStory.onlyoneprint = true;
+            await parentStory.save({transaction: transaction});
+        }
+    }
+}
+
+async function updateFirstAppTag(story, transaction) {
+    if (story.fk_parent === null)
+        return;
+
+    let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+    let stories = await getAllChildrenFromTree(parentStory, transaction);
+
+    await asyncForEach(stories, async (story) => {
+        let firstapp = false;
+
+        if (stories.length > 0 && stories[0]['Issue']) {
+            if (stories[0]['Issue'].id === story.fk_issue)
+                firstapp = true;
+            else {
+                let issue = await models.Issue.findOne({
+                    where: {id: story.fk_issue}
+                });
+
+                if (!issue)
+                    return;
+
+                if (issue.number === stories[0]['Issue'].number && issue.fk_series === stories[0]['Issue'].fk_series)
+                    firstapp = true;
+            }
+        }
+
+        story.firstapp = firstapp;
+        await story.save({transaction: transaction});
+    })
+}
+
+async function updateOnlyAppTag(story, transaction) {
+    if (story.fk_parent === null)
+        return;
+
+    let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+    let stories = await getAllChildrenFromTree(parentStory, transaction);
+
+    await asyncForEach(stories, async (story) => {
+        story.onlyapp = stories.length === 1;
+        await story.save({transaction: transaction});
+    })
+}
+
+async function updateOnlyTbTag(story, transaction) {
+    if (story.fk_parent === null)
+        return;
+
+    let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+    let stories = await getAllChildrenFromTree(parentStory, transaction);
+
+    await asyncForEach(stories, async (story) => {
+        let tbStories = stories.filter(story => story.Issue.format === 'Taschenbuch');
+
+        parentStory.onlytb = tbStories.length > 0 && (tbStories.length === stories.length);
+        await parentStory.save({transaction: transaction});
+    })
+}
+
+async function updateOnlyOnePrintTag(story, transaction) {
+    if (story.fk_parent === null)
+        return;
+
+    let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+    let stories = await getAllChildrenFromTree(parentStory, transaction);
+
+    await asyncForEach(stories, async (story) => {
+        parentStory.onlyoneprint = stories.length === 1;
+        await parentStory.save({transaction: transaction});
+    })
+}
+
+async function updateOtherOnlyTbTag(story, transaction) {
+    if (story.fk_parent === null)
+        return;
+
+    let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+    let stories = await getAllChildrenFromTree(parentStory, transaction);
+
+    await asyncForEach(stories, async (story) => {
+        if (story.Issue.format === "Taschenbuch") {
+            story.otheronlytb = false;
+        } else {
+            let tbStories = stories.filter(story => story.Issue.format === 'Taschenbuch');
+            story.otheronlytb = tbStories.length > 0 && (tbStories.length === (stories.length - 1));
+        }
+
+        await story.save({transaction: transaction});
+    })
+}
+
+async function getAllChildren(story, transaction) {
+    let stories = await models.Story.findAll({
+        transaction,
+        where: {fk_parent: story.id},
+        include: [{
+            model: models.Issue,
+            attributes: ['id', 'number', 'fk_series', 'format', 'releasedate']
+        }],
+        order: [[models.Issue, 'releasedate', 'ASC'], ['part', 'DESC']]
+    });
+
+    let reprints = await models.Story.findAll({
+        where: {fk_reprint: story.id}, transaction,
+    });
+
+    await asyncForEach(reprints, async (reprint) => {
+        stories = stories.concat(await getAllChildren(reprint, transaction));
+    })
+
+    return stories;
+}
+
+export async function getAllChildrenFromTree(story, transaction) {
+    while (story.fk_reprint) {
+        story = await models.Story.findOne({
+            where: {id: story.fk_reprint}, transaction
+        })
+    }
+
+    let stories = await getAllChildren(story, transaction);
+
+    stories = stories.sort((a, b) => {
+        return new Date(b.Issue.releasedate) - new Date(a.Issue.releasedate)
+    }).reverse();
+
+    return stories;
+}
+
 export async function create(item, transaction) {
     return new Promise(async (resolve, reject) => {
         try {
@@ -927,6 +1113,7 @@ export async function create(item, transaction) {
                                 parent: {number: i + 1, issue: story.parent.issue},
                                 translators: story.translators,
                                 addinfo: '',
+                                part: '',
                                 exclusive: false
                             });
                         }
@@ -1085,10 +1272,24 @@ export function findOrCrawlIssue(i, transaction) {
                 }));
 
                 await Promise.all(crawledIssue.stories.map(async (crawledStory) => {
+                    let reprintId;
+
+                    if (crawledStory.reprintOf) {
+                        let reprintIssue = await findOrCrawlIssue(crawledStory.reprintOf.issue, transaction);
+                        let reprintStory = await models.Story.findOne({
+                            where: {fk_issue: reprintIssue.dataValues.id, number: crawledStory.reprintOf.number},
+                            transaction
+                        });
+
+                        reprintId = reprintStory.id;
+                    }
+
                     let newStory = await models.Story.create({
                         title: crawledStory.title ? crawledStory.title : '',
                         number: !isNaN(crawledStory.number) ? crawledStory.number : 1,
-                        addinfo: ''
+                        addinfo: '',
+                        part: '',
+                        fk_reprint: reprintId
                     }, {transaction: transaction});
 
                     await asyncForEach(crawledStory.individuals, async (individual) => {

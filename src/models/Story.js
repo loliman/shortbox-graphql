@@ -1,7 +1,7 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import {findOrCrawlIssue} from "./Issue";
+import {findOrCrawlIssue, getAllChildrenFromTree} from "./Issue";
 import {asyncForEach, romanize} from "../util/util";
 
 class Story extends Model {
@@ -9,6 +9,7 @@ class Story extends Model {
 
     static associate(models) {
         Story.hasMany(models.Story, {as: {singular: 'Children', plural: 'Parent'}, foreignKey: 'fk_parent'});
+        Story.hasMany(models.Story, {as: {singular: 'ReprintOf', plural: 'Reprints'}, foreignKey: 'fk_reprint'});
 
         Story.belongsTo(models.Issue, {foreignKey: 'fk_issue'});
         Story.belongsToMany(models.Individual, {
@@ -80,7 +81,37 @@ export default (sequelize) => {
             type: Sequelize.INTEGER,
             allowNull: false,
         },
+        onlyapp: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
+        firstapp: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
+        otheronlytb: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
+        onlytb: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
+        onlyoneprint: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
         addinfo: {
+            type: Sequelize.STRING(255),
+            allowNull: false,
+            defaultValue: ''
+        },
+        part: {
             type: Sequelize.STRING(255),
             allowNull: false,
             defaultValue: ''
@@ -88,7 +119,7 @@ export default (sequelize) => {
     }, {
         indexes: [{
             unique: true,
-            fields: ['fk_issue', 'fk_parent', 'addinfo', 'number']
+            fields: ['fk_issue', 'fk_parent', 'fk_reprint', 'addinfo', 'number']
         }],
         sequelize,
         tableName: Story.tableName
@@ -107,7 +138,8 @@ export const typeDef = gql`
     appearances: [AppearanceInput],
     title: String,
     addinfo: String,
-    exclusive: Boolean
+    exclusive: Boolean,
+    part: String
   }
   
   type Story {
@@ -120,20 +152,25 @@ export const typeDef = gql`
     children: [Story],
     onlyapp: Boolean, 
     firstapp: Boolean,
-    onlytb: Boolean,
+    otheronlytb: Boolean,
     exclusive: Boolean,
     onlyoneprint: Boolean,
+    onlytb: Boolean,
     appearances: [Appearance],
-    individuals: [Individual] 
+    individuals: [Individual],
+    reprintOf: Story,
+    reprints: [Story],
+    part: String 
   }
 `;
 
 export const resolvers = {
     Story: {
         id: (parent) => parent.id,
-        title: (parent) => parent.title,
+        title: async (parent) => await getReprintOf(parent, (story) => story.title),
         number: (parent) => parent.number,
         addinfo: (parent) => parent.addinfo,
+        part: (parent) => parent.part,
         issue: async (parent) => {
             let issue = await models.Issue.findById(parent.fk_issue);
             return await models.Issue.findOne({
@@ -149,8 +186,15 @@ export const resolvers = {
             if (parent.fk_parent !== null)
                 return [];
 
+            return await getAllChildrenFromTree(parent);
+        },
+        reprintOf: async (parent) => await models.Story.findById(parent.fk_reprint),
+        reprints: async (parent) => {
+            if (parent.fk_reprint !== null)
+                return [];
+
             return await models.Story.findAll({
-                where: {fk_parent: parent.id},
+                where: {fk_reprint: parent.id},
                 include: [{
                     model: models.Issue,
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
@@ -163,119 +207,59 @@ export const resolvers = {
             });
         },
         onlyapp: async (parent) => {
-            if (parent.fk_parent === null)
-                return true;
-
-            let stories = await models.Story.findAll({
-                where: {fk_parent: parent.fk_parent},
-                include: [models.Issue],
-                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
-            });
-
-            return stories.length === 1;
+            return parent.onlyapp;
         },
         firstapp: async (parent) => {
-            if (parent.fk_parent === null)
-                return true;
-
-            let stories = await models.Story.findAll({
-                where: {fk_parent: parent.fk_parent},
-                include: [models.Issue],
-                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
-            });
-
-            let firstapp = false;
-            if (stories.length > 0 && stories[0]['Issue']) {
-                if (stories[0]['Issue'].id === parent.fk_issue)
-                    firstapp = true;
-                else {
-                    let issue = await models.Issue.findOne({
-                        where: {id: parent.fk_issue}
-                    });
-
-                    if (issue.number === stories[0]['Issue'].number && issue.fk_series === stories[0]['Issue'].fk_series)
-                        firstapp = true;
-                }
-            }
-
-            return firstapp;
+            return parent.firstapp;
         },
-        onlytb: async (parent) => {
-            let onlytb = false;
-            let storiesTb = await models.Story.findAll({
-                where: {
-                    fk_parent: parent.fk_parent ? parent.fk_parent : parent.id,
-                    '$Issue.format$': 'Taschenbuch',
-                },
-                include: [
-                    {
-                        model: models.Issue
-                    }],
-                group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
-            });
-
-            if (storiesTb.length > 0) {
-                let isTbStory;
-                if (parent.fk_parent) {
-                    storiesTb.forEach(story => {
-                        if (story.id === parent.id)
-                            isTbStory = true;
-                    });
-                }
-
-                if (!isTbStory) {
-                    let stories = await models.Story.findAll({
-                        where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
-                        include: [models.Issue],
-                        group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
-                        order: [[models.Issue, 'releasedate', 'ASC'], [models.Issue, 'variant', 'ASC']]
-                    });
-
-                    onlytb = stories.length === storiesTb.length + (parent.fk_parent ? 1 : 0);
-                }
-            }
-
-            return onlytb;
+        otheronlytb: async (parent) => {
+            return parent.otheronlytb;
         },
         onlyoneprint: async (parent) => {
-            let onlyoneprint = false;
-
-            let stories = await models.Story.findAll({
-                where: {fk_parent: parent.fk_parent ? parent.fk_parent : parent.id},
-                include: [models.Issue],
-                group: ['id']
-            });
-
-            return stories.length === 1;
+            return parent.onlyoneprint;
+        },
+        onlytb: async (parent) => {
+            return parent.onlytb;
         },
         exclusive: async (parent) => {
             return parent.fk_parent === null;
         },
         individuals: async (parent) => {
-            return await models.Individual.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Individual.fk_story$': parent.id
+            return await getReprintOf(parent, async (story) => {
+                    return await models.Individual.findAll({
+                        include: [{
+                            model: models.Story
+                        }],
+                        where: {
+                            '$Stories->Story_Individual.fk_story$': story.id
+                        }
+                    })
                 }
-            })
+            );
         },
         appearances: async (parent) => {
-            return await models.Appearance.findAll({
-                include: [{
-                    model: models.Story
-                }],
-                where: {
-                    '$Stories->Story_Appearance.fk_story$': parent.id
-                }
+            return await getReprintOf(parent, async (story) => {
+                return await models.Appearance.findAll({
+                    include: [{
+                        model: models.Story
+                    }],
+                    where: {
+                        '$Stories->Story_Appearance.fk_story$': story.id
+                    }
+                })
             })
         }
     }
-};
+}
+
+async function getReprintOf(story, callback) {
+    if (story.fk_reprint) {
+        let parent = await models.Story.findOne({where: {id: story.fk_reprint}});
+        return await getReprintOf(parent, callback);
+    } else {
+        return await callback(story);
+    }
+}
 
 export async function create(story, issue, transaction, us) {
     return new Promise(async (resolve, reject) => {
@@ -285,6 +269,7 @@ export async function create(story, issue, transaction, us) {
                     number: !isNaN(story.number) ? story.number : 1,
                     title: story.title ? story.title.trim() : '',
                     addinfo: story.addinfo,
+                    part: story.part,
                     fk_issue: issue.id
                 }, {transaction: transaction});
 
@@ -325,6 +310,7 @@ export async function create(story, issue, transaction, us) {
                     title: story.title && story.title.trim() ? story.title.trim() : '',
                     number: !isNaN(story.number) ? story.number : 1,
                     addinfo: story.addinfo ? story.addinfo : '',
+                    part: story.part ? story.part : '',
                     fk_parent: oStory.id
                 }, {transaction: transaction});
 
@@ -368,6 +354,7 @@ export async function getStories(issue, transaction) {
                 rawStory.title = story.title;
                 rawStory.number = story.number;
                 rawStory.addinfo = story.addinfo;
+                rawStory.part = story.part;
 
                 rawStory.exclusive = story.fk_parent === null;
 
@@ -470,7 +457,7 @@ export function equals(a, b) {
     if (a.exclusive !== b.exclusive)
         return false;
 
-    if (a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo)
+    if (a.title !== b.title || a.number !== b.number || a.addinfo !== b.addinfo || a.part !== b.part)
         return false;
 
     if (a.individuals && !b.individuals)

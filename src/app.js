@@ -2,7 +2,7 @@ import sequelize from './core/database'
 import server from "./core/server";
 import fs from "fs";
 import {coverDir, fixOnStartup, migrateOnStartup, wwwDir} from "./config/config";
-import {cleanup, run as runCleanup} from './core/cleanup';
+import {cleanup} from './core/cleanup';
 import migrationDatabase from "./migration/core/database";
 import {migrate} from "./migration/core/migration";
 
@@ -70,7 +70,9 @@ async function start() {
     if (fixOnStartup) {
         //await fixUsSeries();
         //await fixUsComics();
-        await runCleanup();
+        //await runCleanup();
+        //await addReprints();
+        //await updateTags();
     }
 
     if (migrateOnStartup) {
