@@ -322,10 +322,6 @@ async function crawlInfobox(issue) {
     $ = $.parse.wikitext['*'].split('\n');
 
     if ($[0].trim().startsWith('#REDIRECT')) {
-        console.log(
-            generateIssueName(issue) + ' - ' + $[0].trim()
-        );
-
         let redirect = $[0].trim().replace('#REDIRECT [[', '');
         redirect = redirect.replace(']]', '');
 

@@ -906,8 +906,11 @@ async function updatePartly(story, transaction) {
 
         if (of === 'x' || amount !== of) {
             let firstComplete = stories.filter(story => !story.part || story.part === "")[0];
-            firstComplete.firstapp = true;
-            await firstComplete.save({transaction: transaction});
+
+            if (firstComplete) {
+                firstComplete.firstapp = true;
+                await firstComplete.save({transaction: transaction});
+            }
         }
 
         if (amount === stories.length) {
