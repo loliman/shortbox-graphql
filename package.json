@@ -26,7 +26,7 @@
     "graphql-relay": "^0.8.0",
     "graphql-upload": "^11.0.0",
     "jest-environment-node": "^26.6.2",
-    "knex": "^0.21.17",
+    "knex": "^2.4.0",
     "lodash": "^4.17.20",
     "match-sorter": "^6.2.0",
     "mysql": "^2.18.1",
