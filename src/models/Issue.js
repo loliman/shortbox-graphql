@@ -180,7 +180,7 @@ export const typeDef = gql`
   
   extend type Query {
     issues(pattern: String, series: SeriesInput!, offset: Int, filter: Filter): [Issue], 
-    lastEdited(filter: Filter, offset: Int, order: String): [Issue],
+    lastEdited(filter: Filter, offset: Int, order: String, direction: String): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }
     
@@ -284,8 +284,8 @@ export const resolvers = {
                 return issues.sort((a, b) => naturalCompare(a.number, b.number));
             }
         },
-        lastEdited: async (_, {filter, offset, order}) => {
-            let rawQuery = createFilterQuery(filter.us, filter, offset, false, true, order);
+        lastEdited: async (_, {filter, offset, order, direction}) => {
+            let rawQuery = createFilterQuery(filter.us, filter, offset, false, true, order, direction);
             let res = await models.sequelize.query(rawQuery);
             let issues = [];
             res[0].forEach(i => issues.push({

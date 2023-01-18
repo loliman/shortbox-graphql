@@ -316,7 +316,7 @@ function getType(type) {
     }
 }
 
-export function createFilterQuery(selected, filter, offset, print, overview, order) {
+export function createFilterQuery(selected, filter, offset, print, overview, order, sort) {
     let type = "story";
     let us = filter.us ? 1 : 0;
 
@@ -650,17 +650,20 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
 
     if (order) {
+        if (!sort)
+            sort = 'DESC';
+
         switch (order) {
             case 'releasedate':
             case 'updatedAt':
             case 'createdAt':
-                rawQuery += " ORDER BY i." + order + " DESC";
+                rawQuery += " ORDER BY i." + order + " " + sort;
                 break;
             case 'series':
-                rawQuery += " ORDER BY s.title, s.volume, i.number DESC";
+                rawQuery += " ORDER BY s.title " + sort + ", s.volume " + sort + ", i.number ";
                 break;
             case 'publisher':
-                rawQuery += " ORDER BY p.name, s.title, s.volume, i.number DESC";
+                rawQuery += " ORDER BY p.name " + sort + ", s.title, s.volume, i.number ";
                 break;
         }
     } else {
