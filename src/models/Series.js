@@ -122,7 +122,9 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        series: async (_, {pattern, publisher, offset, filter}) => {
+        series: async (_, {pattern, publisher, offset, filter}, context) => {
+            const {loggedIn, transaction} = context;
+
             if (!filter) {
                 let options = {
                     order: [[models.sequelize.fn('sortabletitle', models.sequelize.col('title')), 'ASC'],
@@ -150,7 +152,7 @@ export const resolvers = {
 
                 return await models.Series.findAll(options);
             } else {
-                let rawQuery = createFilterQuery(publisher, filter, offset);
+                let rawQuery = createFilterQuery(loggedIn, publisher, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
                 let series = [];
                 res[0].forEach(s => {

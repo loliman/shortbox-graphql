@@ -122,7 +122,9 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        publishers: async (_, {pattern, us, offset, filter}) => {
+        publishers: async (_, {pattern, us, offset, filter}, context) => {
+            const {loggedIn, transaction} = context;
+
             if(!filter) {
                 let where = {original: (us ? 1 : 0)};
                 let order = [['name', 'ASC']];
@@ -144,7 +146,7 @@ export const resolvers = {
                     limit: 50
                 });
             } else {
-                let rawQuery = createFilterQuery(us, filter, offset);
+                let rawQuery = createFilterQuery(loggedIn, us, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
                 let publishers = [];
                 res[0].forEach(p => publishers.push({

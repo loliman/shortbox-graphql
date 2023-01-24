@@ -1,8 +1,8 @@
 export const wwwDir = '/Users/Christian/shortbox-sandbox/shortbox-react/public';
 export const coverDir = 'covers';
-export const db = 'shortbox_old';
+export const db = 'shortbox';
 export const dbUser = 'root';
-export const dbPassword = '';
+export const dbPassword = 'q2#!MgZjrq2SUj7';
 
 export const fixOnStartup = false;
 export const migrateOnStartup = false;

@@ -153,6 +153,11 @@ export default (sequelize) => {
             type: Sequelize.BOOLEAN,
             allowNull: false,
             defaultValue: false
+        },
+        collected: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
         }
     }, {
         indexes: [{
@@ -175,7 +180,8 @@ export const typeDef = gql`
     deleteIssue(item: IssueInput!): Boolean,
     createIssue(item: IssueInput!): Issue,
     editIssue(old: IssueInput!, item: IssueInput!): Issue,
-    verifyIssue(item: IssueInput!): Issue
+    verifyIssue(item: IssueInput!): Issue,
+    addIssueToCollection(item: IssueInput!): Issue
   }
   
   extend type Query {
@@ -225,6 +231,7 @@ export const typeDef = gql`
     variants: [Issue],
     variant: String,
     verified: Boolean,
+    collected: Boolean,
     addinfo: String,
     individuals: [Individual],
     comicguideid: Int,
@@ -235,7 +242,9 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        issues: async (_, {pattern, series, offset, filter}) => {
+        issues: async (_, {pattern, series, offset, filter}, context) => {
+            const {loggedIn, transaction} = context;
+
             if (!filter) {
                 let res = await models.Issue.findAll({
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
@@ -271,7 +280,7 @@ export const resolvers = {
 
                 return res;
             } else {
-                let rawQuery = createFilterQuery(series, filter, offset);
+                let rawQuery = createFilterQuery(loggedIn, series, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
                 let issues = [];
                 res[0].forEach(i => issues.push({
@@ -284,8 +293,10 @@ export const resolvers = {
                 return issues.sort((a, b) => naturalCompare(a.number, b.number));
             }
         },
-        lastEdited: async (_, {filter, offset, order, direction}) => {
-            let rawQuery = createFilterQuery(filter.us, filter, offset, false, true, order, direction);
+        lastEdited: async (_, {filter, offset, order, direction}, context) => {
+            const {loggedIn, transaction} = context;
+
+            let rawQuery = createFilterQuery(loggedIn, filter.us, filter, offset, false, true, order, direction);
             let res = await models.sequelize.query(rawQuery);
             let issues = [];
             res[0].forEach(i => issues.push({
@@ -296,7 +307,9 @@ export const resolvers = {
                 title: i.issuetitle,
                 fk_series: i.seriesid,
                 format: i.issueformat,
-                variant: i.issuevariant
+                variant: i.issuevariant,
+                verified: i.issueverified,
+                collected: i.issuecollected
             }));
 
             return issues;
@@ -735,6 +748,49 @@ export const resolvers = {
                 await transaction.rollback();
                 throw e;
             }
+        },
+        addIssueToCollection: async (_, {item}, context) => {
+            const {loggedIn, transaction} = context;
+
+            try {
+                if (!loggedIn)
+                    throw new Error("Du bist nicht eingeloggt");
+
+                let where = {
+                    number: item.number.trim(),
+                    '$Series.title$': item.series.title.trim(),
+                    '$Series.volume$': item.series.volume,
+                    '$Series->Publisher.name$': item.series.publisher.name.trim()
+                };
+
+                if (item.format)
+                    where.format = item.format.trim();
+
+                if (item.variant)
+                    where.variant = item.variant.trim();
+
+                let res = await models.Issue.findOne({
+                    where: where,
+                    include: [
+                        {
+                            model: models.Series,
+                            include: [
+                                models.Publisher
+                            ]
+                        }
+                    ],
+                    transaction
+                });
+
+                res.collected = !res.collected;
+                res = await res.save({transaction: transaction});
+
+                await transaction.commit();
+                return res;
+            } catch (e) {
+                await transaction.rollback();
+                throw e;
+            }
         }
     },
     Issue: {
@@ -821,6 +877,7 @@ export const resolvers = {
         pages: (parent) => parent.pages,
         releasedate: (parent) => parent.releasedate,
         verified: (parent) => parent.verified,
+        collected: (parent) => parent.collected,
         addinfo: (parent) => parent.addinfo,
         comicguideid: (parent) => parent.comicguideid,
         arcs: async (parent) => {

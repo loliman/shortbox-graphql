@@ -34,7 +34,8 @@ export const typeDef = gql`
     reprint: Boolean,
     otherOnlyTb: Boolean,
     noPrint: Boolean,
-    onlyOnePrint: Boolean
+    onlyOnePrint: Boolean,
+    onlyCollected: Boolean
   }
   
   extend type Query {
@@ -44,8 +45,10 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        export: async (_, {filter, type}) => {
-            let rawQuery = createFilterQuery(filter.us, filter, 0, true);
+        export: async (_, {filter, type}, context) => {
+            const {loggedIn, transaction} = context;
+
+            let rawQuery = createFilterQuery(loggedIn, filter.us, filter, 0, true);
             let res = await models.sequelize.query(rawQuery);
 
             let response = {};
@@ -184,6 +187,8 @@ async function convertFilterToTxt(filter) {
         s += "\t\tNur in TB\n";
     if (filter.onlyOnePrint)
         s += "\t\tNur einfach auf deutsch erschienen\n";
+    if (loggedIn && filter.onlyCollected)
+        s += "\t\tIn Sammlung enthalten\n";
     if (filter.noPrint)
         s += "\t\tNicht auf deutsch erschienen\n";
 
@@ -227,7 +232,7 @@ async function convertFilterToTxt(filter) {
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (!filter.firstPrint && !filter.onlyPrint && !filter.onlyTb && !filter.exclusive && !filter.reprint && !filter.otherOnlyTb && !filter.noPrint && !filter.onlyOnePrint)
+    if (!filter.firstPrint && !filter.onlyPrint && !filter.onlyTb && !filter.exclusive && !filter.reprint && !filter.otherOnlyTb && !filter.noPrint && !filter.onlyOnePrint && (loggedIn && !filter.onlyCollected))
         s += "\t\t-\n";
 
     s += "\tMitwirkende\n";
@@ -316,13 +321,13 @@ function getType(type) {
     }
 }
 
-export function createFilterQuery(selected, filter, offset, print, overview, order, sort) {
+export function createFilterQuery(loggedIn, selected, filter, offset, print, overview, order, sort) {
     let type = "story";
     let us = filter.us ? 1 : 0;
 
     let columns = "p.name as publishername, p.id as publisherid, " +
         "s.title as seriestitle, s.volume as seriesvolume, s.startyear as seriesstartyear, s.endyear as seriesendyear, s.id as seriesid, " +
-        "i.comicguideid as comicguideid, i.updatedAt as updatedAt, i.createdAt as createdAt, i.title as issuetitle, i.number as issuenumber, i.variant as issuevariant, i.id as issueid, i.format as issueformat, i.pages as issuepages, i.releasedate as issuereleasedate, i.price as issueprice, i.currency as issuecurrency ";
+        "i.comicguideid as comicguideid, i.updatedAt as updatedAt, i.createdAt as createdAt, i.title as issuetitle, i.number as issuenumber, i.variant as issuevariant, i.id as issueid, i.format as issueformat, i.pages as issuepages, i.releasedate as issuereleasedate, i.price as issueprice, i.currency as issuecurrency, i.verified as issueverified, i.collected as issuecollected  ";
 
     let groupby = "";
     let where = "";
@@ -438,6 +443,24 @@ export function createFilterQuery(selected, filter, offset, print, overview, ord
         intersect += " (a.title = '" + escapeSqlString(filter.arcs) + "')";
 
         intersect += ") group by i.id) ";
+    }
+
+    if (loggedIn && filter.onlyCollected && !filter.us) {
+        intersect += " AND i.id IN (select i.id from issue i where i.collected = 1 group by i.id) ";
+    }
+
+    if (loggedIn && filter.onlyCollected && filter.us) {
+        intersect += " AND i.id IN (" +
+            "select i.id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join story st on i.id = st.fk_issue " +
+            " left join story stjoin on st.id = stjoin.fk_parent " +
+            " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
+            " where p.original = 1 " +
+            " and i.id is not null " +
+            " and ijoin.collected = 1 group by i.id) ";
     }
 
     if (filter.publishers && filter.publishers.filter(p => p.us !== filter.us).length > 0) {

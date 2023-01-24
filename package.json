@@ -5,7 +5,8 @@
   "main": "src/app.js",
   "scripts": {
     "start": "nodemon --exec babel-node src/app.js",
-    "list": "nodemon --exec babel-node src/ls.js"
+    "list": "nodemon --exec babel-node src/ls.js",
+    "import": "nodemon --exec babel-node src/importCollection.js"
   },
   "keywords": [],
   "dependencies": {

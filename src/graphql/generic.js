@@ -30,7 +30,13 @@ export const resolvers = {
             if (!value || value.indexOf('-00') !== -1)
                 value = '1900-01-01';
 
-            return dateFormat(new Date(value), "yyyy-mm-dd");
+            try {
+                value = dateFormat(new Date(value), "yyyy-mm-dd");
+            } catch (e) {
+                value = '1900-01-01';
+            }
+
+            return value;
         },
         parseLiteral(ast) {
             if (ast.kind === Kind.INT) {
