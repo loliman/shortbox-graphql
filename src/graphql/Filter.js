@@ -35,7 +35,9 @@ export const typeDef = gql`
     otherOnlyTb: Boolean,
     noPrint: Boolean,
     onlyOnePrint: Boolean,
-    onlyCollected: Boolean
+    onlyCollected: Boolean,
+    onlyNotCollected: Boolean,
+    sellable: Boolean
   }
   
   extend type Query {
@@ -189,6 +191,8 @@ async function convertFilterToTxt(filter) {
         s += "\t\tNur einfach auf deutsch erschienen\n";
     if (loggedIn && filter.onlyCollected)
         s += "\t\tIn Sammlung enthalten\n";
+    if (loggedIn && filter.onlyNotCollected)
+        s += "\t\tNicht in Sammlung enthalten\n";
     if (filter.noPrint)
         s += "\t\tNicht auf deutsch erschienen\n";
 
@@ -232,7 +236,7 @@ async function convertFilterToTxt(filter) {
         s = s.substr(0, s.length - 2) + "\n";
     }
 
-    if (!filter.firstPrint && !filter.onlyPrint && !filter.onlyTb && !filter.exclusive && !filter.reprint && !filter.otherOnlyTb && !filter.noPrint && !filter.onlyOnePrint && (loggedIn && !filter.onlyCollected))
+    if (!filter.firstPrint && !filter.onlyPrint && !filter.onlyTb && !filter.exclusive && !filter.reprint && !filter.otherOnlyTb && !filter.noPrint && !filter.onlyOnePrint && (loggedIn && !filter.onlyCollected && !filter.onlyNotCollected))
         s += "\t\t-\n";
 
     s += "\tMitwirkende\n";
@@ -327,7 +331,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
 
     let columns = "p.name as publishername, p.id as publisherid, " +
         "s.title as seriestitle, s.volume as seriesvolume, s.startyear as seriesstartyear, s.endyear as seriesendyear, s.id as seriesid, " +
-        "i.comicguideid as comicguideid, i.updatedAt as updatedAt, i.createdAt as createdAt, i.title as issuetitle, i.number as issuenumber, i.variant as issuevariant, i.id as issueid, i.format as issueformat, i.pages as issuepages, i.releasedate as issuereleasedate, i.price as issueprice, i.currency as issuecurrency, i.verified as issueverified, i.collected as issuecollected  ";
+        "i.id as issueid, i.comicguideid as comicguideid, i.updatedAt as updatedAt, i.createdAt as createdAt, i.title as issuetitle, i.number as issuenumber, i.variant as issuevariant, i.id as issueid, i.format as issueformat, i.pages as issuepages, i.releasedate as issuereleasedate, i.price as issueprice, i.currency as issuecurrency, i.verified as issueverified, i.collected as issuecollected  ";
 
     let groupby = "";
     let where = "";
@@ -354,7 +358,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
         filter.releasedates.map(releasedate => where += " and '" + (dateFormat(new Date(releasedate.date), "yyyy-mm-dd")) + "' " + releasedate.compare + " i.releasedate ");
     }
 
-    if (filter.withVariants) {
+    if (!filter.onlyCollected && filter.withVariants) {
         where += " and i.variant != '' ";
     }
 
@@ -446,7 +450,11 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     }
 
     if (loggedIn && filter.onlyCollected && !filter.us) {
-        intersect += " AND i.id IN (select i.id from issue i where i.collected = 1 group by i.id) ";
+        intersect += " AND i.id IN (select i.id from issue i group by i.fk_series, i.number having max(i.collected) = 1) ";
+    }
+
+    if (loggedIn && filter.onlyNotCollected && !filter.us) {
+        intersect += " AND i.id IN (select i.id from issue i group by i.fk_series, i.number having max(i.collected) = 0 or max(i.collected) is null) ";
     }
 
     if (loggedIn && filter.onlyCollected && filter.us) {
@@ -461,6 +469,20 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " where p.original = 1 " +
             " and i.id is not null " +
             " and ijoin.collected = 1 group by i.id) ";
+    }
+
+    if (loggedIn && filter.onlyNotCollected && filter.us) {
+        intersect += " AND i.id IN (" +
+            "select i.id " +
+            " from publisher p " +
+            " left join series s on p.id = s.fk_publisher " +
+            " left join issue i on s.id = i.fk_series " +
+            " left join story st on i.id = st.fk_issue " +
+            " left join story stjoin on st.id = stjoin.fk_parent " +
+            " left join issue ijoin on stjoin.fk_issue = ijoin.id " +
+            " where p.original = 1 " +
+            " and i.id is not null " +
+            " and (ijoin.collected = 0 or ijoin.collected is null) group by i.id) ";
     }
 
     if (filter.publishers && filter.publishers.filter(p => p.us !== filter.us).length > 0) {
@@ -667,6 +689,24 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " and st.id IS NULL ";
     }
 
+    //negated in query
+    if (loggedIn && filter.sellable && !us) {
+        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+            "select a.id from (" +
+            "   select count(*) as stories, i.id from issue i " +
+            "   LEFT join story st on i.id = st.fk_issue " +
+            "   where i.collected = 1 group by st.fk_issue) a " +
+            "   left join " +
+            "       (select count(*) as stories, i.id from issue i " +
+            "       LEFT join story st on i.id = st.fk_issue " +
+            "       where st.fk_parent in (" +
+            "           select st.fk_parent from issue i " +
+            "           LEFT join story st on i.id = st.fk_issue " +
+            "           where st.fk_parent is not null and i.collected = 1 and st.onlyapp not in (1) group by st.fk_parent having count(st.fk_parent) > 1) " +
+            "       and i.collected = 1 group by st.fk_issue) b " +
+            "   on a.id = b.id where a.stories = b.stories ";
+    }
+
     if (intersectContains !== "")
         intersect += " and i.id " + (filter.reprint ? "not in" : "in") + " (" + intersectContains + ")";
 
@@ -703,7 +743,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     if (!print)
         rawQuery += " LIMIT " + offset + ", 50";
 
-    //console.log(rawQuery);
+    //console.log(rawQuery + "\n\n");
 
     return rawQuery;
 }

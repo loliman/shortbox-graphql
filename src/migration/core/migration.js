@@ -2,7 +2,7 @@ import migration from "../models";
 import models from "../../models";
 import {asyncForEach} from "../../util/util";
 import fs from 'fs';
-import {create, findOrCrawlIssue, updateStoryTags} from "../../models/Issue";
+import {create, findOrCrawlIssue, updateIssueTags} from "../../models/Issue";
 import {crawlIssue, crawlSeries} from "../../crawler/crawler_marvel";
 import {afterFirstMigration} from "../../config/config";
 
@@ -38,7 +38,7 @@ export async function updateTags() {
                     out.write("[" + (new Date()).toUTCString() + "] Fixing issue " + (idx + 1) + " of " + a.length + " " +
                         "(" + i.series.title + " (Vol. " + i.series.volume + ") #" + i.number + ")\n");
 
-                    await updateStoryTags(i, transaction);
+                    await updateIssueTags(i, transaction);
 
                     await transaction.commit();
                 } catch (e) {

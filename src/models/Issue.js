@@ -252,7 +252,7 @@ export const resolvers = {
                         [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
                         [models.sequelize.cast(models.sequelize.col('number'), 'unsigned'), 'numberasint'],
                         [models.sequelize.fn('fromRoman', models.sequelize.col('number')), 'numberfromroman'],
-                        'number', 'releasedate', 'fk_series'],
+                        'number', 'releasedate', 'fk_series', 'collected'],
                     where: {
                         '$Series.title$': series.title,
                         '$Series.volume$': series.volume,
@@ -288,7 +288,8 @@ export const resolvers = {
                     title: i.issuetitle,
                     fk_series: i.seriesid,
                     format: i.issueformat,
-                    variant: i.issuevariant
+                    variant: i.issuevariant,
+                    collected: i.issuecollected
                 }));
                 return issues.sort((a, b) => naturalCompare(a.number, b.number));
             }
@@ -300,6 +301,7 @@ export const resolvers = {
             let res = await models.sequelize.query(rawQuery);
             let issues = [];
             res[0].forEach(i => issues.push({
+                id: i.issueid,
                 comicguideid: i.comicguideid,
                 number: i.issuenumber,
                 updatedAt: i.updatedAt,
@@ -399,7 +401,7 @@ export const resolvers = {
                 let res = await create(item, transaction);
 
                 if (!item.series.publisher.us)
-                    await updateStoryTags(res, transaction);
+                    await updateIssueTags(res, transaction);
 
                 await transaction.commit();
                 return res;
@@ -696,8 +698,10 @@ export const resolvers = {
                     await createCover(cover, res, coverUrl, transaction, us);
                 });
 
-                if (!item.series.publisher.us)
-                    await updateStoryTags(res, transaction);
+                if (!item.series.publisher.us) {
+                    await updateIssueTags(res, transaction);
+                    await updateStoryTags(oldStories, transaction);
+                }
 
                 await transaction.commit();
                 return res;
@@ -741,6 +745,7 @@ export const resolvers = {
 
                 res.verified = !res.verified;
                 res = await res.save({transaction: transaction});
+                await updateIssueTags(res, transaction);
 
                 await transaction.commit();
                 return res;
@@ -784,6 +789,7 @@ export const resolvers = {
 
                 res.collected = !res.collected;
                 res = await res.save({transaction: transaction});
+                await updateIssueTags(res, transaction);
 
                 await transaction.commit();
                 return res;
@@ -857,13 +863,18 @@ export const resolvers = {
 
             if (parent.comicguideid && parent.comicguideid !== 0) {
                 let url = "https://www.comicguide.de/pics/large/" + parent.comicguideid + ".jpg";
+                let isImage;
 
-                let isImage = await request({
-                    uri: url,
-                    transform: (body, response) => {
-                        return response.headers['content-type'] === 'image/jpeg';
-                    },
-                });
+                try {
+                    isImage = await request({
+                        uri: url,
+                        transform: (body, response) => {
+                            return response.headers['content-type'] === 'image/jpeg';
+                        },
+                    });
+                } catch (e) {
+                    return null;
+                }
 
                 if (isImage)
                     return {
@@ -877,7 +888,13 @@ export const resolvers = {
         pages: (parent) => parent.pages,
         releasedate: (parent) => parent.releasedate,
         verified: (parent) => parent.verified,
-        collected: (parent) => parent.collected,
+        collected: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return false;
+
+            return parent.collected;
+        },
         addinfo: (parent) => parent.addinfo,
         comicguideid: (parent) => parent.comicguideid,
         arcs: async (parent) => {
@@ -916,9 +933,13 @@ export const resolvers = {
     }
 };
 
-export async function updateStoryTags(issue, transaction) {
+export async function updateIssueTags(issue, transaction) {
     let stories = await models.Story.findAll({where: {fk_issue: issue.id}, transaction});
 
+    await updateStoryTags(stories, transaction);
+}
+
+export async function updateStoryTags(stories, transaction) {
     await asyncForEach(stories, async (story) => {
         let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
 
@@ -929,6 +950,7 @@ export async function updateStoryTags(issue, transaction) {
         await updateOnlyAppTag(story, transaction);
         await updateFirstAppTag(story, transaction);
         await updateOtherOnlyTbTag(story, transaction);
+        await updateCollected(story, transaction)
 
         //US
         await updateOnlyOnePrintTag(story, transaction);
@@ -1054,6 +1076,29 @@ async function updateOnlyOnePrintTag(story, transaction) {
     })
 }
 
+async function updateCollected(story, transaction) {
+    if (story.fk_parent === null)
+        return;
+
+    let parentStory = await models.Story.findOne({where: {id: story.fk_parent}, transaction});
+    let stories = await getAllChildrenFromTree(parentStory, transaction);
+
+    let atLeastOneComplete = stories.filter(s => !s.part || s.part === '').length > 0;
+    let collected = stories.filter(s => s.Issue.collected).length;
+
+    if (collected > 1 && atLeastOneComplete) {
+        parentStory.collectedmultipletimes = true;
+    } else {
+        parentStory.collectedmultipletimes = false;
+    }
+
+    if (collected === 1) {
+        parentStory.collected = 1;
+    }
+
+    await parentStory.save({transaction: transaction});
+}
+
 async function updateOtherOnlyTbTag(story, transaction) {
     if (story.fk_parent === null)
         return;
@@ -1079,7 +1124,7 @@ async function getAllChildren(story, transaction) {
         where: {fk_parent: story.id},
         include: [{
             model: models.Issue,
-            attributes: ['id', 'number', 'fk_series', 'format', 'releasedate']
+            attributes: ['id', 'number', 'fk_series', 'format', 'releasedate', 'collected']
         }],
         order: [[models.Issue, 'releasedate', 'ASC'], ['part', 'DESC']]
     });

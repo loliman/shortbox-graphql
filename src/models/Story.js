@@ -106,6 +106,16 @@ export default (sequelize) => {
             allowNull: false,
             defaultValue: false
         },
+        collectedmultipletimes: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
+        collected: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
         addinfo: {
             type: Sequelize.STRING(255),
             allowNull: false,
@@ -156,6 +166,8 @@ export const typeDef = gql`
     exclusive: Boolean,
     onlyoneprint: Boolean,
     onlytb: Boolean,
+    collectedmultipletimes: Boolean,
+    collected: Boolean,
     appearances: [Appearance],
     individuals: [Individual],
     reprintOf: Story,
@@ -178,7 +190,7 @@ export const resolvers = {
                 attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
                     [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
                     [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
-                    'number', 'fk_series']
+                    'number', 'fk_series', 'collected']
             });
         },
         parent: async (parent) => await models.Story.findById(parent.fk_parent),
@@ -200,7 +212,7 @@ export const resolvers = {
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
                         [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
                         [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
-                        'number', 'fk_series']
+                        'number', 'fk_series', 'collected']
                 }],
                 group: [[models.Issue, 'fk_series'], [models.Issue, 'number']],
                 order: [[models.Issue, 'releasedate', 'ASC']]
@@ -220,6 +232,12 @@ export const resolvers = {
         },
         onlytb: async (parent) => {
             return parent.onlytb;
+        },
+        collectedmultipletimes: async (parent) => {
+            return parent.collectedmultipletimes;
+        },
+        collected: async (parent) => {
+            return parent.collected;
         },
         exclusive: async (parent) => {
             return parent.fk_parent === null;

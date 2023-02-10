@@ -5,8 +5,10 @@
   "main": "src/app.js",
   "scripts": {
     "start": "nodemon --exec babel-node src/app.js",
-    "list": "nodemon --exec babel-node src/ls.js",
-    "import": "nodemon --exec babel-node src/importCollection.js"
+    "list": "nodemon --exec babel-node src/scripts/ls.js",
+    "migrate": "nodemon --exec babel-node src/scripts/migration.js",
+    "import": "nodemon --exec babel-node src/scripts/importCollection.js",
+    "findVariantsWithStories": "nodemon --exec babel-node src/scripts/findVariantsWithStories.js"
   },
   "keywords": [],
   "dependencies": {

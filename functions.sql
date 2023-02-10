@@ -1,11 +1,12 @@
 DELIMITER $$
 
-CREATE FUNCTION `sortabletitle`(title     VARCHAR(256)) RETURNS varchar(1000) CHARSET utf8mb3
+create function `sortabletitle`(title     VARCHAR(256)) RETURNS varchar(1000) CHARSET utf8mb3
 begin
-  DECLARE label VARCHAR(1000) DEFAULT title;
+  DECLARE label VARCHAR(1000) default title;
 
   SET label := LOWER(label);
-  SET label := REGEXP_REPLACE(label, '/Der |Die |Das |The /g', '');
+
+  SET label := REGEXP_REPLACE(label, '(?i)der |die |das |the ', '');
   SET label := REGEXP_REPLACE(label, '[ä]+', 'a');
   SET label := REGEXP_REPLACE(label, '[ü]+', 'u');
   SET label := REGEXP_REPLACE(label, '[ö]+', 'o');
@@ -25,19 +26,19 @@ CREATE function
                    format    VARCHAR(256), 
                    variant   VARCHAR(256)) returns VARCHAR(1000) charset utf8
 begin 
-  DECLARE label  VARCHAR(1000) DEFAULT concat(createserieslabel(title, name, volume, startyear, endyear), ' #', number);
-  DECLARE format VARCHAR(256) DEFAULT concat(' (', format); 
-  IF variant != '' THEN 
-    SET format := concat(format, '/', variant);
-  end IF; 
-  SET format := concat(format, ')'); 
-  SET label := concat(label, format); 
-  RETURN label; 
+  declare label  varchar(1000) default concat(createserieslabel(title, name, volume, startyear, endyear), ' #', number);
+  declare format varchar(256) default concat(' (', format);
+  if variant != '' then
+    set format := concat(format, '/', variant);
+  end if;
+  set format := concat(format, ')');
+  set label := concat(label, format);
+  return label;
 end 
 
 $$
 
-CREATE function 
+create function
   createlabel(type    VARCHAR(256), 
             title     VARCHAR(256), 
             name      VARCHAR(256), 
@@ -49,20 +50,20 @@ CREATE function
             variant   VARCHAR(256)) returns VARCHAR(4096) charset utf8
   DETERMINISTIC 
 begin 
-  IF type = 'publisher' THEN 
-  RETURN title; 
-end IF; 
-IF type = 'series' THEN 
-RETURN createserieslabel(title, name, volume, startyear, endyear); 
-end IF; 
-IF type = 'issue' THEN 
-RETURN createissuelabel(title, name, volume, startyear, endyear, number, format, variant); 
+  if type = 'publisher' then
+  return title;
+end if;
+if type = 'series' then
+return createserieslabel(title, name, volume, startyear, endyear);
+end if;
+if type = 'issue' then
+return createissuelabel(title, name, volume, startyear, endyear, number, format, variant);
 end IF; 
 end 
 
 $$
 
-CREATE function 
+create function
   createserieslabel(title     VARCHAR(256), 
                     name      VARCHAR(256), 
                     volume    INTEGER, 
@@ -70,21 +71,21 @@ CREATE function
                     endyear   INTEGER) returns VARCHAR(1000) charset utf8
   DETERMINISTIC 
 begin 
-  DECLARE label     VARCHAR(1000) DEFAULT name; 
+  declare label     varchar(1000) default name;
   DECLARE years     VARCHAR(256) DEFAULT concat(' (', startyear); 
-  DECLARE volume    VARCHAR(256) DEFAULT concat(' (Vol. ', toroman(volume), ') '); 
+  declare volume    varchar(256) default concat(' (Vol. ', toroman(volume), ') ');
   DECLARE publisher VARCHAR(256) DEFAULT concat(' (', title, ')'); 
-  IF endyear > startyear THEN 
-    SET years := concat(years, '-', endyear); 
-  end IF; 
-  SET years := concat(years, ') '); 
-  SET label := concat(label, volume, startyear, publisher); 
-  RETURN label; 
+  if endyear > startyear then
+    set years := concat(years, '-', endyear);
+  end if;
+  set years := concat(years, ') ');
+  set label := concat(label, volume, startyear, publisher);
+  return label;
 end 
 
 $$
 
-CREATE function 
+create function
   createurl(type   VARCHAR(256), 
           original TINYINT, 
           title    VARCHAR(256), 
@@ -95,41 +96,41 @@ CREATE function
           variant  VARCHAR(256)) returns VARCHAR(4096) charset utf8
   DETERMINISTIC 
 begin 
-  DECLARE url VARCHAR(4096) DEFAULT ''; 
-  IF original = 1 THEN 
-    SET url := '/us/'; 
-  end IF; 
-  IF original = 0 THEN 
-    SET url := '/de/'; 
-  end IF; 
-  SET url := concat(url, urlencode(title)); 
-  IF type != 'publisher' THEN 
-  SET url := concat(url, '/', urlencode(name), '_Vol_', volume);
-  IF type != 'series' THEN 
-  SET url := concat(url, '/', urlencode(number), '/', urlencode(format));
-  IF variant != '' THEN 
-    SET url := concat(url, '_', urlencode(variant));
-  end IF; 
-end IF; 
-end IF; 
-RETURN url; 
+  declare url varchar(4096) default '';
+  if original = 1 then
+    set url := '/us/';
+  end if;
+  if original = 0 then
+    set url := '/de/';
+  end if;
+  set url := concat(url, urlencode(title));
+  if type != 'publisher' then
+  set url := concat(url, '/', urlencode(name), '_Vol_', volume);
+  if type != 'series' then
+  set url := concat(url, '/', urlencode(number), '/', urlencode(format));
+  if variant != '' then
+    set url := concat(url, '_', urlencode(variant));
+  end if;
+end if;
+end if;
+return url;
 end 
 
 $$
 
-CREATE function 
+create function
   fromroman(inroman VARCHAR(256)) returns INT(11) 
   DETERMINISTIC 
 begin 
-  DECLARE numeral  CHAR(7) DEFAULT 'IVXLCDM'; 
+  declare numeral  char(7) default 'IVXLCDM';
   DECLARE digit    TINYINT; 
-  DECLARE previous INT DEFAULT 0; 
+  declare previous int default 0;
   DECLARE current  INT; 
   DECLARE sum      INT DEFAULT 0; 
-  SET inroman = upper(inroman); 
-  WHILE length(inroman) > 0 do 
-  SET digit := locate(RIGHT(inroman, 1), numeral) - 1; 
-  SET current := pow(10, floor(digit / 2)) * pow(5, MOD(digit, 2)); 
+  set inroman = upper(inroman);
+  while length(inroman) > 0 do
+  set digit := locate(RIGHT(inroman, 1), numeral) - 1;
+  set current := pow(10, floor(digit / 2)) * pow(5, MOD(digit, 2));
   IF current = 0 THEN 
     RETURN 0; 
   end IF; 
@@ -142,9 +143,9 @@ end
 
 $$
 
-CREATE function 
-  toroman(inarabic INT UNSIGNED) returns VARCHAR(15) charset utf8
-  DETERMINISTIC 
+create function
+  toroman(inarabic int UNSIGNED) returns VARCHAR(15) charset utf8
+  deterministic
 begin 
   DECLARE numeral      CHAR(7) DEFAULT 'IVXLCDM'; 
   DECLARE stringinuse  CHAR(3); 
@@ -179,9 +180,9 @@ end
 
 $$
 
-CREATE function 
-  urlencode(str VARCHAR(4096) charset utf8) returns VARCHAR(4096) charset utf8 
-  DETERMINISTIC 
+create function
+  urlencode(str varchar(4096) charset utf8) returns VARCHAR(4096) charset utf8
+  deterministic
 begin 
   -- the individual character we are converting in our loop 
   -- NOTE: must be VARCHAR even though it won't vary in length 
