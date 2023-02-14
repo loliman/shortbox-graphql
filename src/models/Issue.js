@@ -1,7 +1,7 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import {asyncForEach, deleteFile, naturalCompare, storeFile} from "../util/util";
+import {asyncForEach, deleteFile, storeFile} from "../util/util";
 import {crawlIssue, crawlSeries} from "../crawler/crawler_marvel";
 import {coverDir} from "../config/config";
 import {create as createStory, equals as storyEquals, getStories} from "./Story";
@@ -289,7 +289,8 @@ export const resolvers = {
                     variant: i.issuevariant,
                     collected: i.issuecollected
                 }));
-                return issues.sort((a, b) => naturalCompare(a.number, b.number));
+
+                return issues;
             }
         },
         lastEdited: async (_, {filter, offset, order, direction}, context) => {
@@ -297,6 +298,7 @@ export const resolvers = {
 
             let rawQuery = createFilterQuery(loggedIn, filter.us, filter, offset, false, true, order, direction);
             let res = await models.sequelize.query(rawQuery);
+
             let issues = [];
             res[0].forEach(i => issues.push({
                 id: i.issueid,
@@ -342,6 +344,7 @@ export const resolvers = {
 
             if (res)
                 res.edit = (edit === true);
+
             return res;
         }
     },

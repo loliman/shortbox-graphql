@@ -111,7 +111,6 @@ export const typeDef = gql`
     seriesCount: Int,
     issueCount: Int,
     firstIssue: Issue,
-    lastEdited: [Issue],
     lastIssue: Issue,
     startyear: Int,
     endyear: Int,
@@ -296,21 +295,6 @@ export const resolvers = {
         startyear: (parent) => parent.startyear,
         endyear: (parent) => parent.endyear,
         active: (parent) => !(parent.startyear && parent.endyear),
-        addinfo: (parent) => parent.addinfo,
-        lastEdited: async (parent) => await models.Issue.findAll({
-            where: {
-                '$Series->Publisher.id$': parent.id
-            },
-            include: [
-                {
-                    model: models.Series,
-                    include: [
-                        models.Publisher
-                    ]
-                }
-            ],
-            order: [['updatedAt', 'DESC']],
-            limit: 25
-        }),
+        addinfo: (parent) => parent.addinfo
     }
 };

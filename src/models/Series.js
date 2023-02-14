@@ -113,7 +113,6 @@ export const typeDef = gql`
     issueCount: Int,
     firstIssue: Issue,
     lastIssue: Issue,
-    lastEdited: [Issue],
     active: Boolean,
     addinfo: String,
     publisher: Publisher
@@ -166,8 +165,8 @@ export const resolvers = {
                 return series;
             }
         },
-        seriesd: (_, {series}) =>
-            models.Series.findOne({
+        seriesd: async (_, {series}) =>
+            await models.Series.findOne({
                 where: {title: series.title, volume: series.volume, '$Publisher.name$': series.publisher.name},
                 include: [models.Publisher]
             }),
@@ -333,18 +332,6 @@ export const resolvers = {
             return res && res.length > 0 ? res[0] : null;
         },
         active: (parent) => !(parent.startyear && parent.endyear),
-        publisher: async (parent) => await models.Publisher.findById(parent.fk_publisher),
-        lastEdited: async (parent) => await models.Issue.findAll({
-            where: {
-                '$Series.id$': parent.id
-            },
-            include: [
-                {
-                    model: models.Series
-                }
-            ],
-            order: [['updatedAt', 'DESC']],
-            limit: 25
-        }),
+        publisher: async (parent) => await models.Publisher.findById(parent.fk_publisher)
     }
 };

@@ -26,7 +26,19 @@ const server = new ApolloServer({
     resolvers: merge(ScalarResolvers, NodeResolvers, FilterResolvers, PublisherResolvers, UserResolvers,
         CoverResolvers, FeatureResolvers, IndividualResolvers, AppearanceResolvers,
         IssueResolvers, SeriesResolvers, StoryResolvers, ArcResolvers),
+    formatResponse: (resp, context) => {
+
+        let now = new Date();
+        let took = (now - context.context.now) / 1000;
+        console.log("[" + (new Date()).toUTCString() + "] [<<<] [" + context.context.operationName.toUpperCase() + "] took " + took + " seconds");
+        return resp;
+    },
     context: async ({req}) => {
+        let operationName = req.body.operationName;
+
+        let now = new Date();
+        console.log("[" + now.toUTCString() + "] [>>>] [" + operationName.toUpperCase() + "]");
+
         let loggedIn = false;
         if (req.headers.authorization) {
             let userid = req.headers.authorization.split(/:(.+)/)[0];
@@ -43,13 +55,12 @@ const server = new ApolloServer({
 
         let isMutation = req.body.query.indexOf('mutation') === 0;
 
-        if(isMutation) {
+        if (isMutation) {
             const transaction = await models.sequelize.transaction();
-            return {loggedIn, dataloader, transaction};
+            return {loggedIn, dataloader, transaction, operationName, now};
         } else {
-            return {loggedIn, dataloader};
+            return {loggedIn, dataloader, operationName, now};
         }
-
     },
     uploads: {
         maxFileSize: 10000000 // 10 MB

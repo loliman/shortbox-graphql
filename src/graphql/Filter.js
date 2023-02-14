@@ -730,17 +730,18 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
                 break;
         }
     } else {
-        if (!selected) {
-            rawQuery += " ORDER BY p.name, s.title, s.volume, cast(i.number as unsigned) DESC";
-        } else if (selected.name) {
-            rawQuery += " ORDER BY s.title, s.volume, p.name, cast(i.number as unsigned) DESC";
-        } else if (selected.title) {
-            rawQuery += " ORDER BY cast(i.number as unsigned), s.title, s.volume, p.name DESC";
-        }
+        let fromRoman = "CASE WHEN fromRoman(i.number) = 0 THEN 999 ELSE fromRoman(i.number) END";
 
+        if (!selected) {
+            rawQuery += " ORDER BY p.name, s.title, s.volume, " + fromRoman + ", cast(i.number as unsigned) DESC";
+        } else if (selected.name) {
+            rawQuery += " ORDER BY s.title, s.volume, p.name, " + fromRoman + ", cast(i.number as unsigned) DESC";
+        } else if (selected.title) {
+            rawQuery += " ORDER BY " + fromRoman + ", cast(i.number as unsigned), s.title, s.volume, p.name DESC";
+        }
     }
 
-    if (!print)
+    if (!print && offset !== undefined)
         rawQuery += " LIMIT " + offset + ", 50";
 
     //console.log(rawQuery + "\n\n");
