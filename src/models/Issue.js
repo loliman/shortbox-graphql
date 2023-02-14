@@ -185,7 +185,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    issues(pattern: String, series: SeriesInput!, offset: Int, filter: Filter): [Issue], 
+    issues(pattern: String, series: SeriesInput! filter: Filter): [Issue], 
     lastEdited(filter: Filter, offset: Int, order: String, direction: String): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }
@@ -242,7 +242,7 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        issues: async (_, {pattern, series, offset, filter}, context) => {
+        issues: async (_, {pattern, series, filter}, context) => {
             const {loggedIn, transaction} = context;
 
             if (!filter) {
@@ -274,13 +274,11 @@ export const resolvers = {
                             ]
                         }
                     ],
-                    offset: offset,
-                    limit: 50
                 });
 
                 return res;
             } else {
-                let rawQuery = createFilterQuery(loggedIn, series, filter, offset);
+                let rawQuery = createFilterQuery(loggedIn, series, filter);
                 let res = await models.sequelize.query(rawQuery);
                 let issues = [];
                 res[0].forEach(i => issues.push({

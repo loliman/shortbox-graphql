@@ -20,7 +20,7 @@ export const resolvers = {
             if (!offset)
                 offset = 0;
 
-            if(!pattern || pattern.trim() === "")
+            if (!pattern || pattern.trim() === "")
                 return [];
 
             let query = "SELECT * FROM \n" +
@@ -42,7 +42,7 @@ export const resolvers = {
                 "        WHERE  original = " + (us ? 1 : 0) + " \n" +
                 "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
                 "        ORDER  BY label \n" +
-                "        LIMIT 10) \n" +
+                "        ) \n" +
                 "        UNION \n" +
                 "        (SELECT Createlabel('series', name, s.title, volume, s.startyear, s.endyear, 0, '', '') as label, \n" +
                 "               \"series\"    AS type, \n" +
@@ -61,7 +61,7 @@ export const resolvers = {
                 "        WHERE  p.original = " + (us ? 1 : 0) + " \n" +
                 "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
                 "        ORDER  BY label \n" +
-                "        LIMIT 10) \n" +
+                "        ) \n" +
                 "        UNION \n" +
                 "        (SELECT Createlabel('issue', name, s.title, volume, s.startyear, s.endyear, number, format, variant) as label, \n" +
                 "               \"issue\"     AS type, \n" +
@@ -82,14 +82,14 @@ export const resolvers = {
                 "        WHERE  p.original = " + (us ? 1 : 0) + " \n" +
                 "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
                 "        ORDER  BY label \n" +
-                "        LIMIT 10)) a \n" +
+                "        )) a \n" +
                 ") a \n" +
                 "ORDER BY \n" +
                 "    CASE WHEN label LIKE '" + escapeSqlString(pattern) + "' THEN 1 \n" +
                 "        WHEN label LIKE '" + escapeSqlString(pattern) + "%' THEN 2 \n" +
                 "        WHEN label LIKE '%" + escapeSqlString(pattern) + "' THEN 4 \n" +
                 "        ELSE 3 \n" +
-                "    END ASC, label ASC";
+                "    END ASC, label ASC LIMIT " + offset + ", 20";
 
             let res = await models.sequelize.query(query);
 

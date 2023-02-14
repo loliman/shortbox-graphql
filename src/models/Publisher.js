@@ -1,7 +1,7 @@
 import Sequelize, {Model} from 'sequelize';
 import {gql} from 'apollo-server';
 import models from "./index";
-import {asyncForEach, naturalCompare} from "../util/util";
+import {asyncForEach} from "../util/util";
 import {createFilterQuery} from "../graphql/Filter";
 
 class Publisher extends Model {
@@ -90,7 +90,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    publishers(pattern: String, us: Boolean!, offset: Int, filter: Filter): [Publisher],
+    publishers(pattern: String, us: Boolean!, filter: Filter): [Publisher],
     publisher(publisher: PublisherInput!): Publisher
   }
   
@@ -122,14 +122,14 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        publishers: async (_, {pattern, us, offset, filter}, context) => {
+        publishers: async (_, {pattern, us, filter}, context) => {
             const {loggedIn, transaction} = context;
 
-            if(!filter) {
+            if (!filter) {
                 let where = {original: (us ? 1 : 0)};
                 let order = [['name', 'ASC']];
 
-                if(pattern !== '') {
+                if (pattern && pattern !== '') {
                     where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
                     order = [[models.sequelize.literal("CASE " +
                         "   WHEN name LIKE '" + pattern + "' THEN 1 " +
@@ -141,12 +141,10 @@ export const resolvers = {
 
                 return await models.Publisher.findAll({
                     where: where,
-                    order: order,
-                    offset: offset,
-                    limit: 50
+                    order: order
                 });
             } else {
-                let rawQuery = createFilterQuery(loggedIn, us, filter, offset);
+                let rawQuery = createFilterQuery(loggedIn, us, filter);
                 let res = await models.sequelize.query(rawQuery);
                 let publishers = [];
                 res[0].forEach(p => publishers.push({

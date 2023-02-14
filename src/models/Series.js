@@ -90,7 +90,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    series(pattern: String, publisher: PublisherInput!, offset: Int, filter: Filter): [Series],
+    series(pattern: String, publisher: PublisherInput!, filter: Filter): [Series],
     seriesd(series: SeriesInput!): Series
   }
   
@@ -122,16 +122,14 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        series: async (_, {pattern, publisher, offset, filter}, context) => {
+        series: async (_, {pattern, publisher, filter}, context) => {
             const {loggedIn, transaction} = context;
 
             if (!filter) {
                 let options = {
                     order: [[models.sequelize.fn('sortabletitle', models.sequelize.col('title')), 'ASC'],
                         ['volume', 'ASC']],
-                    include: [models.Publisher],
-                    offset: offset,
-                    limit: 50
+                    include: [models.Publisher]
                 };
 
                 if (publisher.name !== "*")
@@ -140,7 +138,7 @@ export const resolvers = {
                 if (publisher.us !== undefined)
                     options.where = {'$Publisher.original$': publisher.us ? 1 : 0};
 
-                if (pattern !== '') {
+                if (pattern && pattern !== '') {
                     options.where.title = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
                     options.order = [[models.sequelize.literal("CASE " +
                         "   WHEN title LIKE '" + pattern + "' THEN 1 " +
@@ -152,7 +150,7 @@ export const resolvers = {
 
                 return await models.Series.findAll(options);
             } else {
-                let rawQuery = createFilterQuery(loggedIn, publisher, filter, offset);
+                let rawQuery = createFilterQuery(loggedIn, publisher, filter);
                 let res = await models.sequelize.query(rawQuery);
                 let series = [];
                 res[0].forEach(s => {
