@@ -190,7 +190,8 @@ export const resolvers = {
                 attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
                     [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
                     [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
-                    'number', 'fk_series', 'collected']
+                    [models.sequelize.fn('MAX', models.sequelize.col('collected')), 'collected'],
+                    'number', 'fk_series']
             });
         },
         parent: async (parent) => await models.Story.findById(parent.fk_parent),
