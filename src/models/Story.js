@@ -234,10 +234,18 @@ export const resolvers = {
         onlytb: async (parent) => {
             return parent.onlytb;
         },
-        collectedmultipletimes: async (parent) => {
+        collectedmultipletimes: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return false;
+
             return parent.collectedmultipletimes;
         },
-        collected: async (parent) => {
+        collected: async (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return false;
+
             return parent.collected;
         },
         exclusive: async (parent) => {
