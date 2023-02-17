@@ -143,10 +143,9 @@ export const resolvers = {
                         "   WHEN name LIKE '%" + pattern + "' THEN 4 " +
                         "   ELSE 3 " +
                         "END"), 'ASC']];
-
                 }
 
-                return await models.Publisher.findAll({options});
+                return await models.Publisher.findAll(options);
             } else {
                 let rawQuery = createFilterQuery(loggedIn, us, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
