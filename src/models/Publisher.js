@@ -90,7 +90,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    publishers(pattern: String, us: Boolean!, filter: Filter): [Publisher],
+    publishers(pattern: String, us: Boolean!, offset: Int, filter: Filter): [Publisher],
     publisher(publisher: PublisherInput!): Publisher
   }
   
@@ -121,29 +121,34 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        publishers: async (_, {pattern, us, filter}, context) => {
+        publishers: async (_, {pattern, us, offset, filter}, context) => {
             const {loggedIn, transaction} = context;
 
             if (!filter) {
-                let where = {original: (us ? 1 : 0)};
-                let order = [['name', 'ASC']];
+                let options = {};
+
+                options.where = {original: (us ? 1 : 0)};
+                options.order = [['name', 'ASC']];
+
+                if (offset !== undefined) {
+                    options.offset = offset;
+                    options.limit = 50;
+                }
 
                 if (pattern && pattern !== '') {
-                    where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
-                    order = [[models.sequelize.literal("CASE " +
+                    options.where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
+                    options.order = [[models.sequelize.literal("CASE " +
                         "   WHEN name LIKE '" + pattern + "' THEN 1 " +
                         "   WHEN name LIKE '" + pattern + "%' THEN 2 " +
                         "   WHEN name LIKE '%" + pattern + "' THEN 4 " +
                         "   ELSE 3 " +
                         "END"), 'ASC']];
+
                 }
 
-                return await models.Publisher.findAll({
-                    where: where,
-                    order: order
-                });
+                return await models.Publisher.findAll({options});
             } else {
-                let rawQuery = createFilterQuery(loggedIn, us, filter);
+                let rawQuery = createFilterQuery(loggedIn, us, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
                 let publishers = [];
                 res[0].forEach(p => publishers.push({

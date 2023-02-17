@@ -90,7 +90,7 @@ export const typeDef = gql`
   }
   
   extend type Query {
-    series(pattern: String, publisher: PublisherInput!, filter: Filter): [Series],
+    series(pattern: String, publisher: PublisherInput!, offset: Int, filter: Filter): [Series],
     seriesd(series: SeriesInput!): Series
   }
   
@@ -121,7 +121,7 @@ export const typeDef = gql`
 
 export const resolvers = {
     Query: {
-        series: async (_, {pattern, publisher, filter}, context) => {
+        series: async (_, {pattern, publisher, offset, filter}, context) => {
             const {loggedIn, transaction} = context;
 
             if (!filter) {
@@ -130,6 +130,11 @@ export const resolvers = {
                         ['volume', 'ASC']],
                     include: [models.Publisher]
                 };
+
+                if (offset !== undefined) {
+                    options.offset = offset;
+                    options.limit = 50;
+                }
 
                 if (publisher.name !== "*")
                     options.where = {'$Publisher.name$': publisher.name};
@@ -149,7 +154,7 @@ export const resolvers = {
 
                 return await models.Series.findAll(options);
             } else {
-                let rawQuery = createFilterQuery(loggedIn, publisher, filter);
+                let rawQuery = createFilterQuery(loggedIn, publisher, filter, offset);
                 let res = await models.sequelize.query(rawQuery);
                 let series = [];
                 res[0].forEach(s => {
