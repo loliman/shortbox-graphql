@@ -807,10 +807,14 @@ export const resolvers = {
         format: (parent) => parent.format,
         series: async (parent) => models.Series.findById(parent.fk_series),
         variants: async (parent) => {
-            return await models.Issue.findAll({
+            let variants = await models.Issue.findAll({
                 where: {fk_series: parent.fk_series, number: parent.number},
                 order: [['variant', 'ASC'], ['title', 'ASC'], ['format', 'ASC'], ['releasedate', 'ASC']]
-            })
+            });
+
+            variants.forEach(variant => variant.edit = true);
+
+            return variants;
         },
         variant: (parent) => parent.variant,
         features: async (parent) => {
