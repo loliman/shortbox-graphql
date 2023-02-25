@@ -85,7 +85,13 @@ export const resolvers = {
         }
     },
     Arc: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return new Date();
+
+            return parent.id;
+        },
         title: (parent) => parent.title.trim(),
         type: (parent) => parent.type,
         issues: async (parent) => await models.Issue.findAll({

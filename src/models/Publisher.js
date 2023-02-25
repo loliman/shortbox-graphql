@@ -239,7 +239,7 @@ export const resolvers = {
         id: (parent, _, context) => {
             const {loggedIn} = context;
             if (!loggedIn)
-                return null;
+                return new Date();
 
             return parent.id;
         },

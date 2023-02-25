@@ -79,7 +79,13 @@ export const resolvers = {
         }
     },
     Individual: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return new Date();
+
+            return parent.id;
+        },
         name: (parent) => parent.name,
         type: async (parent) => {
             let where = {};

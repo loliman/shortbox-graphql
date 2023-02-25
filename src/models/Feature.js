@@ -86,7 +86,13 @@ export const typeDef = gql`
 
 export const resolvers = {
     Feature: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return new Date();
+
+            return parent.id;
+        },
         title: (parent) => parent.title.trim(),
         number: (parent) => parent.number,
         addinfo: (parent) => parent.addinfo,

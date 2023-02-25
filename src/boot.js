@@ -60,7 +60,6 @@ export async function boot(process) {
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 ... Done!");
 
-
     await process();
 
     console.log("[" + (new Date()).toUTCString() + "] 🚀 All done, lets go!");
