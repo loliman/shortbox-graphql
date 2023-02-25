@@ -20,7 +20,11 @@ class Feature extends Model {
                     },
                     transaction: transaction
                 }).then(async ([individual, created]) => {
-                    resolve(await models.Feature_Individual.create({fk_feature: this.id, fk_individual: individual.id, type: type}, {transaction: transaction}));
+                    resolve(await models.Feature_Individual.create({
+                        fk_feature: this.id,
+                        fk_individual: individual.id,
+                        type: type
+                    }, {transaction: transaction}));
                 }).catch(e => reject(e));
             } catch (e) {
                 reject(e);
@@ -108,9 +112,9 @@ export async function create(feature, issue, transaction) {
                 fk_issue: issue.id
             }, {transaction: transaction});
 
-            if(feature.individuals)
+            if (feature.individuals)
                 await asyncForEach(feature.individuals, async individual => {
-                    if(individual.name && individual.name.trim() !== '')
+                    if (individual.name && individual.name.trim() !== '')
                         await asyncForEach(individual.type, async type => {
                             await resFeature.associateIndividual(individual.name.trim(), type, transaction);
                         });
@@ -148,7 +152,7 @@ export async function getFeatures(issue, transaction) {
                 });
 
                 rawFeature.individuals = [];
-                if(individuals) {
+                if (individuals) {
                     individuals.forEach(individual => {
                         let i = rawFeature.individuals.find(n => n.name === individual.name);
 
@@ -172,13 +176,13 @@ export async function getFeatures(issue, transaction) {
 }
 
 export function equals(a, b) {
-    if(a.individuals.length !== b.individuals.length)
+    if (a.individuals.length !== b.individuals.length)
         return false;
 
     let found = a.individuals.every(aIndividual => {
         let r = b.individuals.find(bIndividual => aIndividual.name === bIndividual.name);
 
-        if(r)
+        if (r)
             return aIndividual.type.every(aType => r.type.some(bType => aType === bType));
 
         return false;

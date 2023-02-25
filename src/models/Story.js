@@ -178,7 +178,13 @@ export const typeDef = gql`
 
 export const resolvers = {
     Story: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return null;
+
+            return parent.id;
+        },
         title: async (parent) => await getReprintOf(parent, (story) => story.title),
         number: (parent) => parent.number,
         addinfo: (parent) => parent.addinfo,

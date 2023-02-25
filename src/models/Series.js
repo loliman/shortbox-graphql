@@ -283,7 +283,13 @@ export const resolvers = {
         }
     },
     Series: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return null;
+
+            return parent.id;
+        },
         title: (parent) => parent.title,
         startyear: (parent) => parent.startyear,
         endyear: (parent) => parent.endyear,

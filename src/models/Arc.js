@@ -63,7 +63,7 @@ export const resolvers = {
             let where = {};
             let order = [['title', 'ASC']];
 
-            if(pattern !== '') {
+            if (pattern !== '') {
                 where.title = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
                 order = [[models.sequelize.literal("CASE " +
                     "   WHEN title LIKE '" + pattern + "' THEN 1 " +
@@ -73,7 +73,7 @@ export const resolvers = {
                     "END"), 'ASC']];
             }
 
-            if(type)
+            if (type)
                 where.type = {[Sequelize.Op.eq]: type.toUpperCase()};
 
             return models.Arc.findAll({
@@ -110,7 +110,10 @@ export async function create(arc, issue, transaction) {
                 },
                 transaction: transaction
             }).then(async ([arc, created]) => {
-                resolve(await models.Issue_Arc.create({fk_issue: issue.id, fk_arc: arc.id}, {transaction: transaction}));
+                resolve(await models.Issue_Arc.create({
+                    fk_issue: issue.id,
+                    fk_arc: arc.id
+                }, {transaction: transaction}));
             }).catch(e => reject(e));
         } catch (e) {
             reject(e);

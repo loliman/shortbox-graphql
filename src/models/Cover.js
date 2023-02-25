@@ -98,7 +98,13 @@ export const typeDef = gql`
 
 export const resolvers = {
     Cover: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return null;
+
+            return parent.id;
+        },
         url: (parent) => parent.url,
         number: (parent) => parent.number,
         parent: async (parent) => await models.Cover.findById(parent.fk_parent),

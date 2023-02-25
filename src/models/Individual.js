@@ -60,7 +60,7 @@ export const resolvers = {
             let where = {};
             let order = [['name', 'ASC']];
 
-            if(pattern !== '') {
+            if (pattern !== '') {
                 where.name = {[Sequelize.Op.like]: '%' + pattern.replace(/\s/g, '%') + '%'};
                 order = [[models.sequelize.literal("CASE " +
                     "   WHEN name LIKE '" + pattern + "' THEN 1 " +
@@ -85,16 +85,16 @@ export const resolvers = {
             let where = {};
             let table = "";
 
-            if(parent.Stories) {
+            if (parent.Stories) {
                 where.fk_story = parent.Stories[0].id;
                 table = "Story_Individual";
-            } else if(parent.Covers) {
+            } else if (parent.Covers) {
                 where.fk_cover = parent.Covers[0].id;
                 table = "Cover_Individual";
-            } else if(parent.Issues) {
+            } else if (parent.Issues) {
                 where.fk_issue = parent.Issues[0].id;
                 table = "Issue_Individual";
-            } else if(parent.Features) {
+            } else if (parent.Features) {
                 where.fk_feature = parent.Features[0].id;
                 table = "Feature_Individual";
             }

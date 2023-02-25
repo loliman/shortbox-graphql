@@ -86,7 +86,13 @@ export const resolvers = {
         }
     },
     Appearance: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return null;
+
+            return parent.id;
+        },
         name: (parent) => parent.name.trim(),
         type: (parent) => (parent.type.trim() === '' ? 'CHARACTER' : parent.type),
         role: async (parent) => {

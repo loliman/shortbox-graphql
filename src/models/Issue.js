@@ -801,7 +801,13 @@ export const resolvers = {
         }
     },
     Issue: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return null;
+
+            return parent.id;
+        },
         title: (parent) => parent.title,
         number: (parent) => parent.number,
         format: (parent) => parent.format,

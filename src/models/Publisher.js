@@ -236,7 +236,13 @@ export const resolvers = {
         }
     },
     Publisher: {
-        id: (parent) => parent.id,
+        id: (parent, _, context) => {
+            const {loggedIn} = context;
+            if (!loggedIn)
+                return null;
+
+            return parent.id;
+        },
         name: (parent) => parent.name,
         us: (parent) => parent.original,
         seriesCount: async (parent) => await models.Series.count({where: {fk_publisher: parent.id}}),
