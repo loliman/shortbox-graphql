@@ -9,13 +9,13 @@ export const typeDef = gql`
     date: Date,
     compare: String
   }
-  
+
   input NumberFilter {
     number: String,
     compare: String,
     variant: String
   }
-  
+
   input Filter {
     us: Boolean!,
     formats: [String],
@@ -39,7 +39,7 @@ export const typeDef = gql`
     onlyNotCollected: Boolean,
     sellable: Boolean
   }
-  
+
   extend type Query {
     export(filter: Filter!, type: String!): String
   }
@@ -106,9 +106,9 @@ export const resolvers = {
             }).sort();
 
             if (type === "txt") {
-                return JSON.stringify(await convertFilterToTxt(filter) + await resultsToTxt(sortedResponse));
+                return JSON.stringify(await convertFilterToTxt(filter, loggedIn) + await resultsToTxt(sortedResponse));
             } else if (type === "csv") {
-                return JSON.stringify(await resultsToCsv(sortedResponse));
+                return JSON.stringify(await resultsToCsv(sortedResponse, loggedIn));
             } else {
                 throw new Error("Gültige Export Typen: txt, csv");
             }
@@ -116,7 +116,7 @@ export const resolvers = {
     }
 };
 
-async function resultsToCsv(results) {
+async function resultsToCsv(results, loggedIn) {
     let responseString = "Verlag;Series;Volume;Start;Ende;Nummer;Variante;Format;Seiten;Erscheinungsdaten;Preis;Währung\n";
 
     results.forEach(p => {
@@ -149,7 +149,7 @@ async function resultsToTxt(results) {
     return responseString;
 }
 
-async function convertFilterToTxt(filter) {
+async function convertFilterToTxt(filter, loggedIn) {
     let s = "Aktive Filter\n";
 
     s += "\t" + (filter.us ? "Original Ausgaben" : "Deutsche Ausgaben") + "\n";
