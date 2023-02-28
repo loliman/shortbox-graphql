@@ -38,7 +38,7 @@ export const resolvers = {
                 "               0           AS number, \n" +
                 "               ''          AS format, \n" +
                 "               ''          AS variant, \n" +
-                "               ''          AS issuelable \n" +
+                "               ''          AS issuetitle \n" +
                 "        FROM   publisher p \n" +
                 "        WHERE  original = " + (us ? 1 : 0) + " \n" +
                 "        HAVING label LIKE '%" + escapeSqlString(pattern).replace(/\s/g, '%') + "%' \n" +
@@ -56,7 +56,7 @@ export const resolvers = {
                 "               0           AS number, \n" +
                 "               ''          AS format, \n" +
                 "               ''          AS variant, \n" +
-                "               ''          AS issuelable \n" +
+                "               ''          AS issuetitle \n" +
                 "        FROM   series s \n" +
                 "               LEFT JOIN publisher p \n" +
                 "                      ON s.fk_publisher = p.id \n" +
@@ -76,7 +76,7 @@ export const resolvers = {
                 "               number      AS number, \n" +
                 "               format      AS format, \n" +
                 "               variant     AS variant, \n" +
-                 "              i.title     AS issuelable \n" +
+                 "              i.title     AS issuetitle \n" +
                 "        FROM   issue i \n" +
                 "               LEFT JOIN series s \n" +
                 "                      ON i.fk_series = s.id \n" +
