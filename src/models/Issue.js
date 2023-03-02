@@ -878,8 +878,8 @@ export const resolvers = {
                 return cover;
 
             if (parent.comicguideid && parent.comicguideid !== 0) {
+                let isImage = false;
                 let url = "https://www.comicguide.de/pics/large/" + parent.comicguideid + ".jpg";
-                let isImage;
 
                 try {
                     isImage = await request({
@@ -889,7 +889,21 @@ export const resolvers = {
                         },
                     });
                 } catch (e) {
-                    return null;
+                    isImage = false;
+                }
+
+                if (!isImage) {
+                    url = "https://www.comicguide.de/pics/medium/" + parent.comicguideid + ".jpg";
+                    try {
+                        isImage = await request({
+                            uri: url,
+                            transform: (body, response) => {
+                                return response.headers['content-type'] === 'image/jpeg';
+                            },
+                        });
+                    } catch (e) {
+                        isImage = false;
+                    }
                 }
 
                 if (isImage)
@@ -1474,7 +1488,7 @@ function orderVariants(variants) {
     let back = [];
 
     variants.forEach(variant => {
-        if(variant.format === "Heft" || variant.format === "Softcover" ||variant.format === "Album" ||variant.format === "Taschenbuch") {
+        if (variant.format === "Heft" || variant.format === "Softcover" || variant.format === "Album" || variant.format === "Taschenbuch") {
             front.push(variant);
         } else {
             back.push(variant);
