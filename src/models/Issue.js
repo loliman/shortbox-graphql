@@ -183,13 +183,13 @@ export const typeDef = gql`
     verifyIssue(item: IssueInput!): Issue,
     addIssueToCollection(item: IssueInput!): Issue
   }
-  
+
   extend type Query {
-    issues(pattern: String, series: SeriesInput! filter: Filter): [Issue], 
+    issues(pattern: String, series: SeriesInput! filter: Filter): [Issue],
     lastEdited(filter: Filter, offset: Int, order: String, direction: String): [Issue],
     issue(issue: IssueInput!, edit: Boolean): Issue
   }
-    
+
   input IssueInput {
     id: String,
     title: String,
@@ -211,7 +211,7 @@ export const typeDef = gql`
     arcs: [ArcInput],
     comicguideid: Int
   }
-  
+
   type Issue {
     id: ID,
     format: String,
@@ -248,7 +248,6 @@ export const resolvers = {
             if (!filter) {
                 let res = await models.Issue.findAll({
                     attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
-                        [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
                         [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
                         [models.sequelize.cast(models.sequelize.col('number'), 'unsigned'), 'numberasint'],
                         [models.sequelize.fn('fromRoman', models.sequelize.col('number')), 'numberfromroman'],
@@ -330,7 +329,7 @@ export const resolvers = {
             if (issue.variant)
                 where.variant = issue.variant;
 
-            let res = await models.Issue.findOne({
+            let res = await models.Issue.findAll({
                 where: where,
                 include: [
                     {
@@ -342,10 +341,16 @@ export const resolvers = {
                 ]
             });
 
-            if (res)
-                res.edit = (edit === true);
+            let i;
 
-            return res;
+            if (res) {
+                res = orderVariants(res);
+                i = res[0];
+
+                i.edit = (edit === true);
+            }
+
+            return i;
         }
     },
     Mutation: {
@@ -815,12 +820,12 @@ export const resolvers = {
         variants: async (parent) => {
             let variants = await models.Issue.findAll({
                 where: {fk_series: parent.fk_series, number: parent.number},
-                order: [['variant', 'ASC'], ['title', 'ASC'], ['format', 'ASC'], ['releasedate', 'ASC']]
+                order: [['format', 'ASC'], ['variant', 'ASC']]
             });
 
             variants.forEach(variant => variant.edit = true);
 
-            return variants;
+            return orderVariants(variants);
         },
         variant: (parent) => parent.variant,
         features: async (parent) => {
@@ -1462,4 +1467,19 @@ async function createCoverForIssue(cover, covers, issue, transaction) {
             reject(e);
         }
     });
+}
+
+function orderVariants(variants) {
+    let front = [];
+    let back = [];
+
+    variants.forEach(variant => {
+        if(variant.format === "Heft" || variant.format === "Softcover" ||variant.format === "Album" ||variant.format === "Taschenbuch") {
+            front.push(variant);
+        } else {
+            back.push(variant);
+        }
+    });
+
+    return front.concat(back);
 }
