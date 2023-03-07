@@ -37,7 +37,10 @@ export const typeDef = gql`
     onlyOnePrint: Boolean,
     onlyCollected: Boolean,
     onlyNotCollected: Boolean,
-    sellable: Boolean
+    sellable: Boolean,
+    noCover: Boolean,
+    noContent: Boolean,
+    and: Boolean
   }
 
   extend type Query {
@@ -173,6 +176,13 @@ async function convertFilterToTxt(filter, loggedIn) {
 
     if (!filter.formats && !filter.withVariants && !filter.releasedates)
         s += "\t\t-\n";
+
+    if (filter.and)
+        s += "\tAlle Kriterien müssen erfüllt sein\n";
+    if (filter.noCover)
+        s += "\tOhne Cover\n";
+    if (filter.noContent)
+        s += "\tOhne Inhalt\n";
 
     s += "\tEnthält\n";
     if (filter.firstPrint)
@@ -376,7 +386,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     let intersect = "";
 
     if (filter.appearances && filter.appearances.length > 0) {
-        intersect += " AND i.id IN (";
+        intersect += " " + unionOrIntersect(filter.and) + "  (";
 
         for (let i = 2; i > 0; i--) {
             intersect +=
@@ -391,14 +401,14 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
                 " and ((app.name = '" + escapeSqlString(filter.appearances) + "'))";
 
             if (i === 2)
-                intersect += " UNION "
+                intersect += unionOrIntersect(filter.and)
         }
 
         intersect += " group by i.id) ";
     }
 
     if (filter.individuals && filter.individuals.length > 0) {
-        intersect += " AND i.id IN (";
+        intersect += " " + unionOrIntersect(filter.and) + "  (";
 
         for (let i = 2; i > 0; i--) {
             intersect +=
@@ -421,14 +431,14 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             intersect += ")";
 
             if (i === 2)
-                intersect += " UNION "
+                intersect += unionOrIntersect(filter.and)
         }
 
         intersect += " group by i.id) ";
     }
 
     if (filter.arcs && filter.arcs.length > 0) {
-        intersect += " AND i.id IN (" +
+        intersect += " " + unionOrIntersect(filter.and) + "  (" +
             "select i.id " +
             " from publisher p " +
             " left join series s on p.id = s.fk_publisher " +
@@ -450,15 +460,15 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     }
 
     if (loggedIn && filter.onlyCollected && !filter.us) {
-        intersect += " AND i.id IN (select i.id from issue i group by i.fk_series, i.number having max(i.collected) = 1) ";
+        intersect += " " + unionOrIntersect(filter.and) + "  (select i.id from issue i group by i.fk_series, i.number having max(i.collected) = 1) ";
     }
 
     if (loggedIn && filter.onlyNotCollected && !filter.us) {
-        intersect += " AND i.id IN (select i.id from issue i group by i.fk_series, i.number having max(i.collected) = 0 or max(i.collected) is null) ";
+        intersect += " " + unionOrIntersect(filter.and) + "  (select i.id from issue i group by i.fk_series, i.number having max(i.collected) = 0 or max(i.collected) is null) ";
     }
 
     if (loggedIn && filter.onlyCollected && filter.us) {
-        intersect += " AND i.id IN (" +
+        intersect += " " + unionOrIntersect(filter.and) + "  (" +
             "select i.id " +
             " from publisher p " +
             " left join series s on p.id = s.fk_publisher " +
@@ -472,7 +482,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     }
 
     if (loggedIn && filter.onlyNotCollected && filter.us) {
-        intersect += " AND i.id IN (" +
+        intersect += " " + unionOrIntersect(filter.and) + "  (" +
             "select i.id " +
             " from publisher p " +
             " left join series s on p.id = s.fk_publisher " +
@@ -486,7 +496,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     }
 
     if (filter.publishers && filter.publishers.filter(p => p.us !== filter.us).length > 0) {
-        intersect += " AND i.id IN (" +
+        intersect += " " + unionOrIntersect(filter.and) + "  (" +
             "select i.id " +
             " from publisher p " +
             " left join series s on p.id = s.fk_publisher " +
@@ -521,7 +531,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     }
 
     if (filter.series && filter.series.filter(p => p.publisher.us !== filter.us).length > 0) {
-        intersect += " AND i.id IN (" +
+        intersect += " " + unionOrIntersect(filter.and) + "  (" +
             "select i.id " +
             " from publisher p " +
             " left join series s on p.id = s.fk_publisher " +
@@ -556,7 +566,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     }
 
     if (filter.numbers && filter.numbers.length > 0) {
-        intersect += " AND i.id IN (" +
+        intersect += " " + unionOrIntersect(filter.and) + "  (" +
             "select i.id " +
             " from publisher p " +
             " left join series s on p.id = s.fk_publisher " +
@@ -578,7 +588,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
 
     let intersectContains = "";
     if ((filter.reprint || filter.exclusive) && !us) {
-        intersectContains +=
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "select i.id " +
             " from publisher p " +
             " left join series s on p.id = s.fk_publisher " +
@@ -586,11 +596,11 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " left join " + type + " st on i.id = st.fk_issue " +
             " left join " + type + " stjoin ON st.fk_parent = stjoin.id" +
             " where i.id is not null " +
-            " and st.id is not null and st.fk_parent is null group by i.id ";
+            " and st.id is not null and st.fk_parent is null group by i.id) ";
     }
 
     if ((filter.reprint || filter.otherOnlyTb) && !us) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "select id from ( " +
             " select i.id as id, i.format " +
             " from publisher p " +
@@ -601,11 +611,11 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " where i.id is not null " +
             " AND st.otheronlytb = 1 " +
             " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.fk_parent) a ";
+            " GROUP BY  st.fk_parent) a) ";
     }
 
     if ((filter.reprint || filter.onlyPrint) && !us) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "select id from ( " +
             " select i.id as id, i.format " +
             " from publisher p " +
@@ -616,11 +626,11 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " where i.id is not null " +
             " AND st.onlyapp = 1 " +
             " AND stjoin.id IS NOT NULL " +
-            " GROUP BY  st.fk_parent) a ";
+            " GROUP BY  st.fk_parent) a) ";
     }
 
     if ((filter.reprint || filter.firstPrint) && !us) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "SELECT i.id FROM publisher p " +
             " LEFT JOIN series s ON p.id = s.fk_publisher " +
             " LEFT JOIN issue i ON s.id = i.fk_series " +
@@ -628,11 +638,11 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " LEFT JOIN " + type + " stjoin ON st.fk_parent = stjoin.id " +
             " WHERE  i.id IS NOT NULL " +
             " AND st.firstapp = 1 " +
-            " AND stjoin.id IS NOT NULL ";
+            " AND stjoin.id IS NOT NULL) ";
     }
 
     if (filter.onlyTb && us) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "select id from ( " +
             " select i.id as id, ijoin.format " +
             " from publisher p " +
@@ -644,11 +654,11 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " where i.id is not null " +
             " and (i.variant IS NULL OR i.variant = '') " +
             " AND st.onlytb = 1 " +
-            " AND stjoin.id IS NOT NULL) a ";
+            " AND stjoin.id IS NOT NULL) a) ";
     }
 
     if (filter.onlyOnePrint && us) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "select id from ( " +
             " select i.id as id " +
             " from publisher p " +
@@ -659,11 +669,11 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " where i.id is not null " +
             " and (i.variant IS NULL OR i.variant = '') " +
             " AND st.onlyoneprint = 1 " +
-            " AND stjoin.id IS NOT NULL) a ";
+            " AND stjoin.id IS NOT NULL) a) ";
     }
 
     if (filter.noPrint && us) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "select id from ( " +
             " select i.id as id, i.format " +
             " from publisher p " +
@@ -675,23 +685,33 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             " and (i.variant IS NULL OR i.variant = '') " +
             " AND stjoin.id IS NULL " +
             " GROUP BY  i.id" +
-            " ) a ";
+            " ) a) ";
     }
 
     //negated in query
     if (filter.reprint && !us) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "SELECT i.id FROM publisher p " +
             " LEFT JOIN series s ON p.id = s.fk_publisher " +
             " LEFT JOIN issue i ON s.id = i.fk_series " +
             " LEFT JOIN " + type + " st ON i.id = st.fk_issue " +
             " where i.id is not null " +
-            " and st.id IS NULL ";
+            " and st.id IS NULL) ";
+    }
+
+    if (filter.noCover) {
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
+            "SELECT i.id FROM issue i where comicguideid = 0 or comicguideid is null) ";
+    }
+
+    if (filter.noContent) {
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
+            "select min(i.id) as id from issue i left join story st on i.id = st.fk_issue group by i.number, i.fk_series having count(st.id) = 0) ";
     }
 
     //negated in query
     if (loggedIn && filter.sellable && !us) {
-        intersectContains += (intersectContains !== "" ? " UNION " : "") +
+        intersectContains += " " + unionOrIntersect(filter.and) + "  (" +
             "select a.id from (" +
             "   select count(*) as stories, i.id from issue i " +
             "   LEFT join story st on i.id = st.fk_issue " +
@@ -704,11 +724,14 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             "           LEFT join story st on i.id = st.fk_issue " +
             "           where st.fk_parent is not null and i.collected = 1 and st.onlyapp not in (1) group by st.fk_parent having count(st.fk_parent) > 1) " +
             "       and i.collected = 1 group by st.fk_issue) b " +
-            "   on a.id = b.id where a.stories = b.stories ";
+            "   on a.id = b.id where a.stories = b.stories) ";
     }
 
     if (intersectContains !== "")
-        intersect += " and i.id " + (filter.reprint ? "not in" : "in") + " (" + intersectContains + ")";
+        intersect += intersectContains; //" and i.id " + (filter.reprint ? "not in" : "in") + " (" + intersectContains + ")";
+
+    if(intersect !== "")
+        intersect = " and (" + intersect.substring(6) + ")";
 
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
 
@@ -747,4 +770,12 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     //console.log(rawQuery + "\n\n");
 
     return rawQuery;
+}
+
+function unionOrIntersect(and) {
+    if(and) {
+        return " and i.id in ";
+    } else {
+        return "  or i.id in ";
+    }
 }
