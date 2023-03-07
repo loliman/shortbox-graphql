@@ -526,8 +526,6 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
                 intersect += " OR ";
             intersect += " (p.name = '" + escapeSqlString(publisher.name) + "')";
         });
-
-        intersect += ") ";
     }
 
     if (filter.series && filter.series.filter(p => p.publisher.us !== filter.us).length > 0) {
@@ -730,7 +728,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     if (intersectContains !== "")
         intersect += intersectContains; //" and i.id " + (filter.reprint ? "not in" : "in") + " (" + intersectContains + ")";
 
-    if(intersect !== "")
+    if (intersect !== "")
         intersect = " and (" + intersect.substring(6) + ")";
 
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
@@ -767,13 +765,13 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     if (!print && offset !== undefined)
         rawQuery += " LIMIT " + offset + ", 50";
 
-    //console.log(rawQuery + "\n\n");
+    console.log(rawQuery + "\n\n");
 
     return rawQuery;
 }
 
 function unionOrIntersect(and) {
-    if(and) {
+    if (and) {
         return " and i.id in ";
     } else {
         return "  or i.id in ";
