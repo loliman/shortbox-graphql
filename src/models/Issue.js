@@ -301,7 +301,24 @@ export const resolvers = {
         lastEdited: async (_, {filter, offset, order, direction}, context) => {
             const {loggedIn, transaction} = context;
 
-            let rawQuery = createFilterQuery(loggedIn, filter.us, filter, offset, false, true, order, direction);
+            let selected = filter.us;
+
+            let selectedPublisher;
+            if (filter.publishers && filter.publishers.filter(p => p.us === filter.us).length > 0)
+                selectedPublisher = filter.publishers.filter(p => p.us === filter.us)[0];
+
+            let selectedSeries;
+            if (filter.series && filter.series.filter(p => p.publisher.us === filter.us).length > 0)
+                selectedSeries = filter.series.filter(p => p.publisher.us === filter.us)[0];
+
+            if (selectedSeries) {
+                selected = selectedSeries;
+                selected.publisher = selectedPublisher;
+            } else if (selectedPublisher) {
+                selected = selectedPublisher;
+            }
+
+            let rawQuery = createFilterQuery(loggedIn, selected, filter, offset, false, true, order, direction);
             let res = await models.sequelize.query(rawQuery);
 
             let issues = [];

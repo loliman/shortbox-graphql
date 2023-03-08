@@ -346,15 +346,18 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     let groupby = "";
     let where = "";
 
+    if (selected.publisher)
+        where = " and s.title = '" + escapeSqlString(selected.title) + "' and s.volume = " + selected.volume + " and p.name = '" + escapeSqlString(selected.publisher.name) + "' ";
+    else if (selected.name)
+        where = " and p.name = '" + escapeSqlString(selected.name) + "' ";
+
     if (print && !overview)
         groupby = "i.number, s.title, s.volume, p.name";
-    else if (selected.publisher && !overview) {
+    else if (selected.publisher && !overview)
         groupby = "i.number";
-        where = " and s.title = '" + escapeSqlString(selected.title) + "' and s.volume = " + selected.volume + " and p.name = '" + escapeSqlString(selected.publisher.name) + "' ";
-    } else if (selected.name && !overview) {
+    else if (selected.name && !overview)
         groupby = "s.title, s.volume";
-        where = " and p.name = '" + escapeSqlString(selected.name) + "' ";
-    } else if (!overview)
+    else if (!overview)
         groupby = "p.name";
 
     if (filter.formats && filter.formats.length > 0) {
@@ -518,16 +521,6 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
         intersect += ") group by i.id) ";
     }
 
-    if (filter.publishers && filter.publishers.filter(p => p.us === filter.us).length > 0) {
-        intersect += " AND (";
-
-        filter.publishers.filter(p => p.us === filter.us).map((publisher, i) => {
-            if (i > 0)
-                intersect += " OR ";
-            intersect += " (p.name = '" + escapeSqlString(publisher.name) + "')";
-        });
-    }
-
     if (filter.series && filter.series.filter(p => p.publisher.us !== filter.us).length > 0) {
         intersect += " " + unionOrIntersect(filter.and) + "  (" +
             "select i.id " +
@@ -549,18 +542,6 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
         });
 
         intersect += ") group by i.id) ";
-    }
-
-    if (filter.series && filter.series.filter(p => p.publisher.us === filter.us).length > 0) {
-        intersect += " AND (";
-
-        filter.series.filter(p => p.publisher.us === filter.us).map((series, i) => {
-            if (i > 0)
-                intersect += " OR ";
-            intersect += " (s.title = '" + escapeSqlString(series.title) + "' and s.volume = " + series.volume + ")";
-        });
-
-        intersect += ") ";
     }
 
     if (filter.numbers && filter.numbers.length > 0) {
