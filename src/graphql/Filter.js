@@ -765,7 +765,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     if (!print && offset !== undefined)
         rawQuery += " LIMIT " + offset + ", 50";
 
-    console.log(rawQuery + "\n\n");
+    //console.log(rawQuery + "\n\n");
 
     return rawQuery;
 }
