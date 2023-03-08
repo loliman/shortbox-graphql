@@ -144,6 +144,10 @@ export default (sequelize) => {
             type: Sequelize.STRING,
             allowNull: true
         },
+        isbn: {
+            type: Sequelize.STRING,
+            allowNull: true
+        },
         addinfo: {
             type: Sequelize.STRING,
             allowNull: false,
@@ -203,8 +207,9 @@ export const typeDef = gql`
     releasedate: Date,
     price: String,
     currency: String,
-    individuals: [IndividualInput],
+    isbn: String,
     addinfo: String,
+    individuals: [IndividualInput],
     stories: [StoryInput],
     features: [FeatureInput],
     covers: [CoverInput],
@@ -224,6 +229,7 @@ export const typeDef = gql`
     series: Series,
     pages: Int,
     releasedate: Date,
+    isbn: String,
     arcs: [Arc]
     features: [Feature],
     stories: [Story],
@@ -490,6 +496,7 @@ export const resolvers = {
                 res.currency = item.currency ? item.currency.trim() : '';
                 res.addinfo = item.addinfo;
                 res.comicguideid = item.comicguideid;
+                res.isbn = item.isbn
 
                 res = await res.save({transaction: transaction});
 
@@ -927,6 +934,7 @@ export const resolvers = {
         },
         addinfo: (parent) => parent.addinfo,
         comicguideid: (parent) => parent.comicguideid,
+        isbn: (parent) => parent.isbn,
         arcs: async (parent) => {
             if (!(await (await parent.getSeries()).getPublisher()).original)
                 return [];
@@ -1213,7 +1221,8 @@ export async function create(item, transaction) {
                 price: !isNaN(item.price) && item.price !== '' ? item.price : '0',
                 currency: item.currency ? item.currency.trim() : '',
                 addinfo: item.addinfo,
-                comicguideid: item.comicguideid
+                comicguideid: item.comicguideid,
+                isbn: item.isbn
             }, {transaction: transaction});
 
             let coverUrl = '';
