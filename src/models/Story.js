@@ -193,7 +193,9 @@ export const resolvers = {
             let issue = await models.Issue.findById(parent.fk_issue);
             return await models.Issue.findOne({
                 where: {fk_series: issue.fk_series, number: issue.number},
-                attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
+                attributes: [[models.sequelize.fn('MIN', models.sequelize.col('Issue.id')), 'id'],
+                    [models.sequelize.fn('MIN', models.sequelize.col('Issue.comicguideid')), 'comicguideid'],
+                    [models.sequelize.fn('MIN', models.sequelize.col('Issue.title')), 'title'],
                     [models.sequelize.fn('MIN', models.sequelize.col('format')), 'format'],
                     [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
                     [models.sequelize.fn('MAX', models.sequelize.col('collected')), 'collected'],
