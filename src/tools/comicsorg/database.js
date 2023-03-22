@@ -1,9 +1,9 @@
 import Sequelize from 'sequelize';
-import {migration_db, migration_dbPassword, migration_dbUser} from "../../config/config";
+import {dbPassword, dbUser} from "../../config/config";
 
-const migrationDatabase = new Sequelize(migration_db, migration_dbUser, migration_dbPassword, {
+const sequelize = new Sequelize('comics.org', dbUser, dbPassword, {
     logging: false,
-    host: 'localhost',
+    host: '127.0.0.1',
     dialect: 'mysql',
     define: {
         charset: 'utf8',
@@ -21,4 +21,4 @@ const migrationDatabase = new Sequelize(migration_db, migration_dbUser, migratio
     },
 });
 
-export default migrationDatabase;
+export default sequelize;

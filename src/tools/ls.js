@@ -1,22 +1,19 @@
 import fs from "fs";
-import models from "./models";
-import {asyncForEach, romanize} from "./util/util";
 import {exit} from "shelljs";
-import Sequelize from "sequelize";
-import {StringUtils} from "../build/src/util/StringUtils";
 import {boot} from "../boot";
+import models from "../models";
+import {asyncForEach, romanize} from "../util/util";
 
 var stream;
-var input;
 
 boot(async () => {
     console.log("[" + (new Date()).toUTCString() + "] 🚀 Listing comics");
 
     try {
-        input = [];
+        let input = [];
 
         try {
-            const inputStream = fs.readFileSync('listen/12', 'utf-8');
+            const inputStream = fs.readFileSync('ls_import', 'utf-8');
             inputStream.split(/\r?\n/).forEach(line => {
                 input.push(line)
             });
@@ -25,10 +22,14 @@ boot(async () => {
 
         stream = fs.createWriteStream("comics.log", {flags: 'a'});
 
-        await ls();
+        await asyncForEach(input,
+            async line => await ls(line)
+        );
     } catch (e) {
         if (stream)
             stream.end();
+    } finally {
+        exit();
     }
 })
 
@@ -36,13 +37,18 @@ function writeLine(s) {
     stream.write(s + "\n");
 }
 
-async function ls() {
+async function ls(line) {
+    if (line.trim() === "" || line.split(";").length !== 3)
+        return;
+
+    console.log(line);
+
     let issues = await models.Issue.findAll({
             where: {
-                [Sequelize.Op.and]: [
-                    {releasedate: {[Sequelize.Op.gte]: '2020-01-01'}},
-                    {releasedate: {[Sequelize.Op.lte]: '2023-01-01'}}],
+                number: line.split(";")[2],
                 '$Series->Publisher.original$': 0,
+                '$Series.title$': line.split(";")[0],
+                '$Series.volume$': line.split(";")[1],
             },
             group: [['fk_series'], ['number']],
             order: [['fk_series', 'DESC'], ['number', 'ASC']],
@@ -91,6 +97,7 @@ async function ls() {
                 variant: parent.variant,
                 releasedate: parent.releasedate,
                 price: parent.price,
+                isbn: parent.isbn,
                 pages: parent.pages,
                 limitation: parent.limitation,
                 comicguideid: parent.comicguideid
@@ -114,6 +121,7 @@ async function ls() {
                     releasedate: variant.releasedate,
                     price: variant.price,
                     pages: variant.pages,
+                    isbn: variant.isbn,
                     limitation: variant.limitation,
                     comicguideid: variant.comicguideid
                 })
@@ -129,33 +137,6 @@ async function ls() {
         });
 
         let title = series.title + " (" + series.startyear + ") #" + parent.number + " [" + publisher.name + "]";
-
-        let translatorsFromFile = [];
-        let foundIssue = false;
-        let foundTranslator = false;
-        let found = false;
-        input.forEach((line, i) => {
-            if (line === title) {
-                console.log(title + (parent.title.trim() === "" ? "" : (": " + parent.title)));
-                if (input[i + 1].indexOf(parent.title) > 0 || (parent.title.trim() === "" && input[i + 1].indexOf("Titel: ") === -1)) {
-                    console.log("Found on line " + i);
-                    foundIssue = true;
-                    found = true;
-                }
-            } else if (foundIssue && line.trim() === "Übersetzung:") {
-                foundTranslator = true;
-            } else if (foundTranslator) {
-                if (StringUtils.isEmpty(line.trim()) || line.indexOf(":") > -1) {
-                    foundTranslator = false;
-                    foundIssue = false;
-                } else {
-                    translatorsFromFile.push(line.trim());
-                }
-            }
-        })
-
-        if (!found)
-            return;
 
         writeLine(title);
         if (parent.title !== "")
@@ -244,8 +225,8 @@ async function ls() {
 
             let translators = [...new Set(indi.filter(i => i.role === "TRANSLATOR").map(i => i.name))]
 
-            if (translatorsFromFile && translatorsFromFile.length > 0) {
-                writeLine("Übersetzung: " + translatorsFromFile.join(", "));
+            if (translators && translators.length > 0) {
+                writeLine("Übersetzung: " + translators.join(", "));
             }
         }
 
@@ -257,6 +238,8 @@ async function ls() {
             writeLine("" + "Seiten: " + v.pages)
             writeLine("" + "Erscheinungsdatum: " + v.releasedate.toLocaleDateString("de-DE"));
             writeLine("" + "Ursprüngl. Coverpreis: " + v.price + "€")
+            if (v.isbn && v.isbn > 0)
+                writeLine("" + "ISBN: " + v.isbn + "")
             writeLine("" + "Herkunftsland: USA")
 
             if (v.limitation && v.limitation > 0)
@@ -344,13 +327,11 @@ async function ls() {
             }
 
             writeLine("" + "Comicguide ID: " + (v.comicguideid ? v.comicguideid : "n/a"));
+            writeLine("");
         });
 
         writeLine("");
+        writeLine("-------------------------------------------------------");
         writeLine("");
     })
-
-    exit();
 }
-
-start();
