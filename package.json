@@ -5,12 +5,15 @@
   "main": "src/app.js",
   "scripts": {
     "start": "nodemon --exec babel-node src/app.js",
-    "list": "nodemon --exec babel-node src/scripts/ls.js",
-    "migrate": "nodemon --exec babel-node src/scripts/migration.js",
-    "import": "nodemon --exec babel-node src/scripts/importCollection.js",
-    "findVariantsWithStories": "nodemon --exec babel-node src/scripts/findVariantsWithStories.js",
-    "fixSeriesYears": "nodemon --exec babel-node src/scripts/fixSeriesYear.js",
-    "createTranslators": "nodemon --exec babel-node src/scripts/createTranslators.js"
+    "list": "nodemon --exec babel-node src/tools/ls.js",
+    "migrate": "nodemon --exec babel-node src/tools/migration.js",
+    "import": "nodemon --exec babel-node src/tools/importCollection.js",
+    "findVariantsWithStories": "nodemon --exec babel-node src/tools/findVariantsWithStories.js",
+    "fixSeriesYears": "nodemon --exec babel-node src/tools/fixSeriesYear.js",
+    "createTranslators": "nodemon --exec babel-node src/tools/createTranslators.js",
+    "comicsorg": "nodemon --exec babel-node src/tools/comicsorg/comicsOrgToMarvelDatabase.js",
+    "cmro": "nodemon --exec babel-node src/tools/cmro.js",
+    "updateTags": "nodemon --exec babel-node src/tools/updateTags.js"
   },
   "keywords": [],
   "dependencies": {
@@ -19,6 +22,7 @@
     "babel-preset-env": "^1.7.0",
     "babel-preset-stage-2": "^6.24.1",
     "cheerio": "^1.0.0-rc.3",
+    "cloudflare-bypasser": "^0.0.3",
     "cron": "^1.7.1",
     "dataloader-sequelize": "^1.7.10",
     "dateformat": "^3.0.3",
