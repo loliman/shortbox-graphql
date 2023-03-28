@@ -257,7 +257,7 @@ export const resolvers = {
                         [models.sequelize.fn('MIN', models.sequelize.col('variant')), 'variant'],
                         [models.sequelize.cast(models.sequelize.col('number'), 'unsigned'), 'numberasint'],
                         [models.sequelize.fn('fromRoman', models.sequelize.col('number')), 'numberfromroman'],
-                        'number', 'releasedate', 'fk_series', 'collected'],
+                        'id', 'number', 'comicguideid', 'releasedate', 'fk_series', 'collected'],
                     where: {
                         '$Series.title$': series.title,
                         '$Series.volume$': series.volume,
@@ -287,6 +287,8 @@ export const resolvers = {
                 let res = await models.sequelize.query(rawQuery);
                 let issues = [];
                 res[0].forEach(i => issues.push({
+                    id: i.issueid,
+                    comicguideid: i.comicguideid,
                     number: i.issuenumber,
                     title: i.issuetitle,
                     fk_series: i.seriesid,
