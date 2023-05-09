@@ -519,7 +519,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     }
 
     if (filter.publishers && filter.publishers.filter(p => p.us === filter.us).length > 0) {
-        intersect += " AND (";
+        intersect += " AND     (";
 
         filter.publishers.filter(p => p.us === filter.us).map((publisher, i) => {
             if (i > 0)
@@ -554,7 +554,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     }
 
     if (filter.series && filter.series.filter(p => p.publisher.us === filter.us).length > 0) {
-        intersect += " AND (";
+        intersect += " AND     (";
 
         filter.series.filter(p => p.publisher.us === filter.us).map((series, i) => {
             if (i > 0)
@@ -733,7 +733,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     if(intersect !== "")
         intersect = " and (" + intersect.substring(6) + ")";
 
-    console.log("INTERSECT: " + intersect);
+    //console.log("INTERSECT: " + intersect);
     
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
 
