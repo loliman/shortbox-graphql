@@ -524,7 +524,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
         filter.publishers.filter(p => p.us === filter.us).map((publisher, i) => {
             if (i > 0)
                 intersect += " OR ";
-            intersect += " (p.name = '" + escapeSqlString(publisher.name) + "')";
+            intersect += " p.name = '" + escapeSqlString(publisher.name) + "' ";
         });
 
         intersect += ") ";
@@ -559,10 +559,10 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
         filter.series.filter(p => p.publisher.us === filter.us).map((series, i) => {
             if (i > 0)
                 intersect += " OR ";
-            intersect += " (s.title = '" + escapeSqlString(series.title) + "' and s.volume = " + series.volume + ")";
+            intersect += " (s.title = '" + escapeSqlString(series.title) + "' and s.volume = " + series.volume + ") ";
         });
 
-        intersect += ") ";
+        intersect += ")  ";
     }
 
     if (filter.numbers && filter.numbers.length > 0) {
@@ -733,6 +733,8 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     if(intersect !== "")
         intersect = " and (" + intersect.substring(6) + ")";
 
+    console.log("INTERSECT: " + intersect);
+    
     rawQuery = rawQuery.replace("%INTERSECT%", intersect);
 
     if (order) {
@@ -767,7 +769,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     if (!print && offset !== undefined)
         rawQuery += " LIMIT " + offset + ", 50";
 
-    console.log(rawQuery + "\n\n");
+    //console.log(rawQuery + "\n\n");
 
     return rawQuery;
 }
