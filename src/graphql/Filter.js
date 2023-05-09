@@ -386,7 +386,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     let intersect = "";
 
     if (filter.appearances && filter.appearances.length > 0) {
-        intersect += " " + unionOrIntersect(filter.and) + "  (";
+        intersect += " " + unionOrIntersectSimple(filter.and) + " (i.id in  (";
 
         for (let i = 2; i > 0; i--) {
             intersect +=
@@ -398,17 +398,17 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
                 " left join story_appearance stapp on " + (i === 2 ? "st.id" : "st.fk_parent") + " = stapp.fk_story " +
                 " left join appearance app on stapp.fk_appearance = app.id " +
                 " where i.id is not null " +
-                " and ((app.name = '" + escapeSqlString(filter.appearances) + "'))";
+                " and ((app.name like '%" + escapeSqlString(filter.appearances) + "%'))";
 
             if (i === 2)
-                intersect += ") " + unionOrIntersect(filter.and) + "  (";
+                intersect += ") or i.id in (";
         }
 
-        intersect += " group by i.id) ";
+        intersect += ")) ";
     }
 
     if (filter.individuals && filter.individuals.length > 0) {
-        intersect += " " + unionOrIntersect(filter.and) + "  (";
+        intersect += " " + unionOrIntersectSimple(filter.and) + "(i.id in  (";
 
         for (let i = 2; i > 0; i--) {
             intersect +=
@@ -431,10 +431,10 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
             intersect += ")";
 
             if (i === 2)
-                intersect += ") " + unionOrIntersect(filter.and) + "  (";
+                intersect += ") or i.id in (";
         }
 
-        intersect += " group by i.id) ";
+        intersect += ")) ";
     }
 
     if (filter.arcs && filter.arcs.length > 0) {
@@ -767,7 +767,7 @@ export function createFilterQuery(loggedIn, selected, filter, offset, print, ove
     if (!print && offset !== undefined)
         rawQuery += " LIMIT " + offset + ", 50";
 
-    //console.log(rawQuery + "\n\n");
+    console.log(rawQuery + "\n\n");
 
     return rawQuery;
 }
@@ -777,5 +777,13 @@ function unionOrIntersect(and) {
         return " and i.id in ";
     } else {
         return "  or i.id in ";
+    }
+}
+
+function unionOrIntersectSimple(and) {
+    if(and) {
+        return " and ";
+    } else {
+        return "  or  ";
     }
 }
