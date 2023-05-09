@@ -782,8 +782,8 @@ function unionOrIntersect(and) {
 
 function unionOrIntersectSimple(and) {
     if(and) {
-        return " and ";
+        return " and         ";
     } else {
-        return "  or  ";
+        return "  or         ";
     }
 }
