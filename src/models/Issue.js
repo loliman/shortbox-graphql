@@ -9,7 +9,6 @@ import {create as createCover, equals as coverEquals, getCovers} from "./Cover";
 import {create as createFeature, equals as featureEquals, getFeatures} from "./Feature";
 import {create as createArc} from "./Arc";
 import {createFilterQuery} from "../graphql/Filter";
-import request from "request-promise";
 
 class Issue extends Model {
     static tableName = 'Issue';
@@ -904,10 +903,10 @@ export const resolvers = {
                 return cover;
 
             if (parent.comicguideid && parent.comicguideid !== 0) {
-                let isImage = false;
+                let isImage = true; //should be false
                 let url = "https://www.comicguide.de/pics/large/" + parent.comicguideid + ".jpg";
 
-                try {
+                /*try {
                     isImage = await request({
                         uri: url,
                         transform: (body, response) => {
@@ -930,7 +929,7 @@ export const resolvers = {
                     } catch (e) {
                         isImage = false;
                     }
-                }
+                }*/
 
                 if (isImage)
                     return {
