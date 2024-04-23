@@ -30,7 +30,7 @@
     "lodash": "^4.17.20",
     "match-sorter": "^6.2.0",
     "mysql": "^2.18.1",
-    "mysql2": "^2.2.5",
+    "mysql2": "^3.9.7",
     "objection": "^2.2.14",
     "objection-unique": "^1.2.1",
     "request": "^2.88.2",
