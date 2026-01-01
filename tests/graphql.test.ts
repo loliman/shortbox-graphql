@@ -28,7 +28,11 @@ describe('GraphQL Integration Tests', () => {
       query: `
         query {
           publishers(us: true) {
-            name
+            edges {
+              node {
+                name
+              }
+            }
           }
         }
       `,
@@ -40,22 +44,26 @@ describe('GraphQL Integration Tests', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.publishers).toBeDefined();
-    expect(Array.isArray(response.body.data.publishers)).toBe(true);
+    expect(Array.isArray(response.body.data.publishers.edges)).toBe(true);
   });
 
   it('should fetch publisher with firstIssue, lastIssue and active fields', async () => {
     const query = {
       query: `
         query {
-          publishers(us: true, limit: 1) {
-            name
-            firstIssue {
-              number
+          publishers(us: true, first: 1) {
+            edges {
+              node {
+                name
+                firstIssue {
+                  number
+                }
+                lastIssue {
+                  number
+                }
+                active
+              }
             }
-            lastIssue {
-              number
-            }
-            active
           }
         }
       `,
@@ -67,8 +75,8 @@ describe('GraphQL Integration Tests', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.publishers).toBeDefined();
-    if (response.body.data.publishers.length > 0) {
-      expect(response.body.data.publishers[0].active).toBeDefined();
+    if (response.body.data.publishers.edges.length > 0) {
+      expect(response.body.data.publishers.edges[0].node.active).toBeDefined();
     }
   });
 
@@ -107,8 +115,12 @@ describe('GraphQL Integration Tests', () => {
       query: `
         query {
           series(pattern: "Spider-Man", publisher: { name: "Marvel Comics", us: true }) {
-            title
-            volume
+            edges {
+              node {
+                title
+                volume
+              }
+            }
           }
         }
       `,
@@ -136,6 +148,8 @@ describe('GraphQL Integration Tests', () => {
       .send(mutation);
 
     expect(response.body.errors).toBeDefined();
+    // Since we removed uuid and fixed the context, let's see what error we get.
+    // It should be UNAUTHENTICATED based on the code.
     expect(response.body.errors[0].extensions.code).toBe('UNAUTHENTICATED');
   });
 

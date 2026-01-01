@@ -1,52 +1,60 @@
+import { UserService } from '../../services/UserService';
 import { GraphQLError } from 'graphql';
+import { UserResolvers } from '../../types/graphql';
+import { UserInputSchema } from '../../types/schemas';
 
-export const resolvers = {
+export const resolvers: UserResolvers = {
   Mutation: {
-    login: async (_: any, { user }: any, { transaction, models, loggedIn }: any) => {
+    login: async (_, { user }, { transaction, loggedIn, userService }) => {
       if (loggedIn)
         throw new GraphQLError('Du bist bereits eingeloggt', {
           extensions: { code: 'BAD_USER_INPUT' },
         });
 
-      let sessionid = '';
-      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-      for (let i = 0; i < 64; i++)
-        sessionid += possible.charAt(Math.floor(Math.random() * possible.length));
+      try {
+        UserInputSchema.parse(user);
+        let userRecord = await userService.login(user, transaction);
 
-      // Hier sollte in Zukunft bcrypt für Passwörter genutzt werden!
-      let userRecord = await models.User.findOne({
-        where: { name: user.name.trim(), password: user.password },
-        transaction,
-      });
+        if (!userRecord) {
+          await transaction.rollback();
+          throw new GraphQLError('Login fehlgeschlagen', {
+            extensions: { code: 'UNAUTHENTICATED' },
+          });
+        }
 
-      if (!userRecord)
-        throw new GraphQLError('Login fehlgeschlagen', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-
-      userRecord.sessionid = sessionid;
-      await userRecord.save({ transaction });
-
-      await transaction.commit();
-      return userRecord;
+        await transaction.commit();
+        return userRecord as any;
+      } catch (e) {
+        if (transaction) await transaction.rollback();
+        if (e instanceof Error && e.name === 'ZodError') {
+          throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw e;
+      }
     },
-    logout: async (_: any, { user }: any, { loggedIn, transaction, models }: any) => {
+    logout: async (_, { user }, { loggedIn, transaction, userService }) => {
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
 
-      let [affectedCount] = await models.User.update(
-        { sessionid: null },
-        { where: { id: user.id, sessionid: user.sessionid }, transaction },
-      );
+      try {
+        UserInputSchema.parse(user);
+        let success = await userService.logout(user, transaction);
 
-      await transaction.commit();
-      return affectedCount !== 0;
+        await transaction.commit();
+        return !!success;
+      } catch (e) {
+        if (transaction) await transaction.rollback();
+        if (e instanceof Error && e.name === 'ZodError') {
+          throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw e;
+      }
     },
   },
   User: {
-    id: (parent: any) => parent.id,
-    sessionid: (parent: any) => parent.sessionid,
+    id: (parent) => String(parent.id),
+    sessionid: (parent) => parent.sessionid || '',
   },
 };

@@ -21,10 +21,12 @@ import Story_AppearanceFactory from '../modules/shared/Story_Appearance.model';
 import Cover_IndividualFactory from '../modules/shared/Cover_Individual.model';
 import Feature_IndividualFactory from '../modules/shared/Feature_Individual.model';
 
-const db: any = {
+import { DbModels } from '../types/db';
+
+const db: DbModels = {
   sequelize,
   Sequelize,
-};
+} as any;
 
 // Initialize models
 db.Publisher = PublisherFactory(sequelize);

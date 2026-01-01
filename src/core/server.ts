@@ -3,8 +3,9 @@ import { startStandaloneServer } from '@apollo/server/standalone';
 import { GraphQLError } from 'graphql';
 import { merge } from 'lodash';
 import models from '../models';
-import { createContext, EXPECTED_OPTIONS_KEY } from 'dataloader-sequelize';
+import DataLoader from 'dataloader';
 import { resolver } from 'graphql-sequelize';
+import logger from '../util/logger';
 
 // Import New Modular Schemas and Resolvers
 import { typeDef as PublisherTypeDef } from '../modules/publisher/Publisher.schema';
@@ -33,7 +34,20 @@ import { resolvers as NodeResolvers, typeDef as NodeTypeDefs } from '../api/Node
 import { resolvers as FilterResolvers, typeDef as FilterTypeDefs } from '../api/Filter';
 import { resolvers as ScalarResolvers, typeDef as ScalarTypeDefs } from '../api/generic';
 
-resolver.contextToOptions = { dataloader: EXPECTED_OPTIONS_KEY };
+import { DbModels } from '../types/db';
+import { PublisherService } from '../services/PublisherService';
+import { SeriesService } from '../services/SeriesService';
+import { IssueService } from '../services/IssueService';
+import { UserService } from '../services/UserService';
+import { FilterService } from '../services/FilterService';
+import { StoryService } from '../services/StoryService';
+
+import { Publisher } from '../modules/publisher/Publisher.model';
+import { Series } from '../modules/series/Series.model';
+import { Issue } from '../modules/issue/Issue.model';
+import { Story } from '../modules/story/Story.model';
+
+// resolver.contextToOptions = { dataloader: EXPECTED_OPTIONS_KEY };
 
 const typeDefs = [
   ScalarTypeDefs,
@@ -86,18 +100,15 @@ const server = new ApolloServer({
       async requestDidStart(requestContext) {
         return {
           async willSendResponse(requestContext) {
-            const { response, contextValue } = requestContext;
+            const { contextValue } = requestContext;
             if (!contextValue || !(contextValue as any).now) return;
             let now = new Date();
             let took = (now.getTime() - (contextValue as any).now.getTime()) / 1000;
-            console.log(
-              '[' +
-                new Date().toUTCString() +
-                '] [<<<] [' +
-                ((contextValue as any).operationName || 'UNKNOWN').toUpperCase() +
-                '] took ' +
-                took +
-                ' seconds',
+            logger.info(
+              `[<<<] [${(
+                (contextValue as any).operationName || 'UNKNOWN'
+              ).toUpperCase()}] took ${took} seconds`,
+              { requestId: (contextValue as any).requestId },
             );
           },
         };
@@ -106,12 +117,32 @@ const server = new ApolloServer({
   ],
 });
 
-export const startServer = async (port = 4000) => {
+export interface Context {
+  loggedIn: boolean;
+  operationName: string;
+  requestId: string;
+  now: Date;
+  models: DbModels;
+  transaction?: any;
+  publisherService: PublisherService;
+  seriesService: SeriesService;
+  issueService: IssueService;
+  userService: UserService;
+  filterService: FilterService;
+  storyService: StoryService;
+  publisherLoader: DataLoader<number, Publisher | null>;
+  seriesLoader: DataLoader<number, Series | null>;
+  issueLoader: DataLoader<number, Issue | null>;
+  storyLoader: DataLoader<number, Story | null>;
+}
+
+export const startServer = async (port = parseInt(process.env.PORT || '4000', 10)) => {
   const { url } = await startStandaloneServer(server, {
-    context: async ({ req }: any) => {
+    context: async ({ req }: any): Promise<Context> => {
       let operationName = req.body.operationName || 'UNKNOWN';
+      let requestId = Math.random().toString(36).substring(2, 15);
       let now = new Date();
-      console.log('[' + now.toUTCString() + '] [>>>] [' + operationName.toUpperCase() + ']');
+      logger.info(`[>>>] [${operationName.toUpperCase()}]`, { requestId });
 
       let loggedIn = false;
       if (req.headers.authorization) {
@@ -136,34 +167,37 @@ export const startServer = async (port = 4000) => {
           } as any);
       }
 
-      // Workaround for dataloader-sequelize with Sequelize v6
-      // We create a proxy for the sequelize instance to trick dataloader-sequelize into thinking it's v5
-      const { Model, Association } = require('sequelize');
-      const sequelizeProxy = new Proxy(models.sequelize, {
-        get(target, prop) {
-          if (prop === 'constructor') {
-            return new Proxy(target.constructor, {
-              get(ctorTarget, ctorProp) {
-                if (ctorProp === 'version') return '5.0.0';
-                if (ctorProp === 'Model') {
-                  const M = Model;
-                  if (!M.findById) M.findById = M.findByPk;
-                  if (!M.findByPrimary) M.findByPrimary = M.findByPk;
-                  return M;
-                }
-                if (ctorProp === 'Association') return Association;
-                return (ctorTarget as any)[ctorProp];
-              },
-            });
-          }
-          return (target as any)[prop];
-        },
-      });
-
-      const dataloader = createContext(sequelizeProxy);
       let isMutation = req.body.query && req.body.query.trim().startsWith('mutation');
 
-      const contextBase = { loggedIn, dataloader, operationName, now, models };
+      const publisherService = new PublisherService(models, requestId);
+      const seriesService = new SeriesService(models, requestId);
+      const issueService = new IssueService(models, requestId);
+      const userService = new UserService(models, requestId);
+      const filterService = new FilterService(models, requestId);
+      const storyService = new StoryService(models, requestId);
+
+      const publisherLoader = new DataLoader<number, Publisher | null>((ids) => publisherService.getPublishersByIds(ids));
+      const seriesLoader = new DataLoader<number, Series | null>((ids) => seriesService.getSeriesByIds(ids));
+      const issueLoader = new DataLoader<number, Issue | null>((ids) => issueService.getIssuesByIds(ids));
+      const storyLoader = new DataLoader<number, Story | null>((ids) => storyService.getStoriesByIds(ids));
+
+      const contextBase = {
+        loggedIn,
+        operationName,
+        requestId,
+        now,
+        models,
+        publisherService,
+        seriesService,
+        issueService,
+        userService,
+        filterService,
+        storyService,
+        publisherLoader,
+        seriesLoader,
+        issueLoader,
+        storyLoader,
+      };
 
       if (isMutation) {
         const transaction = await models.sequelize.transaction();

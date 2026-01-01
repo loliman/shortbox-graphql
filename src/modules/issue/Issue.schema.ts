@@ -10,9 +10,19 @@ export const typeDef = gql`
   }
 
   extend type Query {
-    issues(pattern: String, series: SeriesInput!, offset: Int, limit: Int, filter: Filter): [Issue]
+    issues(pattern: String, series: SeriesInput!, first: Int, after: String, filter: Filter): IssueConnection
     issue(issue: IssueInput!, edit: Boolean): Issue
-    lastEdited(filter: Filter, offset: Int, limit: Int, order: String, direction: String): [Issue]
+    lastEdited(filter: Filter, first: Int, after: String, order: String, direction: String): IssueConnection
+  }
+
+  type IssueConnection {
+    edges: [IssueEdge]
+    pageInfo: PageInfo!
+  }
+
+  type IssueEdge {
+    cursor: String!
+    node: Issue
   }
 
   input IssueInput {

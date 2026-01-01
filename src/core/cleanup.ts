@@ -1,6 +1,7 @@
 import models from '../models';
 import { asyncForEach } from '../util/util';
 import { CronJob } from 'cron';
+import logger from '../util/logger';
 
 //Job will on every full hour
 export const cleanup = new CronJob(
@@ -15,7 +16,7 @@ export const cleanup = new CronJob(
 export async function run() {
   const transaction = await (models.sequelize as any).transaction();
 
-  console.log('[' + new Date().toUTCString() + '] Starting cleanup...');
+  logger.info('Starting cleanup...');
   try {
     let issues: any[] = await (models.Issue as any).findAll({
       where: {
@@ -105,8 +106,8 @@ export async function run() {
           });
         });
     });
-    console.log('[' + new Date().toUTCString() + '] Deleted ' + coverCount + ' covers.');
-    console.log('[' + new Date().toUTCString() + '] Deleted ' + storyCount + ' stories.');
+    logger.info(`Deleted ${coverCount} covers.`);
+    logger.info(`Deleted ${storyCount} stories.`);
 
     //Remove all US Issues without content
     let issueCount = 0;
@@ -151,7 +152,7 @@ export async function run() {
           issueCount++;
         });
     });
-    console.log('[' + new Date().toUTCString() + '] Deleted ' + issueCount + ' issues.');
+    logger.info(`Deleted ${issueCount} issues.`);
 
     //Remove all US Series without issues
     let series: any[] = await (models.Series as any).findAll({
@@ -175,7 +176,7 @@ export async function run() {
         seriesCount++;
       }
     });
-    console.log('[' + new Date().toUTCString() + '] Deleted ' + seriesCount + ' series.');
+    logger.info(`Deleted ${seriesCount} series.`);
 
     //Remove all US publishers without series
     let publishers: any[] = await (models.Publisher as any).findAll({
@@ -198,7 +199,7 @@ export async function run() {
         publisherCount++;
       }
     });
-    console.log('[' + new Date().toUTCString() + '] Deleted ' + publisherCount + ' publishers.');
+    logger.info(`Deleted ${publisherCount} publishers.`);
 
     //Remove all Individuals without content
     let individuals: any[] = await (models.Individual as any).findAll({ transaction });
@@ -239,7 +240,7 @@ export async function run() {
         individualCount++;
       }
     });
-    console.log('[' + new Date().toUTCString() + '] Deleted ' + individualCount + ' individuals.');
+    logger.info(`Deleted ${individualCount} individuals.`);
 
     //Remove all arcs without content
     let arcs: any[] = await (models.Arc as any).findAll({ transaction });
@@ -253,13 +254,13 @@ export async function run() {
         arcCount++;
       }
     });
-    console.log('[' + new Date().toUTCString() + '] Deleted ' + arcCount + ' arcs.');
+    logger.info(`Deleted ${arcCount} arcs.`);
 
     await transaction.commit();
-    console.log('[' + new Date().toUTCString() + '] Cleanup done.');
+    logger.info('Cleanup done.');
   } catch (e) {
-    console.log(e);
+    logger.error('Error during cleanup:', e as any);
     await transaction.rollback();
-    console.log('[' + new Date().toUTCString() + '] Error during cleanup... rolling back.');
+    logger.info('Error during cleanup... rolling back.');
   }
 }

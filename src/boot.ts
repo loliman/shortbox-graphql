@@ -3,16 +3,17 @@ import fs from 'fs';
 import { coverDir, wwwDir } from './config/config';
 import { cleanup } from './core/cleanup';
 import shell from 'shelljs';
+import logger from './util/logger';
 
 export async function boot(process: () => Promise<void>) {
   await sequelize.authenticate();
-  console.log('[' + new Date().toUTCString() + '] 🚀 Database is up and running');
+  logger.info('🚀 Database is up and running');
 
   // await sequelize.sync({alter: true});
 
   //remove that nasty constraints...
   try {
-    console.log('[' + new Date().toUTCString() + '] 🚀 Removing constraints from Database...');
+    logger.info('🚀 Removing constraints from Database...');
 
     await sequelize
       .getQueryInterface()
@@ -48,39 +49,37 @@ export async function boot(process: () => Promise<void>) {
   } catch (e) {
     //might be gone already, that's fine!
   } finally {
-    console.log('[' + new Date().toUTCString() + '] 🚀 ... Done!');
+    logger.info('🚀 ... Done!');
   }
 
   try {
-    console.log('[' + new Date().toUTCString() + '] 🚀 Creating stored procedures...');
+    logger.info('🚀 Creating stored procedures...');
 
     let sql = fs.readFileSync('./functions.sql');
     await sequelize.query(sql.toString());
   } catch (e) {
     //might already exist
   } finally {
-    console.log('[' + new Date().toUTCString() + '] 🚀 ... Done!');
+    logger.info('🚀 ... Done!');
   }
 
-  console.log('[' + new Date().toUTCString() + '] 🚀 Database is all set up');
+  logger.info('🚀 Database is all set up');
 
-  console.log('[' + new Date().toUTCString() + '] 🚀 Creating cover directory...');
+  logger.info('🚀 Creating cover directory...');
 
   if (!fs.existsSync(wwwDir + '/' + coverDir)) shell.mkdir('-p', wwwDir + '/' + coverDir);
 
-  console.log('[' + new Date().toUTCString() + '] 🚀 ... Done!');
+  logger.info('🚀 ... Done!');
 
-  console.log(
-    '[' + new Date().toUTCString() + '] 🚀 Coverdir is set up at ' + wwwDir + '/' + coverDir,
-  );
+  logger.info(`🚀 Coverdir is set up at ${wwwDir}/${coverDir}`);
 
-  console.log('[' + new Date().toUTCString() + '] 🚀 Starting cleanup process...');
+  logger.info('🚀 Starting cleanup process...');
 
   cleanup.start();
 
-  console.log('[' + new Date().toUTCString() + '] 🚀 ... Done!');
+  logger.info('🚀 ... Done!');
 
   await process();
 
-  console.log('[' + new Date().toUTCString() + '] 🚀 All done, lets go!');
+  logger.info('🚀 All done, lets go!');
 }

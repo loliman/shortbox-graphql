@@ -1,23 +1,25 @@
-export const resolvers = {
+import { StoryResolvers } from '../../types/graphql';
+
+export const resolvers: StoryResolvers = {
   Story: {
-    id: (parent: any, _: any, { loggedIn }: any) => {
+    id: (parent, _, { loggedIn }) => {
       if (!loggedIn) return String(new Date().getTime());
-      return parent.id;
+      return String(parent.id);
     },
-    parent: async (parent: any, _: any, { models }: any) =>
-      parent.fk_parent ? await models.Story.findByPk(parent.fk_parent) : null,
-    children: async (parent: any, _: any, { models }: any) =>
+    parent: async (parent, _, { storyLoader }) =>
+      parent.fk_parent ? await storyLoader.load(parent.fk_parent) : null,
+    children: async (parent, _, { models }) =>
       await models.Story.findAll({ where: { fk_parent: parent.id } }),
-    reprintOf: async (parent: any, _: any, { models }: any) =>
-      parent.fk_reprint ? await models.Story.findByPk(parent.fk_reprint) : null,
-    reprints: async (parent: any, _: any, { models }: any) =>
+    reprintOf: async (parent, _, { storyLoader }) =>
+      parent.fk_reprint ? await storyLoader.load(parent.fk_reprint) : null,
+    reprints: async (parent, _, { models }) =>
       await models.Story.findAll({ where: { fk_reprint: parent.id } }),
-    issue: async (parent: any, _: any, { models }: any) =>
-      parent.Issue || (await models.Issue.findByPk(parent.fk_issue)),
-    individuals: async (parent: any) =>
-      parent.getIndividuals ? await parent.getIndividuals() : [],
-    appearances: async (parent: any) =>
-      parent.getAppearances ? await parent.getAppearances() : [],
-    exclusive: (parent: any) => parent.onlyapp && parent.firstapp,
+    issue: async (parent, _, { issueLoader }) =>
+      (parent as any).Issue || (await issueLoader.load(parent.fk_issue)),
+    individuals: async (parent) =>
+      (parent as any).getIndividuals ? await (parent as any).getIndividuals() : [],
+    appearances: async (parent) =>
+      (parent as any).getAppearances ? await (parent as any).getAppearances() : [],
+    exclusive: (parent) => !!(parent.onlyapp && parent.firstapp),
   },
 };

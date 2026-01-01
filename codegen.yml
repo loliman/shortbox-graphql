@@ -1,0 +1,13 @@
+overwrite: true
+schema: 
+  - "src/api/generic.ts"
+  - "src/api/Filter.ts"
+  - "src/modules/**/*.schema.ts"
+generates:
+  src/types/graphql.ts:
+    plugins:
+      - "typescript"
+      - "typescript-resolvers"
+    config:
+      useIndexSignature: true
+      contextType: "../core/server#Context"

@@ -8,8 +8,18 @@ export const typeDef = gql`
   }
 
   extend type Query {
-    series(pattern: String, publisher: PublisherInput!, offset: Int, limit: Int, filter: Filter): [Series]
+    series(pattern: String, publisher: PublisherInput!, first: Int, after: String, filter: Filter): SeriesConnection
     seriesd(series: SeriesInput!): Series
+  }
+
+  type SeriesConnection {
+    edges: [SeriesEdge]
+    pageInfo: PageInfo!
+  }
+
+  type SeriesEdge {
+    cursor: String!
+    node: Series
   }
 
   input SeriesInput {

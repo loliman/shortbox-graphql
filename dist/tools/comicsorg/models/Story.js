@@ -1,0 +1,110 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+const sequelize_1 = __importStar(require("sequelize"));
+class Story extends sequelize_1.Model {
+    static associate(models) {
+        Story.belongsTo(models.Issue, { foreignKey: 'issue_id' });
+        Story.hasOne(models.StoryType, {
+            foreignKey: 'type_id',
+            onDelete: 'cascade',
+        });
+        Story.belongsToMany(models.Individual, {
+            through: models.Story_Individual,
+            foreignKey: 'creator_id',
+            unique: false,
+        });
+        Story.belongsToMany(models.IndividualType, {
+            through: models.Story_Individual,
+            foreignKey: 'credit_type_id',
+            unique: false,
+        });
+    }
+}
+Story.tableName = 'gcd_story';
+exports.default = (sequelize) => {
+    Story.init({
+        id: {
+            type: sequelize_1.default.INTEGER,
+            primaryKey: true,
+            allowNull: false,
+            autoIncrement: true,
+        },
+        title: {
+            type: sequelize_1.default.STRING(255),
+            allowNull: false,
+            default: '',
+        },
+        script: {
+            type: sequelize_1.default.STRING(255),
+            allowNull: false,
+            default: '',
+        },
+        pencils: {
+            type: sequelize_1.default.STRING(255),
+            allowNull: false,
+            default: '',
+        },
+        inks: {
+            type: sequelize_1.default.STRING(255),
+            allowNull: false,
+            default: '',
+        },
+        colors: {
+            type: sequelize_1.default.STRING(255),
+            allowNull: false,
+            default: '',
+        },
+        letters: {
+            type: sequelize_1.default.STRING(255),
+            allowNull: false,
+            default: '',
+        },
+        sequence_number: {
+            type: sequelize_1.default.INTEGER,
+            allowNull: false,
+        },
+    }, {
+        indexes: [
+            {
+                unique: true,
+                fields: ['issue_id', 'sequence_number'],
+            },
+        ],
+        sequelize,
+        tableName: Story.tableName,
+    });
+    return Story;
+};

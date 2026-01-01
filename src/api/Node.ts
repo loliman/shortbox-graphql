@@ -1,6 +1,8 @@
 import gql from 'graphql-tag';
 import models from '../models';
-import { escapeSqlString } from '../util/util';
+import { naturalCompare, generateLabel, romanize } from '../util/util';
+import { QueryResolvers, Resolvers } from '../types/graphql';
+import { Op } from 'sequelize';
 
 export const typeDef = gql`
   extend type Query {
@@ -14,116 +16,141 @@ export const typeDef = gql`
   }
 `;
 
-export const resolvers = {
-  Query: {
-    nodes: async (
-      _: any,
-      { pattern, us, offset }: { pattern: string; us: boolean; offset: number | null },
-    ) => {
-      if (!offset) offset = 0;
+const createUrl = (type: string, original: boolean, publisherName: string, seriesTitle: string, seriesVolume: number, number: string, format: string, variant: string) => {
+  let url = original ? '/us/' : '/de/';
+  url += encodeURIComponent(publisherName);
+  if (type !== 'publisher') {
+    url += `/${encodeURIComponent(seriesTitle)}_Vol_${seriesVolume}`;
+    if (type !== 'series') {
+      url += `/${encodeURIComponent(number)}/${encodeURIComponent(format)}`;
+      if (variant) {
+        url += `_${encodeURIComponent(variant)}`;
+      }
+    }
+  }
+  return url;
+};
 
+const createSeriesLabel = (seriesTitle: string, publisherName: string, volume: number, startyear: number, endyear: number | null) => {
+  let years = ` (${startyear}`;
+  if (endyear && endyear > startyear) {
+    years += `-${endyear}`;
+  }
+  years += ')';
+  return `${seriesTitle} (Vol. ${romanize(volume)})${years} (${publisherName})`;
+};
+
+const createIssueLabel = (seriesLabel: string, number: string, format: string, variant: string, issueTitle: string) => {
+  let label = `${seriesLabel} #${number}`;
+  let fmt = ` (${format}`;
+  if (variant) {
+    fmt += `/${variant}`;
+  }
+  fmt += ')';
+  label += fmt;
+  if (issueTitle) {
+    label += `: ${issueTitle}`;
+  }
+  return label;
+};
+
+export const resolvers: { Query: QueryResolvers; Node: Resolvers['Node'] } = {
+  Query: {
+    nodes: async (_, { pattern, us, offset }) => {
       if (!pattern || pattern.trim() === '') return [];
 
-      let query =
-        'SELECT * FROM \n' +
-        '(SELECT type, \n' +
-        '       label, \n' +
-        '       Createurl(type, original, name, title, volume, number, format, variant) AS url \n' +
-        "FROM   ((SELECT Createlabel('publisher', name, '', 0, 0, 0, 0, '', '', '') as label, \n" +
-        '               "publisher" AS type, \n' +
-        '               original    AS original, \n' +
-        '               name        AS name, \n' +
-        '               ""          AS title, \n' +
-        '               0           AS volume, \n' +
-        '               0           AS startyear, \n' +
-        '               0           AS endyear, \n' +
-        '               0           AS number, \n' +
-        "               ''          AS format, \n" +
-        "               ''          AS variant, \n" +
-        "               ''          AS issuetitle \n" +
-        '        FROM   publisher p \n' +
-        '        WHERE  original = ' +
-        (us ? 1 : 0) +
-        ' \n' +
-        "        HAVING label LIKE '%" +
-        escapeSqlString(pattern).replace(/\s/g, '%') +
-        "%' \n" +
-        '        ORDER  BY label \n' +
-        '        ) \n' +
-        '        UNION \n' +
-        "        (SELECT Createlabel('series', name, s.title, volume, s.startyear, s.endyear, 0, '', '', '') as label, \n" +
-        '               "series"    AS type, \n' +
-        '               original    AS original, \n' +
-        '               name        AS name, \n' +
-        '               s.title     AS title, \n' +
-        '               volume      AS volume, \n' +
-        '               s.startyear AS startyear, \n' +
-        '               s.endyear   AS endyear, \n' +
-        '               0           AS number, \n' +
-        "               ''          AS format, \n" +
-        "               ''          AS variant, \n" +
-        "               ''          AS issuetitle \n" +
-        '        FROM   series s \n' +
-        '               LEFT JOIN publisher p \n' +
-        '                      ON s.fk_publisher = p.id \n' +
-        '        WHERE  p.original = ' +
-        (us ? 1 : 0) +
-        ' \n' +
-        "        HAVING label LIKE '%" +
-        escapeSqlString(pattern).replace(/\s/g, '%') +
-        "%' \n" +
-        '        ORDER  BY label \n' +
-        '        ) \n' +
-        '        UNION \n' +
-        "        (SELECT Createlabel('issue', name, s.title, volume, s.startyear, s.endyear, number, format, variant, i.title) as label, \n" +
-        '               "issue"     AS type, \n' +
-        '               original    AS original, \n' +
-        '               name        AS name, \n' +
-        '               s.title     AS title, \n' +
-        '               volume      AS volume, \n' +
-        '               s.startyear AS startyear, \n' +
-        '               s.endyear   AS endyear, \n' +
-        '               number      AS number, \n' +
-        '               format      AS format, \n' +
-        '               variant     AS variant, \n' +
-        '               i.title     AS issuetitle \n' +
-        '        FROM   issue i \n' +
-        '               LEFT JOIN series s \n' +
-        '                      ON i.fk_series = s.id \n' +
-        '               LEFT JOIN publisher p \n' +
-        '                      ON s.fk_publisher = p.id \n' +
-        '        WHERE  p.original = ' +
-        (us ? 1 : 0) +
-        ' \n' +
-        "        HAVING label LIKE '%" +
-        escapeSqlString(pattern).replace(/\s/g, '%') +
-        "%' \n" +
-        '        ORDER  BY label \n' +
-        '        )) a \n' +
-        ') a \n' +
-        'ORDER BY \n' +
-        "    CASE WHEN label LIKE '" +
-        escapeSqlString(pattern) +
-        "' THEN 1 \n" +
-        "        WHEN label LIKE '" +
-        escapeSqlString(pattern) +
-        "%' THEN 2 \n" +
-        "        WHEN label LIKE '%" +
-        escapeSqlString(pattern) +
-        "' THEN 4 \n" +
-        '        ELSE 3 \n' +
-        '    END ASC, label ASC LIMIT ' +
-        offset +
-        ', 20';
+      const searchPattern = `%${pattern.replace(/\s/g, '%')}%`;
 
-      let res = await models.sequelize.query(query);
+      // 1. Publishers
+      const publishers = await models.Publisher.findAll({
+        where: {
+          original: us,
+          name: { [Op.like]: searchPattern }
+        },
+        limit: 20
+      });
 
-      return res[0];
+      // 2. Series
+      const series = await models.Series.findAll({
+        include: [{
+          model: models.Publisher,
+          required: true,
+          where: { original: us }
+        }],
+        where: {
+          title: { [Op.like]: searchPattern }
+        },
+        limit: 20
+      });
+
+      // 3. Issues
+      const issues = await models.Issue.findAll({
+        include: [{
+          model: models.Series,
+          required: true,
+          include: [{
+            model: models.Publisher,
+            required: true,
+            where: { original: us }
+          }]
+        }],
+        where: {
+          [Op.or]: [
+            { title: { [Op.like]: searchPattern } },
+            { number: { [Op.like]: `${pattern}%` } }
+          ]
+        },
+        limit: 20
+      });
+
+      const nodes = [
+        ...publishers.map(p => ({
+          type: 'publisher',
+          label: p.name,
+          url: createUrl('publisher', us, p.name, '', 0, '', '', '')
+        })),
+        ...series.map(s => {
+          const label = createSeriesLabel(s.title, (s as any).Publisher.name, s.volume, s.startyear, s.endyear);
+          return {
+            type: 'series',
+            label,
+            url: createUrl('series', us, (s as any).Publisher.name, s.title, s.volume, '', '', '')
+          };
+        }),
+        ...issues.map(i => {
+          const s = (i as any).Series;
+          const seriesLabel = createSeriesLabel(s.title, s.Publisher.name, s.volume, s.startyear, s.endyear);
+          const label = createIssueLabel(seriesLabel, i.number, i.format, i.variant, i.title);
+          return {
+            type: 'issue',
+            label,
+            url: createUrl('issue', us, s.Publisher.name, s.title, s.volume, i.number, i.format, i.variant)
+          };
+        })
+      ];
+
+      // Re-apply the specific ordering and pattern matching logic from the original SQL
+      nodes.sort((a, b) => {
+        const getRank = (label: string) => {
+          if (label.toLowerCase() === pattern.toLowerCase()) return 1;
+          if (label.toLowerCase().startsWith(pattern.toLowerCase())) return 2;
+          if (label.toLowerCase().endsWith(pattern.toLowerCase())) return 4;
+          return 3;
+        };
+
+        const rankA = getRank(a.label);
+        const rankB = getRank(b.label);
+
+        if (rankA !== rankB) return rankA - rankB;
+        return a.label.localeCompare(b.label);
+      });
+
+      return nodes.slice(offset || 0, (offset || 0) + 20);
     },
   },
   Node: {
-    type: (parent: any) => parent.type,
-    label: (parent: any) => parent.label,
-    url: (parent: any) => parent.url,
+    type: (parent) => parent.type || null,
+    label: (parent) => parent.label || null,
+    url: (parent) => parent.url || null,
   },
 };

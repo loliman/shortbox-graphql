@@ -1,12 +1,8 @@
-export const wwwDir = '/Users/Christian/shortbox-sandbox/shortbox-react/public';
-export const coverDir = 'covers';
-export const db = 'shortbox';
-export const dbUser = 'shortbox';
-export const dbPassword = 'Apfelmouse2837!';
+import dotenv from 'dotenv';
+dotenv.config();
 
-export const fixOnStartup = false;
-export const migrateOnStartup = false;
-export const afterFirstMigration = true;
-export const migration_db = 'shortbox';
-export const migration_dbUser = 'root';
-export const migration_dbPassword = '';
+export const wwwDir = process.env.WWW_DIR || '/Users/Christian/shortbox-sandbox/shortbox-react/public';
+export const coverDir = process.env.COVER_DIR || 'covers';
+export const db = process.env.DB_NAME || 'shortbox';
+export const dbUser = process.env.DB_USER || 'shortbox';
+export const dbPassword = process.env.DB_PASSWORD || 'Apfelmouse2837!';

@@ -1,5 +1,13 @@
 import cheerio from 'cheerio';
 import axios from 'axios';
+import {
+  CrawlerAppearance,
+  CrawlerArc,
+  CrawlerCover,
+  CrawlerIndividual,
+  CrawlerIssue,
+  CrawlerStory,
+} from './types';
 
 const BASE_URI = 'https://dc.fandom.com';
 const INDEX_URI = BASE_URI + '/index.php';
@@ -21,26 +29,26 @@ const request = async (options: any) => {
   return response.data;
 };
 
-export async function crawlIssue(number, title, volume) {
-  let issue = {};
-  issue.format = 'Heft';
-  issue.currency = 'USD';
-  issue.number = number;
-  issue.releasedate = new Date().toISOString().replace('T', ' ').replace('Z', '');
-
-  issue.series = {};
-  issue.series.title = title;
-  issue.series.volume = volume;
-
-  issue.series.publisher = {};
-
-  issue.cover = {};
-  issue.cover.number = 0;
-  issue.cover.individuals = [];
-  issue.variants = [];
-  issue.stories = [];
-  issue.individuals = [];
-  issue.arcs = [];
+export async function crawlIssue(number: string, title: string, volume: number) {
+  let issue: CrawlerIssue = {
+    format: 'Heft',
+    currency: 'USD',
+    number: number,
+    releasedate: new Date().toISOString().replace('T', ' ').replace('Z', ''),
+    series: {
+      title: title,
+      volume: volume,
+      publisher: {},
+    },
+    cover: {
+      number: 0,
+      individuals: [],
+    },
+    variants: [],
+    stories: [],
+    individuals: [],
+    arcs: [],
+  };
 
   await crawlInfobox(issue);
   await crawlSeries(issue);
@@ -63,12 +71,13 @@ export async function crawlIssue(number, title, volume) {
   return issue;
 }
 
-async function finalizeStories(issue) {
-  await asyncForEach(issue.stories, async (story, idx) => {
+async function finalizeStories(issue: CrawlerIssue) {
+  await asyncForEach(issue.stories, async (story: CrawlerStory, idx: number) => {
     story.number = idx + 1;
 
     story.appearances = story.appearances.filter(
-      (thing, index, self) => index === self.findIndex((t) => t.name === thing.name),
+      (thing: CrawlerAppearance, index: number, self: CrawlerAppearance[]) =>
+        index === self.findIndex((t) => t.name === thing.name),
     );
 
     if (story.reprintOf) {
@@ -77,20 +86,20 @@ async function finalizeStories(issue) {
   });
 }
 
-async function crawlReprint(story) {
-  let issue = await crawlIssue(
+async function crawlReprint(story: CrawlerStory) {
+  let issue = (await crawlIssue(
     story.reprintOf.issue.number,
     story.reprintOf.issue.series.title,
     story.reprintOf.issue.series.volume,
-  );
+  )) as CrawlerIssue;
 
-  let originalStoryIndex = story.reprintOf.number;
+  let originalStoryIndex: number | undefined = story.reprintOf.number;
 
   if (originalStoryIndex) {
     originalStoryIndex--;
   } else if (story.title) {
     let storyParts = story.title.split(' ');
-    issue.stories.forEach((s, i) => {
+    issue.stories.forEach((s: CrawlerStory, i: number) => {
       if (!s.title) return;
 
       let found = 0;
@@ -116,27 +125,26 @@ async function crawlReprint(story) {
   story.reprintOf.issue = issue;
 }
 
-function fixPublisher(issue) {
-  if (!issue.series.publisher) {
-    let publisher = {};
-    publisher.name = 'Marvel Comics';
-
-    issue.series.publisher = publisher;
+function fixPublisher(issue: CrawlerIssue) {
+  if (!issue.series.publisher.name) {
+    issue.series.publisher.name = 'Marvel Comics';
   }
 }
 
-async function fixStories(issue) {
-  let stories = [];
+async function fixStories(issue: CrawlerIssue) {
+  let stories: CrawlerStory[] = [];
   let storyIdx = 1;
 
   //We do have some issues, that are missing stories in between, so we have to create dummies
-  issue.stories.forEach((story) => {
-    while (story.number > storyIdx) {
-      let story = {};
-      story.individuals = [];
-      story.appearances = [];
-      story.number = storyIdx++;
-      issue.stories.push(story);
+  issue.stories.forEach((story: CrawlerStory) => {
+    while ((story.number || 0) > storyIdx) {
+      let dummyStory: CrawlerStory = {
+        title: '',
+        individuals: [],
+        appearances: [],
+        number: storyIdx++,
+      };
+      issue.stories.push(dummyStory);
     }
 
     stories.push(story);
@@ -146,39 +154,42 @@ async function fixStories(issue) {
   issue.stories = stories;
 }
 
-async function fixVariants(issue) {
+async function fixVariants(issue: CrawlerIssue) {
   if (!issue.variants) return;
 
-  issue.variants = issue.variants.filter((value) => Object.keys(value).length !== 0);
+  issue.variants = issue.variants.filter((value: any) => Object.keys(value).length !== 0);
 
-  issue.variants.forEach((v, i) => {
+  issue.variants.forEach((v: any, i: number) => {
     let title = v.variant;
-    if (issue.variants && issue.variants.map((o) => o.variant).includes(title)) {
+    if (issue.variants && issue.variants.map((o: any) => o.variant).includes(title)) {
       title =
-        title + ' ' + issue.variants.map((o) => o.variant).filter((o) => o === title).length + 1;
+        title + ' ' + (issue.variants.map((o: any) => o.variant).filter((o: any) => o === title).length + 1);
     }
 
-    let cover = {};
-    cover.number = 0;
-    cover.url = v.cover.url;
+    let cover: CrawlerCover = {
+      number: 0,
+      url: v.cover.url,
+      individuals: [],
+    };
 
-    let variant = {};
-    variant.number = issue.number;
-    variant.variant = v.variant ? v.variant : getFromAlphabet(i);
-    variant.format = 'Heft';
-    variant.currency = 'USD';
-    variant.series = JSON.parse(JSON.stringify(issue.series));
-    variant.cover = cover;
-    variant.releasedate = issue.releasedate;
-    variant.variants = [];
-    variant.individuals = [];
-    variant.stories = [];
-    variant.arcs = [];
+    let variant: CrawlerIssue = {
+      number: issue.number,
+      variant: v.variant ? v.variant : getFromAlphabet(i),
+      format: 'Heft',
+      currency: 'USD',
+      releasedate: issue.releasedate,
+      series: JSON.parse(JSON.stringify(issue.series)),
+      cover: cover,
+      variants: [],
+      individuals: [],
+      stories: [],
+      arcs: [],
+    };
 
     if (issue.variants) issue.variants[i] = variant;
   });
 
-  issue.variants.forEach((v, i) => {
+  issue.variants.forEach((v: any, i: number) => {
     let duplicateCount = 0;
 
     if (!issue.variants) return;
@@ -194,15 +205,15 @@ async function fixVariants(issue) {
   });
 }
 
-async function crawlCovers(issue) {
+async function crawlCovers(issue: CrawlerIssue) {
   await crawlCover(issue.cover, issue);
 
-  await asyncForEach(issue.variants, async (issue) => {
-    await crawlCover(issue.cover, issue);
+  await asyncForEach(issue.variants, async (v: CrawlerIssue) => {
+    await crawlCover(v.cover, v);
   });
 }
 
-async function crawlCover(cover, issue) {
+async function crawlCover(cover: CrawlerCover, issue: CrawlerIssue) {
   if (!cover) return;
 
   if (!cover.url || cover.url.trim() === '') cover.url = generateIssueUrl(issue) + '.jpg';
@@ -214,12 +225,12 @@ async function crawlCover(cover, issue) {
   while (cover.url.indexOf('%3A') !== -1) cover.url = cover.url.replace('%3A', '');
 
   try {
-    let $ = await request({
+    let $: any = await request({
       uri:
         API_URI +
         '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
         encodeURI(cover.url),
-      transform: (body) => JSON.parse(body),
+      transform: (body: string) => JSON.parse(body),
     });
 
     if (Object.keys($.query.pages)[0] === '-1') {
@@ -228,7 +239,7 @@ async function crawlCover(cover, issue) {
           API_URI +
           '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
           decodeURI(cover.url),
-        transform: (body) => JSON.parse(body),
+        transform: (body: string) => JSON.parse(body),
       });
     }
 
@@ -238,7 +249,7 @@ async function crawlCover(cover, issue) {
           API_URI +
           '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
           encodeURI(cover.url.replace('.jpg', '.png')),
-        transform: (body) => JSON.parse(body),
+        transform: (body: string) => JSON.parse(body),
       });
     }
 
@@ -248,7 +259,7 @@ async function crawlCover(cover, issue) {
           API_URI +
           '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
           decodeURI(cover.url.replace('.jpg', '.png')),
-        transform: (body) => JSON.parse(body),
+        transform: (body: string) => JSON.parse(body),
       });
     }
 
@@ -258,7 +269,7 @@ async function crawlCover(cover, issue) {
           API_URI +
           '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
           encodeURI(cover.url.replace('.jpg', '.gif')),
-        transform: (body) => JSON.parse(body),
+        transform: (body: string) => JSON.parse(body),
       });
     }
 
@@ -268,7 +279,7 @@ async function crawlCover(cover, issue) {
           API_URI +
           '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
           decodeURI(cover.url.replace('.jpg', '.gif')),
-        transform: (body) => JSON.parse(body),
+        transform: (body: string) => JSON.parse(body),
       });
     }
 
@@ -278,24 +289,24 @@ async function crawlCover(cover, issue) {
           API_URI +
           '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
           decodeURI(cover.url.replace(':', '')),
-        transform: (body) => JSON.parse(body),
+        transform: (body: string) => JSON.parse(body),
       });
     }
 
     cover.url = $.query.pages[Object.keys($.query.pages)[0]].imageinfo[0].url;
-    cover.url = cover.url.substring(0, cover.url.indexOf('/revision/'));
+    cover.url = (cover.url as string).substring(0, (cover.url as string).indexOf('/revision/'));
   } catch (e) {
     cover.url = '';
   }
 }
 
-async function crawlInfobox(issue) {
-  let $;
+async function crawlInfobox(issue: CrawlerIssue) {
+  let $: any;
 
   try {
     $ = await request({
       uri: API_URI + '?action=parse&format=json&prop=wikitext&page=' + generateIssueUrl(issue),
-      transform: function (body) {
+      transform: function (body: string) {
         return JSON.parse(body);
       },
     });
@@ -307,10 +318,10 @@ async function crawlInfobox(issue) {
     throw new Error('Cannot find issue ' + generateIssueUrl(issue));
   }
 
-  $ = $.parse.wikitext['*'].split('\n');
+  let lines: string[] = $.parse.wikitext['*'].split('\n');
 
-  if ($[0].trim().startsWith('#REDIRECT')) {
-    let redirect = $[0].trim().replace('#REDIRECT [[', '');
+  if (lines[0].trim().startsWith('#REDIRECT')) {
+    let redirect = lines[0].trim().replace('#REDIRECT [[', '');
     redirect = redirect.replace(']]', '');
 
     issue.series.title = redirect.substring(0, redirect.indexOf('Vol')).trim();
@@ -320,23 +331,23 @@ async function crawlInfobox(issue) {
 
     await crawlInfobox(issue);
   } else {
-    $.forEach((line, i) => {
+    lines.forEach((line, i) => {
       line = line.trim();
 
       // | StoryTitle1         = [[Batman: The Court of Owls|The Court of Owls]], Part Six: Beneath the Glass
 
       if (line.startsWith('|') && line.indexOf('=') > -1) {
-        crawlInfoboxLine(line.replace('|', '').trim(), i, issue, $);
+        crawlInfoboxLine(line.replace('|', '').trim(), i, issue, lines);
       }
     });
   }
 }
 
-function parseInt(string) {
+function parseInt(string: string) {
   return Number.parseInt(string.replace(/\D/g, ''));
 }
 
-function crawlInfoboxLine(line, indexOfLine, issue, $) {
+function crawlInfoboxLine(line: string, indexOfLine: number, issue: CrawlerIssue, $: string[]) {
   let type = line.substring(0, line.indexOf('=')).trim();
   let content = line.substring(line.indexOf('=') + 1).trim();
   let count = extractNumberOfInfoboxLine(type);
@@ -393,7 +404,7 @@ function crawlInfoboxLine(line, indexOfLine, issue, $) {
   }
 }
 
-function extractAppearances(count, issue, indexOfLine, $) {
+function extractAppearances(count: number, issue: CrawlerIssue, indexOfLine: number, $: string[]) {
   //Sooooometimes (again...) there are no individuals defined, so we have to create the story during the
   //appearing block :(
   count -= 1;
@@ -404,7 +415,6 @@ function extractAppearances(count, issue, indexOfLine, $) {
   }
 
   if (issue.stories[count].reprintOf) {
-    count++;
     return;
   }
 
@@ -429,7 +439,7 @@ function extractAppearances(count, issue, indexOfLine, $) {
 
       currentType = currentType.trim().toUpperCase();
     } else if (currentLine.startsWith('*')) {
-      let apps = currentLine.match(/(?<=\[.)(.*?)(?=])/g);
+      let apps: string[] | null = currentLine.match(/(?<=\[.)(.*?)(?=])/g);
 
       if (!apps) {
         //currentLine = currentLine.replace(/\*/g, "");
@@ -439,8 +449,9 @@ function extractAppearances(count, issue, indexOfLine, $) {
           currentLine = $[currentAppIdx++];
           if (currentLine) currentLine = currentLine.trim();
         }
-        apps = [];
-        apps.push(currentLine);
+        let appsArr: string[] = [];
+        if (currentLine) appsArr.push(currentLine);
+        apps = appsArr;
       } else {
         apps.forEach((app, i) => {
           if (app.indexOf('|') > -1) {
@@ -450,12 +461,13 @@ function extractAppearances(count, issue, indexOfLine, $) {
               app = app.substring(app.indexOf('#') + 1);
             }
 
-            if (app.indexOf('-->') === -1) apps[i] = app;
+            if (app.indexOf('-->') === -1 && apps) apps[i] = app;
           }
         });
       }
 
       apps.forEach((app) => {
+        if (!app) return;
         if (app.indexOf("'''") > -1 || app.indexOf('<!--') > -1) return;
         if (app.indexOf('{') > -1) app = app.substring(0, app.indexOf('{'));
 
@@ -489,14 +501,15 @@ function extractAppearances(count, issue, indexOfLine, $) {
   }
 }
 
-function extractReprint(content, count, type, issue) {
+function extractReprint(content: string, count: number, type: string, issue: CrawlerIssue) {
   createStory(count, issue);
 
   if (type.indexOf('Story') > 0) {
     issue.stories[count - 1].reprintOf.number = Number.parseInt(content);
   } else {
-    let original = {};
-    original.series = {};
+    let original: any = {
+      series: {},
+    };
 
     if (content.indexOf('Vol') === -1) {
       original.series.title = content.substring(0, content.indexOf('#')).trim();
@@ -527,38 +540,38 @@ function extractReprint(content, count, type, issue) {
   }
 }
 
-function extractAdaptedFrom(content, count, issue) {
+function extractAdaptedFrom(content: string, count: number, issue: CrawlerIssue) {
   createStory(count, issue);
   addIndividual(content, 'ORIGINAL', issue.stories[count - 1].individuals);
 }
 
-function extractColourist(content, count, issue) {
+function extractColourist(content: string, count: number, issue: CrawlerIssue) {
   createStory(count, issue);
   addIndividual(content, 'COLORIST', issue.stories[count - 1].individuals);
 }
 
-function extractLetterer(content, count, issue) {
+function extractLetterer(content: string, count: number, issue: CrawlerIssue) {
   createStory(count, issue);
   addIndividual(content, 'LETTERER', issue.stories[count - 1].individuals);
 }
 
-function extractInker(content, count, issue) {
+function extractInker(content: string, count: number, issue: CrawlerIssue) {
   createStory(count, issue);
   addIndividual(content, 'INKER', issue.stories[count - 1].individuals);
 }
 
-function extractPenciler(content, count, issue) {
+function extractPenciler(content: string, count: number, issue: CrawlerIssue) {
   createStory(count, issue);
   addIndividual(content, 'PENCILER', issue.stories[count - 1].individuals);
 }
 
-function extractWriter(content, count, issue) {
+function extractWriter(content: string, count: number, issue: CrawlerIssue) {
   createStory(count, issue);
   if (!issue.stories[count - 1].reprintOf)
     addIndividual(content, 'WRITER', issue.stories[count - 1].individuals);
 }
 
-function extractStory(content, count, issue) {
+function extractStory(content: string, count: number, issue: CrawlerIssue) {
   createStory(count, issue);
   if (!issue.stories[count - 1].reprintOf) {
     if (content.endsWith('}}')) content = content.replace('}}', '');
@@ -578,30 +591,32 @@ function extractStory(content, count, issue) {
   }
 }
 
-function extractCover(content, issue) {
+function extractCover(content: string, issue: CrawlerIssue) {
   addIndividual(content, 'ARTIST', issue.cover.individuals);
 }
 
-function extractEditorInChief(content, issue) {
+function extractEditorInChief(content: string, issue: CrawlerIssue) {
   addIndividual(content, 'EDITOR', issue.individuals);
 }
 
-function extractEditor(content, count, issue) {
+function extractEditor(content: string, count: number, issue: CrawlerIssue) {
   createStory(count, issue);
   if (!issue.stories[count - 1].reprintOf)
     addIndividual(content, 'EDITOR', issue.stories[count - 1].individuals);
 }
 
-function extractVariant(type, content, count, issue) {
+function extractVariant(type: string, content: string, count: number, issue: CrawlerIssue) {
   if (count === 1) {
     return;
   }
 
   if (issue.variants && type.indexOf('Text') === -1 && !content.startsWith('<!--')) {
     createCover(count, issue);
-    issue.variants[count - 1].cover = {};
-    issue.variants[count - 1].cover.number = 0;
-    issue.variants[count - 1].cover.url = content;
+    issue.variants[count - 1].cover = {
+      number: 0,
+      url: content,
+      individuals: [],
+    };
   } else {
     if (issue.variants && issue.variants[count - 1] && content !== '') {
       while (content.indexOf('[[') !== -1) content = content.replace('[[', '');
@@ -624,7 +639,7 @@ function extractVariant(type, content, count, issue) {
   }
 }
 
-function extractNumberOfInfoboxLine(type) {
+function extractNumberOfInfoboxLine(type: string) {
   if (type.indexOf('_') > -1) return parseInt(type.substring(0, type.indexOf('_')));
   else if (type.indexOf(' ') > -1) return parseInt(type.substring(0, type.indexOf(' ')));
   else if (type !== 'Image' && type.indexOf('Image') > -1)
@@ -636,11 +651,11 @@ function extractNumberOfInfoboxLine(type) {
   }
 }
 
-export async function crawlSeries(issue) {
+export async function crawlSeries(issue: CrawlerIssue) {
   try {
-    let $ = await request({
+    let $: any = await request({
       uri: INDEX_URI + '?action=render&title=' + generateSeriesUrl(issue.series),
-      transform: (body) => cheerio.load(body),
+      transform: (body: string) => cheerio.load(body),
     });
 
     extractPublisher($, issue);
@@ -650,7 +665,7 @@ export async function crawlSeries(issue) {
   }
 }
 
-function extractDates($, issue) {
+function extractDates($: any, issue: CrawlerIssue) {
   let publicationDate = $("h3:contains('Dates Published')");
 
   if (publicationDate.length > 0) {
@@ -659,17 +674,17 @@ function extractDates($, issue) {
     //let ongoing = text.indexOf("Ongoing") !== -1;
     let date = text.replace(/[a-zA-Z :,—]/g, '').replaceAll(' ', '');
 
-    issue.series.startyear = date.substring(1, 5);
+    (issue.series as any).startyear = date.substring(1, 5);
 
     if (date.length === 11) {
-      issue.series.endyear = date.substring(7, 11);
+      (issue.series as any).endyear = date.substring(7, 11);
     } else {
-      issue.series.endyear = 0;
+      (issue.series as any).endyear = 0;
     }
   }
 }
 
-function extractPublisher($, issue) {
+function extractPublisher($: any, issue: CrawlerIssue) {
   let publisher = $("h3:contains('Publisher')");
   if (!issue.series.publisher) {
     issue.series.publisher = {};
@@ -679,10 +694,10 @@ function extractPublisher($, issue) {
   } else {
     issue.series.publisher.name = 'DC Comics';
   }
-  issue.series.publisher.us = 1;
+  issue.series.publisher.original = true;
 }
 
-function getAppearances(story, currentType, name, firstApp) {
+function getAppearances(story: CrawlerStory, currentType: string, name: string, firstApp: boolean) {
   let role = '';
 
   if (
@@ -744,57 +759,69 @@ function getAppearances(story, currentType, name, firstApp) {
     currentType = 'CHARACTER';
   }
 
-  let app = {};
-  app.name = name;
-  app.type = currentType.trim();
-  app.role = role.trim();
+  let app: CrawlerAppearance = {
+    name: name,
+    type: currentType.trim(),
+    role: role.trim(),
+  };
   if (firstApp) app.firstapp = firstApp;
 
   if (app.name && app.name.indexOf('-->') === -1 && app.name.length > 0)
     addAppearance(story.appearances, app);
 }
 
-function generateIssueUrl(issue) {
+function generateIssueUrl(issue: any) {
   return generateSeriesUrl(issue.series) + encodeURIComponent('_') + issue.number.trim();
 }
 
-function generateSeriesUrl(series) {
+function generateSeriesUrl(series: any) {
   return encodeURIComponent(series.title.trim().replace(/\s/g, '_') + '_Vol_' + series.volume);
 }
 
-function generateIssueName(issue) {
+function generateIssueName(issue: any) {
   return generateSeriesName(issue.series) + ' ' + issue.number.trim();
 }
 
-function generateSeriesName(series) {
+function generateSeriesName(series: any) {
   return series.title.trim() + ' Vol ' + series.volume;
 }
 
-async function asyncForEach(array, callback) {
+async function asyncForEach<T>(
+  array: T[],
+  callback: (item: T, index: number, array: T[]) => Promise<void>,
+) {
   for (let index = 0; index < array.length; index++) {
     await callback(array[index], index, array);
   }
 }
 
-function createStory(count, issue) {
+function createStory(count: number, issue: CrawlerIssue) {
   if (!issue.stories[count - 1]) {
-    issue.stories[count - 1] = {};
-    issue.stories[count - 1].individuals = [];
-    issue.stories[count - 1].appearances = [];
-    issue.stories[count - 1].number = count;
+    issue.stories[count - 1] = {
+      title: '',
+      individuals: [],
+      appearances: [],
+      number: count,
+    };
   }
 }
 
-function createCover(count, issue) {
+function createCover(count: number, issue: CrawlerIssue) {
   if (issue.variants && !issue.variants[count - 1]) {
-    issue.variants[count - 1] = {};
+    issue.variants[count - 1] = {
+      cover: {
+        number: 0,
+        individuals: [],
+      },
+    } as any;
   }
 }
 
-function addArc(title, type, arcs) {
-  let arc = {};
-  arc.title = title;
-  arc.type = type;
+function addArc(title: string, type: string, arcs: CrawlerArc[]) {
+  let arc: CrawlerArc = {
+    title: title,
+    type: type,
+  };
 
   if (arc.title.trim() === '') return;
 
@@ -820,7 +847,7 @@ function addArc(title, type, arcs) {
   if (!contains) arcs.push(arc);
 }
 
-function addAppearance(apps, app) {
+function addAppearance(apps: CrawlerAppearance[], app: CrawlerAppearance) {
   if (app.name.trim() === '' || app.name.trim().indexOf('|') === 0) return;
 
   if (app.name.indexOf('|') !== -1) {
@@ -842,7 +869,7 @@ function addAppearance(apps, app) {
   if (!contains) apps.push(app);
 }
 
-function addIndividual(name, type, individuals) {
+function addIndividual(name: string, type: string, individuals: CrawlerIndividual[]) {
   if (name.indexOf('<!--') > -1) {
     name = name.substring(0, name.indexOf('<!--'));
     name = name.trim();
@@ -860,14 +887,17 @@ function addIndividual(name, type, individuals) {
   name = name.replace('}}', '');
   name = name.trim();
 
+  if (name === '' || name.indexOf('|') === 0) return;
+
   let contains = individuals.find(
     (i) => i.name.toLowerCase() === name.toLowerCase() && i.type === type,
   );
 
   if (!contains) {
-    let i = {};
-    i.name = name;
-    i.type = type;
+    let i: CrawlerIndividual = {
+      name: name,
+      type: type,
+    };
 
     individuals.push(i);
   }

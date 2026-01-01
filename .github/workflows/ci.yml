@@ -1,0 +1,57 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run GraphQL Codegen
+        run: npm run codegen
+
+      - name: Run Tests with Coverage
+        run: npm test -- --coverage
+
+      - name: Build Project
+        run: npm run build
+
+      - name: Prepare Artifact
+        run: |
+          mkdir -p release
+          cp -r dist release/
+          cp package.json release/
+          cp package-lock.json release/
+          cp docker-compose.yml release/
+          cp Dockerfile release/
+          cp functions.sql release/
+          # Optional: Include a .env.example or similar if needed
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shortbox-graphql-build
+          path: release/
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

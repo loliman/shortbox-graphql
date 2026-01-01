@@ -7,6 +7,13 @@ export const typeDef = gql`
   scalar DateTime
   scalar Upload
 
+  type PageInfo {
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+    startCursor: String
+    endCursor: String
+  }
+
   type Mutation {
     _empty: String
   }
