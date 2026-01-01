@@ -10,7 +10,7 @@ services:
       - DB_PORT=3306
       - DB_NAME=${DB_NAME:-shortbox}
       - DB_USER=${DB_USER:-shortbox}
-      - DB_PASSWORD=${DB_PASSWORD:-Apfelmouse2837!}
+      - DB_PASSWORD=${DB_PASSWORD:-xxx}
       - PORT=4000
     depends_on:
       - db
@@ -25,7 +25,7 @@ services:
     environment:
       - MYSQL_DATABASE=${DB_NAME:-shortbox}
       - MYSQL_USER=${DB_USER:-shortbox}
-      - MYSQL_PASSWORD=${DB_PASSWORD:-Apfelmouse2837!}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-xxx}
       - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-rootpassword}
     ports:
       - "3336:3306"
