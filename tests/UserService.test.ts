@@ -18,7 +18,7 @@ describe('UserService', () => {
     userService = new UserService(mockModels);
   });
 
-  it('creates a cryptographically strong session id on successful login', async () => {
+  it('persists user record on successful login', async () => {
     const save = jest.fn().mockResolvedValue(undefined);
     const password = 'secret';
     const salt = randomBytes(16).toString('base64url');
@@ -41,10 +41,8 @@ describe('UserService', () => {
       transaction: mockTransaction,
     });
     expect(result).toBe(userRecord);
-    expect(typeof userRecord.sessionid).toBe('string');
-    expect(userRecord.sessionid).toHaveLength(64);
-    expect(userRecord.sessionid).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(save).toHaveBeenCalledWith({ transaction: mockTransaction });
+    expect(userRecord.sessionid).toBeNull();
   });
 
   it('returns null and does not persist when login fails', async () => {
@@ -97,16 +95,10 @@ describe('UserService', () => {
     expect(save).toHaveBeenCalledWith({ transaction: mockTransaction });
   });
 
-  it('clears sessionid on logout only for matching id/sessionid', async () => {
-    mockModels.User.update.mockResolvedValue([1]);
-
-    const input = { id: '1', sessionid: 'token' } as any;
-    const result = await userService.logout(input, mockTransaction);
+  it('returns true on logout without database write', async () => {
+    const result = await userService.logout(1, mockTransaction);
 
     expect(result).toBe(true);
-    expect(mockModels.User.update).toHaveBeenCalledWith(
-      { sessionid: null },
-      { where: { id: input.id, sessionid: input.sessionid }, transaction: mockTransaction },
-    );
+    expect(mockModels.User.update).not.toHaveBeenCalled();
   });
 });

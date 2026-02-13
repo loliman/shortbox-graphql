@@ -1,12 +1,14 @@
 import request from 'supertest';
 import { startServer } from '../src/core/server';
+import { resetAndSeedDatabase } from './integration/seed';
 
-describe('FilterService Integration Tests', () => {
+describe('Filter Integration Tests', () => {
   let url: string;
-  let serverInstance: any;
+  let serverInstance: { stop: () => Promise<void> } | null = null;
 
   beforeAll(async () => {
-    const result = await startServer(4005);
+    await resetAndSeedDatabase();
+    const result = await startServer(4102);
     url = result.url;
     serverInstance = result.server;
   });
@@ -15,9 +17,9 @@ describe('FilterService Integration Tests', () => {
     if (serverInstance) {
       await serverInstance.stop();
     }
-  });
+  }, 30000);
 
-  it('should export filter results as txt', async () => {
+  it('exports filtered issues as txt', async () => {
     const query = {
       query: `
         query {
@@ -26,16 +28,14 @@ describe('FilterService Integration Tests', () => {
       `,
     };
 
-    const response = await request(url)
-      .post('/')
-      .send(query);
+    const response = await request(url).post('/').send(query);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.export).toBeDefined();
     expect(typeof response.body.data.export).toBe('string');
+    expect(response.body.data.export).toContain('Spider-Man');
   });
 
-  it('should export filter results as csv', async () => {
+  it('exports filtered issues as csv', async () => {
     const query = {
       query: `
         query {
@@ -44,16 +44,15 @@ describe('FilterService Integration Tests', () => {
       `,
     };
 
-    const response = await request(url)
-      .post('/')
-      .send(query);
+    const response = await request(url).post('/').send(query);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.export).toBeDefined();
+    expect(typeof response.body.data.export).toBe('string');
     expect(response.body.data.export).toContain('Verlag;Series;Volume');
+    expect(response.body.data.export).toContain('Marvel Comics');
   });
 
-  it('should return error for invalid export type', async () => {
+  it('returns BAD_USER_INPUT for unsupported export type', async () => {
     const query = {
       query: `
         query {
@@ -62,11 +61,9 @@ describe('FilterService Integration Tests', () => {
       `,
     };
 
-    const response = await request(url)
-      .post('/')
-      .send(query);
+    const response = await request(url).post('/').send(query);
 
     expect(response.body.errors).toBeDefined();
-    expect(response.body.errors[0].message).toContain('Gültige Export Typen: txt, csv');
+    expect(response.body.errors[0].extensions.code).toBe('BAD_USER_INPUT');
   });
 });

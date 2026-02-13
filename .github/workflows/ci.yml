@@ -3,12 +3,13 @@ name: CI/CD Pipeline
 on:
   push:
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
-  build-and-test:
-    name: Build and Test
+  quality-and-build:
+    name: Quality and Build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,6 +20,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -26,7 +28,14 @@ jobs:
       - name: Run GraphQL Codegen
         run: npm run codegen
 
+      - name: Lint
+        run: npm run lint
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit Tests with Coverage Gate (>=80%)
+        run: npm run test:unit
 
       - name: Build Project
         run: npm run build
@@ -40,16 +49,82 @@ jobs:
           cp docker-compose.yml release/
           cp Dockerfile release/
           cp functions.sql release/
-          # Optional: Include a .env.example or similar if needed
 
-      - name: Upload Artifact
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: shortbox-graphql-build
           path: release/
+
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shortbox-graphql-coverage
+          path: coverage/unit/
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  integration-tests:
+    name: Integration Tests (MySQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality-and-build
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: shortbox
+          MYSQL_USER: shortbox
+          MYSQL_PASSWORD: xxx
+          MYSQL_ROOT_PASSWORD: rootpassword
+        ports:
+          - 3336:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3336
+      DB_NAME: shortbox
+      DB_USER: shortbox
+      DB_PASSWORD: xxx
+      SESSION_SECRET: integration-test-session-secret-at-least-32-chars
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run GraphQL Codegen
+        run: npm run codegen
+
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            if (echo > /dev/tcp/127.0.0.1/3336) >/dev/null 2>&1; then
+              echo "MySQL is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL did not become ready in time"
+          exit 1
+
+      - name: Run Integration Tests
+        run: npm run test:integration
