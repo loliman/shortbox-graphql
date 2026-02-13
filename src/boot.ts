@@ -1,4 +1,5 @@
 import sequelize from './core/database';
+import models from './models';
 import fs from 'fs';
 import { coverDir, wwwDir } from './config/config';
 import { cleanup } from './core/cleanup';
@@ -8,6 +9,9 @@ import logger from './util/logger';
 export async function boot(process: () => Promise<void>) {
   await sequelize.authenticate();
   logger.info('🚀 Database is up and running');
+
+  await models.UserSession.sync();
+  logger.info('🚀 Session table is ready');
 
   // await sequelize.sync({alter: true});
 

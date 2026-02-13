@@ -1,11 +1,14 @@
-import models from '../models';
-import { Transaction } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import logger from '../util/logger';
 import type { UserInput } from '@shortbox/contract';
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 export class UserService {
   private static readonly PASSWORD_PREFIX = 'scrypt';
+  private static readonly SESSION_TTL_SECONDS = (() => {
+    const parsed = parseInt(process.env.SESSION_TTL_SECONDS || '1209600', 10);
+    return Number.isFinite(parsed) ? parsed : 1209600;
+  })();
 
   constructor(
     private models: typeof import('../models').default,
@@ -26,6 +29,14 @@ export class UserService {
 
   private generateSessionId(): string {
     return randomBytes(48).toString('base64url');
+  }
+
+  private hashSessionToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private buildSessionExpiry(reference = new Date()): Date {
+    return new Date(reference.getTime() + UserService.SESSION_TTL_SECONDS * 1000);
   }
 
   private hashPassword(password: string): string {
@@ -55,7 +66,9 @@ export class UserService {
 
   async login(user: UserInput, transaction: Transaction) {
     this.log(`Login attempt for user: ${user.name}`);
-    const sessionid = this.generateSessionId();
+    const sessionToken = this.generateSessionId();
+    const sessionTokenHash = this.hashSessionToken(sessionToken);
+    const expiresAt = this.buildSessionExpiry();
 
     let userRecord = await this.models.User.findOne({
       where: { name: (user.name || '').trim() },
@@ -69,16 +82,38 @@ export class UserService {
       userRecord.password = this.hashPassword(user.password);
     }
 
-    userRecord.sessionid = sessionid;
+    // One active session per user is enough for this single-admin setup.
+    await this.models.UserSession.update(
+      { revokedat: new Date() },
+      { where: { fk_user: userRecord.id, revokedat: null }, transaction },
+    );
+    await this.models.UserSession.create(
+      {
+        fk_user: userRecord.id,
+        tokenhash: sessionTokenHash,
+        expiresat: expiresAt,
+        revokedat: null,
+      },
+      { transaction },
+    );
+    userRecord.sessionid = null;
     await userRecord.save({ transaction });
-    return userRecord;
+    return { userRecord, sessionToken };
   }
 
-  async logout(userId: number, sessionid: string, transaction: Transaction) {
+  async logout(userId: number, sessionTokenHash: string, transaction: Transaction) {
     this.log(`Logout for user ID: ${userId}`);
-    let [affectedCount] = await this.models.User.update(
-      { sessionid: null },
-      { where: { id: userId, sessionid }, transaction },
+    let [affectedCount] = await this.models.UserSession.update(
+      { revokedat: new Date() },
+      {
+        where: {
+          fk_user: userId,
+          tokenhash: sessionTokenHash,
+          revokedat: null,
+          expiresat: { [Op.gt]: new Date() },
+        },
+        transaction,
+      },
     );
     return affectedCount !== 0;
   }

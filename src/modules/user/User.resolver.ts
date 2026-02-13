@@ -79,9 +79,9 @@ export const resolvers: UserResolvers = {
       try {
         tx = requireTransaction(transaction);
         UserInputSchema.parse(user);
-        let userRecord = await userService.login(user, tx);
+        let loginResult = await userService.login(user, tx);
 
-        if (!userRecord) {
+        if (!loginResult) {
           throw new GraphQLError('Login fehlgeschlagen', {
             extensions: { code: 'UNAUTHENTICATED' },
           });
@@ -89,8 +89,8 @@ export const resolvers: UserResolvers = {
 
         await tx.commit();
         committed = true;
-        appendSetCookie(response, buildSessionCookie(`${userRecord.id}:${userRecord.sessionid || ''}`));
-        return userRecord;
+        appendSetCookie(response, buildSessionCookie(loginResult.sessionToken));
+        return loginResult.userRecord;
       } catch (e) {
         if (tx && !committed) await tx.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
@@ -102,7 +102,7 @@ export const resolvers: UserResolvers = {
     logout: async (
       _,
       __,
-      { loggedIn, transaction, userService, authenticatedUserId, authenticatedSessionId, response },
+      { loggedIn, transaction, userService, authenticatedUserId, authenticatedSessionTokenHash, response },
     ) => {
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
@@ -114,14 +114,14 @@ export const resolvers: UserResolvers = {
       try {
         tx = requireTransaction(transaction);
         const userId = authenticatedUserId;
-        const sessionid = authenticatedSessionId;
-        if (!userId || !sessionid) {
+        const sessionTokenHash = authenticatedSessionTokenHash;
+        if (!userId || !sessionTokenHash) {
           throw new GraphQLError('Ungültige Session', {
             extensions: { code: 'UNAUTHENTICATED' },
           });
         }
 
-        let success = await userService.logout(userId, sessionid, tx);
+        let success = await userService.logout(userId, sessionTokenHash, tx);
 
         await tx.commit();
         committed = true;

@@ -16,7 +16,7 @@ import {
 
 export const mockResolvers = {
   Query: {
-    me: () => ({ id: 1, sessionid: 'mock-session' }),
+    me: () => ({ id: 1 }),
     nodes: (_: unknown, args: { pattern?: string }) => getNodes(args.pattern),
     export: () => 'Mock export content',
     publishers: (_: unknown, args: { pattern?: string }) =>
@@ -58,7 +58,7 @@ export const mockResolvers = {
       createConnection(mockApps.filter((a) => matches(a.name, args.pattern))),
   },
   Mutation: {
-    login: () => ({ id: 1, sessionid: 'mock-session' }),
+    login: () => ({ id: 1 }),
     logout: () => true,
     deletePublisher: () => true,
     deleteSeries: () => true,

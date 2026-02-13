@@ -7,10 +7,10 @@ import models from '../models';
 import DataLoader from 'dataloader';
 import { resolver } from 'graphql-sequelize';
 import logger from '../util/logger';
-import { Transaction } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { IncomingMessage } from 'http';
 import type { ServerResponse } from 'http';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import http from 'http';
 import { parse as parseUrl } from 'url';
 
@@ -66,6 +66,17 @@ const resolvers = merge(
 
 const mockModeEnabled = (process.env.MOCK_MODE || '').toLowerCase() === 'true';
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'sb_session';
+const parsedSessionTtlSeconds = parseInt(process.env.SESSION_TTL_SECONDS || '1209600', 10);
+const SESSION_TTL_SECONDS = Number.isFinite(parsedSessionTtlSeconds)
+  ? parsedSessionTtlSeconds
+  : 1209600;
+const parsedSessionRefreshThresholdSeconds = parseInt(
+  process.env.SESSION_REFRESH_THRESHOLD_SECONDS || '43200',
+  10,
+);
+const SESSION_REFRESH_THRESHOLD_SECONDS = Number.isFinite(parsedSessionRefreshThresholdSeconds)
+  ? parsedSessionRefreshThresholdSeconds
+  : 43200;
 const defaultCorsOrigins = [
   'https://shortbox.de',
   'https://www.shortbox.de',
@@ -85,7 +96,7 @@ const allowedCorsHeaders = 'content-type,authorization';
 export interface Context {
   loggedIn: boolean;
   authenticatedUserId?: number;
-  authenticatedSessionId?: string;
+  authenticatedSessionTokenHash?: string;
   operationName: string;
   requestId: string;
   now: Date;
@@ -133,16 +144,15 @@ const parseCookies = (cookieHeader: string | undefined): Record<string, string> 
   }, {});
 };
 
-const parseSessionToken = (token: string | undefined): { userId: number; sessionid: string } | null => {
+const parseSessionToken = (token: string | undefined): string | null => {
   if (!token) return null;
-  let [userid, sessionid] = token.split(/:(.+)/);
-  if (!userid || !sessionid) return null;
+  const normalized = token.trim().replace(/^"|"$/g, '');
+  if (normalized.length < 32) return null;
+  return normalized;
+};
 
-  userid = userid.trim().replace(/^"|"$/g, '');
-  sessionid = sessionid.trim().replace(/^"|"$/g, '');
-  const userId = parseInt(userid, 10);
-  if (!Number.isFinite(userId) || userId <= 0 || !sessionid) return null;
-  return { userId, sessionid };
+const hashSessionToken = (token: string): string => {
+  return createHash('sha256').update(token).digest('hex');
 };
 
 const isOriginAllowed = (origin: string | undefined): boolean => {
@@ -256,7 +266,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         return {
           loggedIn: true,
           authenticatedUserId: undefined,
-          authenticatedSessionId: undefined,
+          authenticatedSessionTokenHash: undefined,
           operationName,
           requestId,
           now,
@@ -284,7 +294,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
 
       let loggedIn = false;
       let authenticatedUserId: number | undefined;
-      let authenticatedSessionId: string | undefined;
+      let authenticatedSessionTokenHash: string | undefined;
       const authorization =
         typeof request.headers.authorization === 'string'
           ? request.headers.authorization
@@ -298,17 +308,28 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           ? authorization.substring(7)
           : authorization
         : undefined;
-      const tokenData =
+      const sessionToken =
         parseSessionToken(parsedCookies[SESSION_COOKIE_NAME]) || parseSessionToken(headerToken);
 
-      if (tokenData) {
-        const user = await models.User.findOne({
-          where: { id: tokenData.userId, sessionid: tokenData.sessionid },
+      if (sessionToken) {
+        const tokenHash = hashSessionToken(sessionToken);
+        const session = await models.UserSession.findOne({
+          where: {
+            tokenhash: tokenHash,
+            revokedat: null,
+            expiresat: { [Op.gt]: now },
+          },
         });
-        if (user) {
+        if (session) {
           loggedIn = true;
-          authenticatedUserId = tokenData.userId;
-          authenticatedSessionId = tokenData.sessionid;
+          authenticatedUserId = session.fk_user;
+          authenticatedSessionTokenHash = tokenHash;
+
+          const remainingMs = session.expiresat.getTime() - now.getTime();
+          if (remainingMs < SESSION_REFRESH_THRESHOLD_SECONDS * 1000) {
+            session.expiresat = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000);
+            await session.save();
+          }
         }
       }
 
@@ -365,7 +386,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
       const contextBase = {
         loggedIn,
         authenticatedUserId,
-        authenticatedSessionId,
+        authenticatedSessionTokenHash,
         operationName,
         requestId,
         now,
