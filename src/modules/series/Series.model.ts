@@ -1,4 +1,6 @@
-import { Model, DataTypes, Sequelize } from 'sequelize';
+import { DataTypes, Model, Sequelize, Transaction } from 'sequelize';
+import type { DbModels } from '../../types/db';
+import { Issue } from '../issue/Issue.model';
 
 export class Series extends Model {
   public id!: number;
@@ -9,21 +11,21 @@ export class Series extends Model {
   public addinfo!: string;
   public fk_publisher!: number;
 
-  public static associate(models: any) {
+  public static associate(models: DbModels) {
     Series.hasMany(models.Issue, { as: 'Issue', foreignKey: 'fk_series', onDelete: 'cascade' });
     Series.belongsTo(models.Publisher, { foreignKey: 'fk_publisher' });
   }
 
   // Die delete Methode wird später in einen Service verschoben,
   // hier bleibt sie vorerst für die Kompatibilität mit dem bestehenden Code.
-  public async deleteInstance(transaction: any, models: any): Promise<void> {
+  public async deleteInstance(transaction: Transaction, models: DbModels): Promise<void> {
     const issues = await models.Issue.findAll({
       where: { fk_series: this.id },
       transaction,
     });
 
-    for (const issue of issues) {
-      await issue.delete(transaction);
+    for (const issue of issues as Issue[]) {
+      await issue.deleteInstance(transaction, models);
     }
 
     await this.destroy({ transaction });

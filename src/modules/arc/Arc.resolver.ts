@@ -1,6 +1,8 @@
 import { Sequelize, Op } from 'sequelize';
 import { ArcResolvers } from '../../types/graphql';
 
+type ArcParent = { id: number; title: string };
+
 export const resolvers: ArcResolvers = {
   Query: {
     arcs: async (_, { pattern, type, first, after }, { models }) => {
@@ -10,12 +12,17 @@ export const resolvers: ArcResolvers = {
         decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
       }
 
-      let where: any = {};
-      let order: any = [['title', 'ASC'], ['id', 'ASC']];
+      const where: Record<string | symbol, unknown> = {};
+      const order: Array<[string, 'ASC' | 'DESC']> = [
+        ['title', 'ASC'],
+        ['id', 'ASC'],
+      ];
 
       if (decodedCursor) {
-        where[Op.and as any] = [
-          Sequelize.literal(`(title, id) > (SELECT title, id FROM Arc WHERE id = ${decodedCursor})`)
+        where[Op.and] = [
+          Sequelize.literal(
+            `(title, id) > (SELECT title, id FROM Arc WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
 
@@ -34,9 +41,9 @@ export const resolvers: ArcResolvers = {
       const hasNextPage = results.length > limit;
       const nodes = results.slice(0, limit);
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node,
       }));
 
       return {
@@ -46,7 +53,7 @@ export const resolvers: ArcResolvers = {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     },
   },
@@ -57,13 +64,13 @@ export const resolvers: ArcResolvers = {
     },
     title: (parent) => parent.title.trim(),
     issues: async (parent, _, { models }) =>
-      (await models.Issue.findAll({
+      await models.Issue.findAll({
         include: [
           {
-            model: models.Arc as any,
-            where: { id: parent.id },
+            model: models.Arc,
+            where: { id: (parent as ArcParent).id },
           },
         ],
-      })) as any,
+      }),
   },
 };

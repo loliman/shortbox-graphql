@@ -1,4 +1,5 @@
 import { Model, DataTypes, Sequelize } from 'sequelize';
+import type { DbModels } from '../../types/db';
 
 export class Feature extends Model {
   public id!: number;
@@ -7,7 +8,7 @@ export class Feature extends Model {
   public addinfo!: string;
   public fk_issue!: number;
 
-  public static associate(models: any) {
+  public static associate(models: DbModels) {
     Feature.belongsTo(models.Issue, { foreignKey: 'fk_issue' });
     Feature.belongsToMany(models.Individual, {
       through: models.Feature_Individual,

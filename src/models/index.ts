@@ -23,10 +23,10 @@ import Feature_IndividualFactory from '../modules/shared/Feature_Individual.mode
 
 import { DbModels } from '../types/db';
 
-const db: DbModels = {
+const db = {
   sequelize,
   Sequelize,
-} as any;
+} as unknown as DbModels;
 
 // Initialize models
 db.Publisher = PublisherFactory(sequelize);

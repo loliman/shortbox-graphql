@@ -1,6 +1,15 @@
 import { Sequelize, Op } from 'sequelize';
 import { IndividualResolvers } from '../../types/graphql';
 
+type IndividualParent = {
+  id: number;
+  name: string;
+  Stories?: Array<{ id: number }>;
+  Covers?: Array<{ id: number }>;
+  Issues?: Array<{ id: number }>;
+  Features?: Array<{ id: number }>;
+};
+
 export const resolvers: IndividualResolvers = {
   Query: {
     individuals: async (_, { pattern, first, after }, { models }) => {
@@ -10,12 +19,17 @@ export const resolvers: IndividualResolvers = {
         decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
       }
 
-      let where: any = {};
-      let order: any = [['name', 'ASC'], ['id', 'ASC']];
+      const where: Record<string | symbol, unknown> = {};
+      const order: Array<[string, 'ASC' | 'DESC']> = [
+        ['name', 'ASC'],
+        ['id', 'ASC'],
+      ];
 
       if (decodedCursor) {
-        where[Op.and as any] = [
-          Sequelize.literal(`(name, id) > (SELECT name, id FROM Individual WHERE id = ${decodedCursor})`)
+        where[Op.and] = [
+          Sequelize.literal(
+            `(name, id) > (SELECT name, id FROM Individual WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
 
@@ -33,9 +47,9 @@ export const resolvers: IndividualResolvers = {
       const hasNextPage = results.length > limit;
       const nodes = results.slice(0, limit);
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node,
       }));
 
       return {
@@ -45,7 +59,7 @@ export const resolvers: IndividualResolvers = {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     },
   },
@@ -56,28 +70,37 @@ export const resolvers: IndividualResolvers = {
     },
     name: (parent) => parent.name,
     type: async (parent, _, { models }) => {
-      let where: any = {};
-      let table: 'Story_Individual' | 'Cover_Individual' | 'Issue_Individual' | 'Feature_Individual' | '' = '';
+      const where: Record<string, number> = {};
+      let table:
+        | 'Story_Individual'
+        | 'Cover_Individual'
+        | 'Issue_Individual'
+        | 'Feature_Individual'
+        | '' = '';
+      const individualParent = parent as IndividualParent;
 
-      if ((parent as any).Stories && (parent as any).Stories.length > 0) {
-        where.fk_story = (parent as any).Stories[0].id;
+      if (individualParent.Stories && individualParent.Stories.length > 0) {
+        where.fk_story = individualParent.Stories[0].id;
         table = 'Story_Individual';
-      } else if ((parent as any).Covers && (parent as any).Covers.length > 0) {
-        where.fk_cover = (parent as any).Covers[0].id;
+      } else if (individualParent.Covers && individualParent.Covers.length > 0) {
+        where.fk_cover = individualParent.Covers[0].id;
         table = 'Cover_Individual';
-      } else if ((parent as any).Issues && (parent as any).Issues.length > 0) {
-        where.fk_issue = (parent as any).Issues[0].id;
+      } else if (individualParent.Issues && individualParent.Issues.length > 0) {
+        where.fk_issue = individualParent.Issues[0].id;
         table = 'Issue_Individual';
-      } else if ((parent as any).Features && (parent as any).Features.length > 0) {
-        where.fk_feature = (parent as any).Features[0].id;
+      } else if (individualParent.Features && individualParent.Features.length > 0) {
+        where.fk_feature = individualParent.Features[0].id;
         table = 'Feature_Individual';
       } else {
         return [];
       }
 
-      where.fk_individual = parent.id;
-      let relation = await (models[table] as any).findAll({ where });
-      return relation.map((r: any) => r.type);
+      where.fk_individual = individualParent.id;
+      const relationModel = models[table] as {
+        findAll: (options: { where: Record<string, number> }) => Promise<Array<{ type: string }>>;
+      };
+      const relation = await relationModel.findAll({ where });
+      return relation.map((r) => r.type);
     },
   },
 };

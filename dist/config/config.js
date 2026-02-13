@@ -10,4 +10,4 @@ exports.wwwDir = process.env.WWW_DIR || '/Users/Christian/shortbox-sandbox/short
 exports.coverDir = process.env.COVER_DIR || 'covers';
 exports.db = process.env.DB_NAME || 'shortbox';
 exports.dbUser = process.env.DB_USER || 'shortbox';
-exports.dbPassword = process.env.DB_PASSWORD || 'Apfelmouse2837!';
+exports.dbPassword = process.env.DB_PASSWORD || 'xxx';

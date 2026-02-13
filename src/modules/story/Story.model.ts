@@ -1,4 +1,5 @@
 import { Model, DataTypes, Sequelize } from 'sequelize';
+import type { DbModels } from '../../types/db';
 
 export class Story extends Model {
   public id!: number;
@@ -17,7 +18,7 @@ export class Story extends Model {
   public fk_parent!: number | null;
   public fk_reprint!: number | null;
 
-  public static associate(models: any) {
+  public static associate(models: DbModels) {
     Story.hasMany(models.Story, { as: 'Children', foreignKey: 'fk_parent' });
     Story.hasMany(models.Story, { as: 'Reprints', foreignKey: 'fk_reprint' });
     Story.belongsTo(models.Issue, { foreignKey: 'fk_issue' });

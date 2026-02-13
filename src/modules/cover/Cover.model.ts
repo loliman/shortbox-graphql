@@ -1,4 +1,5 @@
 import { Model, DataTypes, Sequelize } from 'sequelize';
+import type { DbModels } from '../../types/db';
 
 export class Cover extends Model {
   public id!: number;
@@ -8,7 +9,7 @@ export class Cover extends Model {
   public fk_issue!: number;
   public fk_parent!: number | null;
 
-  public static associate(models: any) {
+  public static associate(models: DbModels) {
     Cover.hasMany(models.Cover, { as: 'Children', foreignKey: 'fk_parent' });
     Cover.belongsTo(models.Issue, { foreignKey: 'fk_issue' });
     Cover.belongsToMany(models.Individual, {

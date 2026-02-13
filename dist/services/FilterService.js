@@ -15,36 +15,45 @@ class FilterService {
         this.requestId = requestId;
     }
     log(message, level = 'info') {
-        logger_1.default[level](message, { requestId: this.requestId });
+        if (level === 'error') {
+            logger_1.default.error(message, { requestId: this.requestId });
+            return;
+        }
+        if (level === 'warn') {
+            logger_1.default.warn(message, { requestId: this.requestId });
+            return;
+        }
+        logger_1.default.info(message, { requestId: this.requestId });
     }
     async export(filter, type, loggedIn) {
         const options = this.getFilterOptions(loggedIn, filter, true);
         options.limit = 1000; // Export limit
         const issues = await this.models.Issue.findAll(options);
-        let response = {};
+        const response = {};
         await (0, util_1.asyncForEach)(issues, async (issue) => {
-            const p = issue.Series.Publisher;
-            const s = issue.Series;
-            let publisher = { name: p.name };
-            let series = {
+            const issueRecord = issue;
+            const p = issueRecord.Series.Publisher;
+            const s = issueRecord.Series;
+            const publisher = { name: p.name };
+            const series = {
                 title: s.title,
                 volume: s.volume,
                 startyear: s.startyear,
                 endyear: s.endyear,
-                publisher: publisher,
+                publisher,
             };
-            let issueData = {
-                number: issue.number,
-                format: issue.format,
-                variant: issue.variant,
-                pages: issue.pages,
-                releasedate: issue.releasedate,
-                price: issue.price,
-                currency: issue.currency,
+            const issueData = {
+                number: issueRecord.number,
+                format: issueRecord.format,
+                variant: issueRecord.variant,
+                pages: issueRecord.pages,
+                releasedate: issueRecord.releasedate,
+                price: issueRecord.price,
+                currency: issueRecord.currency,
                 series: series,
             };
-            let publisherLabel = await (0, util_1.generateLabel)(publisher);
-            let seriesLabel = await (0, util_1.generateLabel)(series);
+            const publisherLabel = await (0, util_1.generateLabel)(publisher);
+            const seriesLabel = await (0, util_1.generateLabel)(series);
             if (publisherLabel in response) {
                 if (seriesLabel in response[publisherLabel])
                     response[publisherLabel][seriesLabel].push(issueData);
@@ -56,25 +65,23 @@ class FilterService {
                 response[publisherLabel] = { [seriesLabel]: [issueData] };
             }
         });
-        let sortedResponse = Object.keys(response)
+        const sortedResponse = Object.keys(response)
             .map((key) => {
-            let p = response[key];
+            const publisherGroups = response[key];
             return [
                 key,
-                Object.keys(p)
+                Object.keys(publisherGroups)
                     .map((key) => {
-                    let s = p[key];
-                    return [
-                        key,
-                        s.sort((a, b) => (0, util_1.naturalCompare)(a.number, b.number)),
-                    ];
+                    const issuesForSeries = publisherGroups[key];
+                    return [key, issuesForSeries.sort((a, b) => (0, util_1.naturalCompare)(a.number, b.number))];
                 })
                     .sort(),
             ];
         })
             .sort();
         if (type === 'txt') {
-            return JSON.stringify((await this.convertFilterToTxt(filter, loggedIn)) + (await this.resultsToTxt(sortedResponse)));
+            return JSON.stringify((await this.convertFilterToTxt(filter, loggedIn)) +
+                (await this.resultsToTxt(sortedResponse)));
         }
         else if (type === 'csv') {
             return JSON.stringify(await this.resultsToCsv(sortedResponse, loggedIn));
@@ -106,9 +113,20 @@ class FilterService {
         }
         if (filter.releasedates && filter.releasedates.length > 0) {
             filter.releasedates.forEach((rd) => {
+                if (!rd || !rd.date)
+                    return;
                 const dateStr = dateFormat(new Date(rd.date), 'yyyy-mm-dd');
-                const op = rd.compare === '>=' ? sequelize_1.Op.gte : rd.compare === '<=' ? sequelize_1.Op.lte : rd.compare === '>' ? sequelize_1.Op.gt : rd.compare === '<' ? sequelize_1.Op.lt : sequelize_1.Op.eq;
-                where.releasedate = { ...(where.releasedate || {}), [op]: dateStr };
+                const op = rd.compare === '>='
+                    ? sequelize_1.Op.gte
+                    : rd.compare === '<='
+                        ? sequelize_1.Op.lte
+                        : rd.compare === '>'
+                            ? sequelize_1.Op.gt
+                            : rd.compare === '<'
+                                ? sequelize_1.Op.lt
+                                : sequelize_1.Op.eq;
+                const releaseDateWhere = (where.releasedate || {});
+                where.releasedate = { ...releaseDateWhere, [op]: dateStr };
             });
         }
         if (!filter.onlyCollected && filter.withVariants) {
@@ -121,7 +139,8 @@ class FilterService {
             where.collected = false;
         }
         if (filter.sellable) {
-            where.format = { ...(where.format || {}), [sequelize_1.Op.ne]: 'Digital' };
+            const formatWhere = (where.format || {});
+            where.format = { ...formatWhere, [sequelize_1.Op.ne]: 'Digital' };
         }
         // Story-based filters
         const storyConditions = [];
@@ -134,7 +153,9 @@ class FilterService {
             });
         }
         if (filter.individuals && filter.individuals.length > 0) {
-            const names = filter.individuals.map((ind) => ind.name);
+            const names = filter.individuals
+                .map((ind) => ind?.name)
+                .filter((name) => typeof name === 'string');
             storyConditions.push({
                 [sequelize_1.Op.or]: [
                     { '$Stories.Individuals.name$': { [sequelize_1.Op.in]: names } },
@@ -166,8 +187,16 @@ class FilterService {
                 include: [],
             };
             if (filter.appearances || filter.individuals) {
-                storyInclude.include.push({ model: this.models.Appearance, as: 'Appearances', required: false });
-                storyInclude.include.push({ model: this.models.Individual, as: 'Individuals', required: false });
+                storyInclude.include.push({
+                    model: this.models.Appearance,
+                    as: 'Appearances',
+                    required: false,
+                });
+                storyInclude.include.push({
+                    model: this.models.Individual,
+                    as: 'Individuals',
+                    required: false,
+                });
                 storyInclude.include.push({
                     model: this.models.Story,
                     as: 'Children',
@@ -179,11 +208,18 @@ class FilterService {
                 });
             }
             include.push(storyInclude);
+            const whereWithSymbols = where;
             if (filter.and) {
-                where[sequelize_1.Op.and] = [...(where[sequelize_1.Op.and] || []), ...storyConditions];
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.and])
+                    ? whereWithSymbols[sequelize_1.Op.and]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.and] = [...current, ...storyConditions];
             }
             else {
-                where[sequelize_1.Op.or] = [...(where[sequelize_1.Op.or] || []), ...storyConditions];
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.or])
+                    ? whereWithSymbols[sequelize_1.Op.or]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.or] = [...current, ...storyConditions];
             }
         }
         if (filter.arcs) {
@@ -195,35 +231,78 @@ class FilterService {
             });
         }
         if (filter.publishers && filter.publishers.length > 0) {
-            const names = filter.publishers.map((p) => p.name);
+            const names = filter.publishers
+                .map((p) => p?.name)
+                .filter((name) => typeof name === 'string');
             const condition = { '$Series.Publisher.name$': { [sequelize_1.Op.in]: names } };
-            if (filter.and)
-                where[sequelize_1.Op.and] = [...(where[sequelize_1.Op.and] || []), condition];
-            else
-                where[sequelize_1.Op.or] = [...(where[sequelize_1.Op.or] || []), condition];
+            const whereWithSymbols = where;
+            if (filter.and) {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.and])
+                    ? whereWithSymbols[sequelize_1.Op.and]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.and] = [...current, condition];
+            }
+            else {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.or])
+                    ? whereWithSymbols[sequelize_1.Op.or]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.or] = [...current, condition];
+            }
         }
         if (filter.series && filter.series.length > 0) {
-            const conditions = filter.series.map((s) => ({
-                '$Series.title$': s.title,
-                '$Series.volume$': s.volume,
+            const conditions = filter.series
+                .filter((s) => !!s)
+                .map((s) => ({
+                '$Series.title$': s?.title,
+                '$Series.volume$': s?.volume,
             }));
-            if (filter.and)
-                where[sequelize_1.Op.and] = [...(where[sequelize_1.Op.and] || []), { [sequelize_1.Op.or]: conditions }];
-            else
-                where[sequelize_1.Op.or] = [...(where[sequelize_1.Op.or] || []), ...conditions];
+            const whereWithSymbols = where;
+            if (filter.and) {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.and])
+                    ? whereWithSymbols[sequelize_1.Op.and]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.and] = [...current, { [sequelize_1.Op.or]: conditions }];
+            }
+            else {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.or])
+                    ? whereWithSymbols[sequelize_1.Op.or]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.or] = [...current, ...conditions];
+            }
         }
         if (filter.numbers && filter.numbers.length > 0) {
-            const conditions = filter.numbers.map((n) => {
-                const op = n.compare === '>=' ? sequelize_1.Op.gte : n.compare === '<=' ? sequelize_1.Op.lte : n.compare === '>' ? sequelize_1.Op.gt : n.compare === '<' ? sequelize_1.Op.lt : sequelize_1.Op.eq;
+            const conditions = filter.numbers
+                .map((n) => {
+                if (!n)
+                    return null;
+                const op = n.compare === '>='
+                    ? sequelize_1.Op.gte
+                    : n.compare === '<='
+                        ? sequelize_1.Op.lte
+                        : n.compare === '>'
+                            ? sequelize_1.Op.gt
+                            : n.compare === '<'
+                                ? sequelize_1.Op.lt
+                                : sequelize_1.Op.eq;
                 const cond = { number: { [op]: n.number } };
                 if (n.variant)
                     cond.variant = n.variant;
                 return cond;
-            });
-            if (filter.and)
-                where[sequelize_1.Op.and] = [...(where[sequelize_1.Op.and] || []), { [sequelize_1.Op.or]: conditions }];
-            else
-                where[sequelize_1.Op.or] = [...(where[sequelize_1.Op.or] || []), ...conditions];
+            })
+                .filter((cond) => cond !== null);
+            const whereWithSymbols = where;
+            if (filter.and) {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.and])
+                    ? whereWithSymbols[sequelize_1.Op.and]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.and] = [...current, { [sequelize_1.Op.or]: conditions }];
+            }
+            else {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.or])
+                    ? whereWithSymbols[sequelize_1.Op.or]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.or] = [...current, ...conditions];
+            }
         }
         if (filter.noCover) {
             include.push({
@@ -232,20 +311,38 @@ class FilterService {
                 required: false,
             });
             const condition = { '$Covers.id$': null };
-            if (filter.and)
-                where[sequelize_1.Op.and] = [...(where[sequelize_1.Op.and] || []), condition];
-            else
-                where[sequelize_1.Op.or] = [...(where[sequelize_1.Op.or] || []), condition];
+            const whereWithSymbols = where;
+            if (filter.and) {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.and])
+                    ? whereWithSymbols[sequelize_1.Op.and]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.and] = [...current, condition];
+            }
+            else {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.or])
+                    ? whereWithSymbols[sequelize_1.Op.or]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.or] = [...current, condition];
+            }
         }
         if (filter.noContent) {
             if (!include.find((inc) => inc.as === 'Stories')) {
                 include.push({ model: this.models.Story, as: 'Stories', required: false });
             }
             const condition = { '$Stories.id$': null };
-            if (filter.and)
-                where[sequelize_1.Op.and] = [...(where[sequelize_1.Op.and] || []), condition];
-            else
-                where[sequelize_1.Op.or] = [...(where[sequelize_1.Op.or] || []), condition];
+            const whereWithSymbols = where;
+            if (filter.and) {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.and])
+                    ? whereWithSymbols[sequelize_1.Op.and]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.and] = [...current, condition];
+            }
+            else {
+                const current = Array.isArray(whereWithSymbols[sequelize_1.Op.or])
+                    ? whereWithSymbols[sequelize_1.Op.or]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.or] = [...current, condition];
+            }
         }
         let order = [];
         if (orderField) {
@@ -328,7 +425,10 @@ class FilterService {
             s += '\t\tmit Varianten\n';
         if (filter.releasedates) {
             s += '\t\tErscheinungsdatum: ';
-            filter.releasedates.forEach((r) => (s += dateFormat(new Date(r.date), 'dd.mm.yyyy') + ' ' + r.compare + ', '));
+            filter.releasedates.forEach((r) => {
+                if (r?.date)
+                    s += dateFormat(new Date(r.date), 'dd.mm.yyyy') + ' ' + r.compare + ', ';
+            });
             s = s.substr(0, s.length - 2) + '\n';
         }
         if (!filter.formats && !filter.withVariants && !filter.releasedates)
@@ -364,17 +464,25 @@ class FilterService {
             s += '\t\tVerkaufbar\n';
         if (filter.publishers) {
             s += '\tVerlag: ';
-            filter.publishers.forEach((p) => (s += p.name + ', '));
+            filter.publishers.forEach((p) => {
+                if (p?.name)
+                    s += p.name + ', ';
+            });
             s = s.substr(0, s.length - 2) + '\n';
         }
         if (filter.series) {
             s += '\tSerie: ';
-            filter.series.forEach((n) => (s += n.title + ' (Vol. ' + n.volume + '), '));
+            filter.series.forEach((n) => {
+                if (n?.title && n?.volume)
+                    s += n.title + ' (Vol. ' + n.volume + '), ';
+            });
             s = s.substr(0, s.length - 2) + '\n';
         }
         if (filter.numbers) {
             s += '\tNummer: ';
             filter.numbers.forEach((n) => {
+                if (!n)
+                    return;
                 s += '#' + n.number;
                 if (n.variant)
                     s += ' (' + n.variant + ')';
@@ -387,7 +495,10 @@ class FilterService {
         }
         if (filter.individuals) {
             s += '\tMitwirkende: ';
-            filter.individuals.forEach((i) => (s += i.name + ', '));
+            filter.individuals.forEach((i) => {
+                if (i?.name)
+                    s += i.name + ', ';
+            });
             s = s.substr(0, s.length - 2) + '\n';
         }
         if (filter.appearances) {

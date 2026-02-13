@@ -2,19 +2,36 @@ import { SeriesService } from '../../services/SeriesService';
 import { GraphQLError } from 'graphql';
 import { SeriesResolvers } from '../../types/graphql';
 import { SeriesInputSchema } from '../../types/schemas';
+import { Transaction } from 'sequelize';
+
+type SeriesParent = {
+  id: number;
+  fk_publisher: number;
+  endyear?: number | null;
+  Publisher?: unknown;
+};
+
+const requireTransaction = (transaction: Transaction | undefined): Transaction => {
+  if (!transaction) {
+    throw new GraphQLError('Transaktion konnte nicht erstellt werden', {
+      extensions: { code: 'INTERNAL_SERVER_ERROR' },
+    });
+  }
+  return transaction;
+};
 
 export const resolvers: SeriesResolvers = {
   Query: {
     series: async (_, { pattern, publisher, first, after, filter }, context) => {
       const { loggedIn, seriesService } = context;
-      return (await seriesService.findSeries(
+      return await seriesService.findSeries(
         pattern || undefined,
         publisher,
         first || undefined,
         after || undefined,
         loggedIn,
         filter || undefined,
-      )) as any;
+      );
     },
     seriesd: async (_, { series }, { models }) => {
       SeriesInputSchema.parse(series);
@@ -37,12 +54,13 @@ export const resolvers: SeriesResolvers = {
         });
 
       try {
+        const tx = requireTransaction(transaction);
         SeriesInputSchema.parse(item);
-        await seriesService.deleteSeries(item, transaction);
-        await transaction.commit();
+        await seriesService.deleteSeries(item, tx);
+        await tx.commit();
         return true;
       } catch (e) {
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -57,12 +75,13 @@ export const resolvers: SeriesResolvers = {
         });
 
       try {
+        const tx = requireTransaction(transaction);
         SeriesInputSchema.parse(item);
-        let res = await seriesService.createSeries(item, transaction);
-        await transaction.commit();
-        return res as any;
+        let res = await seriesService.createSeries(item, tx);
+        await tx.commit();
+        return res;
       } catch (e) {
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -77,13 +96,14 @@ export const resolvers: SeriesResolvers = {
         });
 
       try {
+        const tx = requireTransaction(transaction);
         SeriesInputSchema.parse(old);
         SeriesInputSchema.parse(item);
-        let res = await seriesService.editSeries(old, item, transaction);
-        await transaction.commit();
-        return res as any;
+        let res = await seriesService.editSeries(old, item, tx);
+        await tx.commit();
+        return res;
       } catch (e) {
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -93,27 +113,28 @@ export const resolvers: SeriesResolvers = {
   },
   Series: {
     publisher: async (parent, _, { publisherLoader }) =>
-      (parent as any).Publisher || (await publisherLoader.load(parent.fk_publisher)),
+      (parent as SeriesParent).Publisher ||
+      (await publisherLoader.load((parent as SeriesParent).fk_publisher)),
     issueCount: async (parent, _, { models }) =>
       await models.Issue.count({ where: { fk_series: parent.id }, group: ['number'] }).then(
-        (res: any) => res.length,
+        (res) => (Array.isArray(res) ? res.length : Number(res)),
       ),
     firstIssue: async (parent, _, { models }) =>
-      (await models.Issue.findOne({
+      await models.Issue.findOne({
         where: { fk_series: parent.id },
         order: [['number', 'ASC']],
-      })) as any,
+      }),
     lastIssue: async (parent, _, { models }) =>
-      (await models.Issue.findOne({
+      await models.Issue.findOne({
         where: { fk_series: parent.id },
         order: [['number', 'DESC']],
-      })) as any,
+      }),
     lastEdited: async (parent, { limit }, { models }) =>
-      (await models.Issue.findAll({
+      await models.Issue.findAll({
         where: { fk_series: parent.id },
         order: [['updatedAt', 'DESC']],
         limit: limit || 25,
-      })) as any,
-    active: (parent) => !parent.endyear || parent.endyear === 0,
+      }),
+    active: (parent) => !(parent as SeriesParent).endyear || (parent as SeriesParent).endyear === 0,
   },
 };

@@ -7,13 +7,36 @@ import {
   CrawlerIndividual,
   CrawlerIssue,
   CrawlerStory,
+  CrawlerStoryReference,
 } from './types';
 
 const BASE_URI = 'https://marvel.fandom.com';
 const INDEX_URI = BASE_URI + '/index.php';
 const API_URI = BASE_URI + '/api.php';
 
-const request = async (options: any) => {
+type CrawlerApiImageResponse = {
+  query: {
+    pages: Record<string, { imageinfo?: Array<{ url: string }> }>;
+  };
+};
+
+type CrawlerApiParseResponse = {
+  parse?: {
+    wikitext: {
+      '*': string;
+    };
+  };
+};
+
+const request = async (options: {
+  uri?: string;
+  url?: string;
+  method?: string;
+  qs?: Record<string, unknown>;
+  body?: unknown;
+  headers?: Record<string, string>;
+  transform?: (body: string) => unknown;
+}) => {
   const response = await axios({
     url: options.uri || options.url,
     method: options.method || 'GET',
@@ -78,13 +101,16 @@ async function finalizeStories(issue: CrawlerIssue) {
 }
 
 async function crawlReprint(story: CrawlerStory) {
+  if (!story.reprintOf) return;
+  const reprint = story.reprintOf;
+
   let issue = (await crawlIssue(
-    story.reprintOf.issue.number,
-    story.reprintOf.issue.series.title,
-    story.reprintOf.issue.series.volume,
+    reprint.issue.number,
+    reprint.issue.series.title,
+    reprint.issue.series.volume,
   )) as CrawlerIssue;
 
-  let originalStoryIndex: number | undefined = story.reprintOf.number;
+  let originalStoryIndex: number | undefined = reprint.number;
 
   if (originalStoryIndex) {
     originalStoryIndex--;
@@ -112,8 +138,14 @@ async function crawlReprint(story: CrawlerStory) {
 
   if (!originalStoryIndex || originalStoryIndex - 1 > issue.stories.length) originalStoryIndex = 0;
 
-  story.reprintOf = JSON.parse(JSON.stringify(issue.stories[originalStoryIndex]));
-  story.reprintOf.issue = issue;
+  const reprintOf = JSON.parse(
+    JSON.stringify(issue.stories[originalStoryIndex]),
+  ) as CrawlerStoryReference;
+  reprintOf.issue = {
+    number: issue.number,
+    series: issue.series,
+  };
+  story.reprintOf = reprintOf;
 }
 
 function fixPublisher(issue: CrawlerIssue) {
@@ -148,13 +180,17 @@ async function fixStories(issue: CrawlerIssue) {
 async function fixVariants(issue: CrawlerIssue) {
   if (!issue.variants) return;
 
-  issue.variants = issue.variants.filter((value: any) => Object.keys(value).length !== 0);
+  issue.variants = issue.variants.filter((value: CrawlerIssue) => Object.keys(value).length !== 0);
 
-  issue.variants.forEach((v: any, i: number) => {
+  issue.variants.forEach((v: CrawlerIssue, i: number) => {
     let title = v.variant;
-    if (issue.variants && issue.variants.map((o: any) => o.variant).includes(title)) {
+    if (issue.variants && issue.variants.map((o: CrawlerIssue) => o.variant).includes(title)) {
       title =
-        title + ' ' + (issue.variants.map((o: any) => o.variant).filter((o: any) => o === title).length + 1);
+        title +
+        ' ' +
+        (issue.variants.map((o: CrawlerIssue) => o.variant).filter((variant) => variant === title)
+          .length +
+          1);
     }
 
     let cover: CrawlerCover = {
@@ -180,7 +216,7 @@ async function fixVariants(issue: CrawlerIssue) {
     if (issue.variants) issue.variants[i] = variant;
   });
 
-  issue.variants.forEach((v: any, i: number) => {
+  issue.variants.forEach((v: CrawlerIssue, i: number) => {
     let duplicateCount = 0;
 
     if (!issue.variants) return;
@@ -212,13 +248,13 @@ async function crawlCover(cover: CrawlerCover, issue: CrawlerIssue) {
   while (cover.url.indexOf('%3A') !== -1) cover.url = cover.url.replace('%3A', '');
 
   try {
-    let $: any = await request({
+    let $ = (await request({
       uri:
         API_URI +
         '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
         encodeURI(cover.url),
       transform: (body: string) => JSON.parse(body),
-    });
+    })) as CrawlerApiImageResponse;
 
     if (Object.keys($.query.pages)[0] === '-1') {
       $ = await request({
@@ -280,15 +316,18 @@ async function crawlCover(cover: CrawlerCover, issue: CrawlerIssue) {
       });
     }
 
-    cover.url = $.query.pages[Object.keys($.query.pages)[0]].imageinfo[0].url;
-    cover.url = (cover.url as string).substring(0, (cover.url as string).indexOf('/revision/'));
+    const firstPage = $.query.pages[Object.keys($.query.pages)[0]];
+    const imageUrl = firstPage?.imageinfo?.[0]?.url || '';
+    cover.url = imageUrl.includes('/revision/')
+      ? imageUrl.substring(0, imageUrl.indexOf('/revision/'))
+      : imageUrl;
   } catch (e) {
     cover.url = '';
   }
 }
 
 async function crawlInfobox(issue: CrawlerIssue) {
-  let $: any;
+  let $: CrawlerApiParseResponse;
 
   try {
     $ = await request({
@@ -491,12 +530,17 @@ function extractAppearances(count: number, issue: CrawlerIssue, indexOfLine: num
 
 function extractReprint(content: string, count: number, type: string, issue: CrawlerIssue) {
   createStory(count, issue);
+  const storyEntry = issue.stories[count - 1];
+  if (!storyEntry) return;
 
   if (type.indexOf('Story') > 0) {
-    issue.stories[count - 1].reprintOf.number = Number.parseInt(content);
+    if (storyEntry.reprintOf) {
+      storyEntry.reprintOf.number = Number.parseInt(content);
+    }
   } else {
-    let original: any = {
-      series: {},
+    const original: Pick<CrawlerIssue, 'number' | 'series'> = {
+      number: '',
+      series: { title: '', volume: 1, publisher: {} },
     };
 
     if (content.indexOf('Vol') === -1) {
@@ -519,12 +563,19 @@ function extractReprint(content: string, count: number, type: string, issue: Cra
 
     createStory(count, issue);
 
-    if (!issue.stories[count - 1].reprintOf) {
-      issue.stories[count - 1].reprintOf = {};
+    if (!storyEntry.reprintOf) {
+      storyEntry.reprintOf = {
+        title: '',
+        issue: { number: '', series: { title: '', volume: 1, publisher: {} } },
+        individuals: [],
+        appearances: [],
+      } as CrawlerStoryReference;
     }
-    issue.stories[count - 1].reprintOf.individuals = [];
-    issue.stories[count - 1].reprintOf.appearances = [];
-    issue.stories[count - 1].reprintOf.issue = original;
+    const storyRef = storyEntry.reprintOf;
+    if (!storyRef) return;
+    storyRef.individuals = [];
+    storyRef.appearances = [];
+    storyRef.issue = original;
   }
 }
 
@@ -634,10 +685,10 @@ function extractNumberOfInfoboxLine(type: string) {
 
 export async function crawlSeries(issue: CrawlerIssue) {
   try {
-    let $: any = await request({
+    const $ = (await request({
       uri: INDEX_URI + '?action=render&title=' + generateSeriesUrl(issue.series),
       transform: (body: string) => cheerio.load(body),
-    });
+    })) as cheerio.CheerioAPI;
 
     extractPublisher($, issue);
     extractGenre($, issue);
@@ -647,7 +698,7 @@ export async function crawlSeries(issue: CrawlerIssue) {
   }
 }
 
-function extractDates($: any, issue: CrawlerIssue) {
+function extractDates($: cheerio.CheerioAPI, issue: CrawlerIssue) {
   let publicationDate = $("span:contains('Publication Date: ')");
   if (publicationDate.length > 0) {
     let text = $(publicationDate.get(0).parent).text();
@@ -665,24 +716,31 @@ function extractDates($: any, issue: CrawlerIssue) {
     let finished =
       text.substring(0, text.indexOf('Publication Date: ')).replace('Status: ', '') === 'Finished';
 
-    (issue.series as any).startyear = date.substring(0, 4);
+    const series = issue.series as CrawlerIssue['series'] & {
+      startyear?: string;
+      endyear?: string | number;
+    };
+    series.startyear = date.substring(0, 4);
 
     if (date.length === 8) {
-      (issue.series as any).endyear = date.substring(4, 8);
+      series.endyear = date.substring(4, 8);
     } else if (finished) {
-      (issue.series as any).endyear = (issue.series as any).startyear;
+      series.endyear = series.startyear;
     } else {
-      (issue.series as any).endyear = 0;
+      series.endyear = 0;
     }
   }
 }
 
-function extractGenre($: any, issue: CrawlerIssue) {
+function extractGenre($: cheerio.CheerioAPI, issue: CrawlerIssue) {
   let genre = $("span:contains('Genre: ')");
-  if (genre.length > 0) (issue.series as any).genre = $(genre.get(0).nextSibling).text().trim();
+  if (genre.length > 0) {
+    const series = issue.series as CrawlerIssue['series'] & { genre?: string };
+    series.genre = $(genre.get(0).nextSibling).text().trim();
+  }
 }
 
-function extractPublisher($: any, issue: CrawlerIssue) {
+function extractPublisher($: cheerio.CheerioAPI, issue: CrawlerIssue) {
   let publisher = $("span:contains('Publisher: ')");
   if (!issue.series.publisher) {
     issue.series.publisher = {};
@@ -768,19 +826,19 @@ function getAppearances(story: CrawlerStory, currentType: string, name: string, 
     addAppearance(story.appearances, app);
 }
 
-function generateIssueUrl(issue: any) {
+function generateIssueUrl(issue: CrawlerIssue) {
   return generateSeriesUrl(issue.series) + encodeURIComponent('_') + issue.number.trim();
 }
 
-function generateSeriesUrl(series: any) {
+function generateSeriesUrl(series: CrawlerIssue['series']) {
   return encodeURIComponent(series.title.trim().replace(/\s/g, '_') + '_Vol_' + series.volume);
 }
 
-function generateIssueName(issue: any) {
+function generateIssueName(issue: CrawlerIssue) {
   return generateSeriesName(issue.series) + ' ' + issue.number.trim();
 }
 
-function generateSeriesName(series: any) {
+function generateSeriesName(series: CrawlerIssue['series']) {
   return series.title.trim() + ' Vol ' + series.volume;
 }
 
@@ -807,11 +865,20 @@ function createStory(count: number, issue: CrawlerIssue) {
 function createCover(count: number, issue: CrawlerIssue) {
   if (issue.variants && !issue.variants[count - 1]) {
     issue.variants[count - 1] = {
+      number: issue.number,
+      format: issue.format,
+      currency: issue.currency,
+      releasedate: issue.releasedate,
+      series: JSON.parse(JSON.stringify(issue.series)),
       cover: {
         number: 0,
         individuals: [],
       },
-    } as any;
+      variants: [],
+      stories: [],
+      individuals: [],
+      arcs: [],
+    };
   }
 }
 

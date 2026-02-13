@@ -1,10 +1,11 @@
 import { Model, DataTypes, Sequelize } from 'sequelize';
+import type { DbModels } from '../../types/db';
 
 export class Individual extends Model {
   public id!: number;
   public name!: string;
 
-  public static associate(models: any) {
+  public static associate(models: DbModels) {
     Individual.belongsToMany(models.Cover, {
       through: models.Cover_Individual,
       foreignKey: 'fk_individual',

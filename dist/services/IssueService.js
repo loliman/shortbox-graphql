@@ -6,13 +6,37 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.IssueService = void 0;
 const sequelize_1 = require("sequelize");
 const logger_1 = __importDefault(require("../util/logger"));
+const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
+    'updatedAt',
+    'createdAt',
+    'number',
+    'format',
+    'variant',
+    'title',
+    'id',
+]);
+const normalizeSortField = (field) => field && ALLOWED_LAST_EDITED_SORT_FIELDS.has(field) ? field : 'updatedAt';
+const normalizeSortDirection = (direction) => {
+    if (!direction)
+        return 'DESC';
+    const normalized = direction.toUpperCase();
+    return normalized === 'ASC' || normalized === 'DESC' ? normalized : 'DESC';
+};
 class IssueService {
     constructor(models, requestId) {
         this.models = models;
         this.requestId = requestId;
     }
     log(message, level = 'info') {
-        logger_1.default[level](message, { requestId: this.requestId });
+        if (level === 'error') {
+            logger_1.default.error(message, { requestId: this.requestId });
+            return;
+        }
+        if (level === 'warn') {
+            logger_1.default.warn(message, { requestId: this.requestId });
+            return;
+        }
+        logger_1.default.info(message, { requestId: this.requestId });
     }
     async findIssues(pattern, series, first, after, loggedIn, filter) {
         const limit = first || 50;
@@ -21,6 +45,7 @@ class IssueService {
             decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
         }
         if (!filter) {
+            const where = {};
             let options = {
                 order: [
                     ['number', 'ASC'],
@@ -39,12 +64,12 @@ class IssueService {
                         ],
                     },
                 ],
-                where: {},
+                where,
                 limit: limit + 1,
             };
             if (decodedCursor) {
-                options.where[sequelize_1.Op.and] = [
-                    sequelize_1.Sequelize.literal(`(number, variant, Issue.id) > (SELECT number, variant, id FROM Issue WHERE id = ${decodedCursor})`)
+                where[sequelize_1.Op.and] = [
+                    sequelize_1.Sequelize.literal(`(number, variant, Issue.id) > (SELECT number, variant, id FROM Issue WHERE id = ${decodedCursor})`),
                 ];
             }
             if (pattern && pattern !== '') {
@@ -59,9 +84,9 @@ class IssueService {
             const results = await this.models.Issue.findAll(options);
             const hasNextPage = results.length > limit;
             const nodes = results.slice(0, limit);
-            const edges = nodes.map(node => ({
+            const edges = nodes.map((node) => ({
                 cursor: Buffer.from(node.id.toString()).toString('base64'),
-                node: node
+                node,
             }));
             return {
                 edges,
@@ -70,26 +95,30 @@ class IssueService {
                     hasPreviousPage: !!after,
                     startCursor: edges.length > 0 ? edges[0].cursor : null,
                     endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-                }
+                },
             };
         }
         else {
             const { FilterService } = require('./FilterService');
             const filterService = new FilterService(this.models);
             const options = filterService.getFilterOptions(loggedIn, filter);
+            const whereWithSymbols = options.where;
             options.limit = limit + 1;
             if (decodedCursor) {
-                options.where[sequelize_1.Op.and] = [
-                    ...(options.where[sequelize_1.Op.and] || []),
-                    sequelize_1.Sequelize.literal(`(Issue.number, Issue.variant, Issue.id) > (SELECT number, variant, id FROM Issue WHERE id = ${decodedCursor})`)
+                const currentAnd = Array.isArray(whereWithSymbols[sequelize_1.Op.and])
+                    ? whereWithSymbols[sequelize_1.Op.and]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.and] = [
+                    ...currentAnd,
+                    sequelize_1.Sequelize.literal(`(Issue.number, Issue.variant, Issue.id) > (SELECT number, variant, id FROM Issue WHERE id = ${decodedCursor})`),
                 ];
             }
             const results = await this.models.Issue.findAll(options);
             const hasNextPage = results.length > limit;
             const nodes = results.slice(0, limit);
-            const edges = nodes.map(node => ({
+            const edges = nodes.map((node) => ({
                 cursor: Buffer.from(node.id.toString()).toString('base64'),
-                node: node
+                node,
             }));
             return {
                 edges,
@@ -98,7 +127,7 @@ class IssueService {
                     hasPreviousPage: !!after,
                     startCursor: edges.length > 0 ? edges[0].cursor : null,
                     endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-                }
+                },
             };
         }
     }
@@ -197,7 +226,7 @@ class IssueService {
         res.number = (item.number || '').trim();
         res.format = item.format || '';
         res.variant = (item.variant || '').trim();
-        res.releasedate = item.releasedate;
+        res.releasedate = item.releasedate ?? '';
         res.pages = item.pages || 0;
         res.price = item.price || 0;
         res.currency = item.currency || '';
@@ -210,17 +239,19 @@ class IssueService {
         const limit = first || 25;
         let decodedCursor;
         if (after) {
-            decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
+            const parsed = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
+            decodedCursor = Number.isFinite(parsed) ? parsed : undefined;
         }
-        const sortField = order || 'updatedAt';
-        const sortDirection = direction || 'DESC';
+        const sortField = normalizeSortField(order);
+        const sortDirection = normalizeSortDirection(direction);
+        const where = {};
         let options = {
             order: [
                 [sortField, sortDirection],
                 ['id', sortDirection],
             ],
             limit: limit + 1,
-            where: {},
+            where,
             include: [
                 {
                     model: this.models.Series,
@@ -230,17 +261,39 @@ class IssueService {
         };
         if (decodedCursor) {
             const op = sortDirection.toUpperCase() === 'DESC' ? sequelize_1.Op.lt : sequelize_1.Op.gt;
-            options.where[sequelize_1.Op.and] = [
-                sequelize_1.Sequelize.literal(`(${sortField}, id) ${op === sequelize_1.Op.lt ? '<' : '>'} (SELECT ${sortField}, id FROM Issue WHERE id = ${decodedCursor})`),
-            ];
+            const cursorRecord = await this.models.Issue.findByPk(decodedCursor, {
+                attributes: ['id', sortField],
+            });
+            if (cursorRecord) {
+                const cursorValue = cursorRecord.get(sortField);
+                const currentAnd = Array.isArray(where[sequelize_1.Op.and]) ? where[sequelize_1.Op.and] : [];
+                if (cursorValue === null || cursorValue === undefined) {
+                    where[sequelize_1.Op.and] = [...currentAnd, { id: { [op]: decodedCursor } }];
+                }
+                else {
+                    where[sequelize_1.Op.and] = [
+                        ...currentAnd,
+                        {
+                            [sequelize_1.Op.or]: [
+                                { [sortField]: { [op]: cursorValue } },
+                                { [sortField]: cursorValue, id: { [op]: decodedCursor } },
+                            ],
+                        },
+                    ];
+                }
+            }
         }
         if (filter) {
-            const seriesInclude = options.include[0];
-            const publisherInclude = seriesInclude.include[0];
-            if (filter.us !== undefined && filter.us !== null) {
+            const includeList = options.include;
+            const seriesInclude = includeList[0];
+            const publisherInclude = seriesInclude.include?.[0];
+            if (publisherInclude && filter.us !== undefined && filter.us !== null) {
                 publisherInclude.where = { ...publisherInclude.where, original: filter.us ? 1 : 0 };
             }
-            if (filter.publishers && filter.publishers.length > 0 && filter.publishers[0]) {
+            if (publisherInclude &&
+                filter.publishers &&
+                filter.publishers.length > 0 &&
+                filter.publishers[0]) {
                 publisherInclude.where = {
                     ...publisherInclude.where,
                     name: filter.publishers[0].name,
@@ -259,7 +312,7 @@ class IssueService {
         const nodes = results.slice(0, limit);
         const edges = nodes.map((node) => ({
             cursor: Buffer.from(node.id.toString()).toString('base64'),
-            node: node,
+            node,
         }));
         return {
             edges,
@@ -276,6 +329,71 @@ class IssueService {
             where: { id: { [sequelize_1.Op.in]: [...ids] } },
         });
         return ids.map((id) => issues.find((i) => i.id === id) || null);
+    }
+    async getStoriesByIssueIds(issueIds) {
+        const stories = await this.models.Story.findAll({
+            where: { fk_issue: { [sequelize_1.Op.in]: [...issueIds] } },
+            order: [
+                ['number', 'ASC'],
+                ['id', 'ASC'],
+            ],
+        });
+        return issueIds.map((issueId) => stories.filter((story) => story.fk_issue === issueId));
+    }
+    async getPrimaryCoversByIssueIds(issueIds) {
+        const covers = await this.models.Cover.findAll({
+            where: {
+                fk_issue: { [sequelize_1.Op.in]: [...issueIds] },
+                number: 0,
+            },
+            order: [['id', 'ASC']],
+        });
+        return issueIds.map((issueId) => covers.find((cover) => cover.fk_issue === issueId) || null);
+    }
+    async getCoversByIssueIds(issueIds) {
+        const covers = await this.models.Cover.findAll({
+            where: { fk_issue: { [sequelize_1.Op.in]: [...issueIds] } },
+            order: [
+                ['number', 'ASC'],
+                ['id', 'ASC'],
+            ],
+        });
+        return issueIds.map((issueId) => covers.filter((cover) => cover.fk_issue === issueId));
+    }
+    async getFeaturesByIssueIds(issueIds) {
+        const features = await this.models.Feature.findAll({
+            where: { fk_issue: { [sequelize_1.Op.in]: [...issueIds] } },
+            order: [
+                ['number', 'ASC'],
+                ['id', 'ASC'],
+            ],
+        });
+        return issueIds.map((issueId) => features.filter((feature) => feature.fk_issue === issueId));
+    }
+    async getVariantsBySeriesAndNumberKeys(keys) {
+        if (keys.length === 0)
+            return [];
+        const parsedKeys = keys.map((key) => {
+            const [seriesPart, ...numberParts] = key.split('::');
+            const fkSeries = parseInt(seriesPart || '', 10);
+            return {
+                key,
+                fkSeries: Number.isFinite(fkSeries) ? fkSeries : 0,
+                number: numberParts.join('::'),
+            };
+        });
+        const whereOr = parsedKeys.map(({ fkSeries, number }) => ({
+            fk_series: fkSeries,
+            number,
+        }));
+        const variants = await this.models.Issue.findAll({
+            where: { [sequelize_1.Op.or]: whereOr },
+            order: [
+                ['variant', 'ASC'],
+                ['id', 'ASC'],
+            ],
+        });
+        return parsedKeys.map(({ fkSeries, number }) => variants.filter((variant) => variant.fk_series === fkSeries && variant.number === number));
     }
 }
 exports.IssueService = IssueService;

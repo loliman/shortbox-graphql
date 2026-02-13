@@ -1,11 +1,12 @@
 import { Model, DataTypes, Sequelize } from 'sequelize';
+import type { DbModels } from '../../types/db';
 
 export class Arc extends Model {
   public id!: number;
   public title!: string;
   public type!: string;
 
-  public static associate(models: any) {
+  public static associate(models: DbModels) {
     Arc.belongsToMany(models.Issue, { through: models.Issue_Arc, foreignKey: 'fk_arc' });
   }
 }

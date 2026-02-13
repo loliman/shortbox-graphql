@@ -1,0 +1,1608 @@
+export const mockIssueUsFixture = {
+  "id": "196173",
+  "title": "",
+  "isbn": null,
+  "number": "1",
+  "format": "Heft",
+  "limitation": 0,
+  "pages": 0,
+  "comicguideid": 0,
+  "releasedate": "2006-08-22",
+  "price": "0.00",
+  "currency": "USD",
+  "individuals": [
+    {
+      "name": "Joe Quesada",
+      "type": ["EDITOR"],
+      "__typename": "Individual"
+    }
+  ],
+  "cover": {
+    "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+    "individuals": [
+      {
+        "name": "Ryan Sook",
+        "type": ["ARTIST"],
+        "__typename": "Individual"
+      }
+    ],
+    "__typename": "Cover"
+  },
+  "covers": [
+    {
+      "parent": null,
+      "__typename": "Cover",
+      "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+      "addinfo": "",
+      "number": 0,
+      "children": [],
+      "onlyapp": true,
+      "firstapp": true,
+      "exclusive": true,
+      "individuals": [
+        {
+          "name": "Ryan Sook",
+          "type": ["ARTIST"],
+          "__typename": "Individual"
+        }
+      ]
+    }
+  ],
+  "series": {
+    "title": "Giant-Size Hulk",
+    "volume": 2,
+    "publisher": {
+      "name": "Marvel Comics",
+      "us": true,
+      "__typename": "Publisher"
+    },
+    "__typename": "Series"
+  },
+  "features": [],
+  "stories": [
+    {
+      "title": "Green Pieces",
+      "addinfo": "",
+      "part": "",
+      "number": 1,
+      "reprints": [],
+      "children": [
+        {
+          "issue": {
+            "collected": true,
+            "__typename": "Issue",
+            "cover": {
+              "url": "https://www.comicguide.de/pics/large/91529.jpg",
+              "__typename": "Cover"
+            },
+            "covers": [],
+            "number": "18",
+            "title": "Planet Hulk 1",
+            "series": {
+              "title": "Marvel Monster Edition",
+              "volume": 1,
+              "startyear": 2003,
+              "endyear": 2013,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 10,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Giant-Size Hulk",
+                "volume": 2,
+                "startyear": 2006,
+                "endyear": 0,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": {
+              "url": "https://www.comicguide.de/pics/large/119121.jpg",
+              "__typename": "Cover"
+            },
+            "covers": [],
+            "number": "1",
+            "title": "",
+            "series": {
+              "title": "Planet Hulk",
+              "volume": 1,
+              "startyear": 2016,
+              "endyear": 2016,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 10,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Giant-Size Hulk",
+                "volume": 2,
+                "startyear": 2006,
+                "endyear": 0,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": {
+              "url": "https://www.comicguide.de/pics/large/135290.jpg",
+              "__typename": "Cover"
+            },
+            "covers": [],
+            "number": "12",
+            "title": "Planet Hulk",
+            "series": {
+              "title": "Marvel Must-Have",
+              "volume": 1,
+              "startyear": 2020,
+              "endyear": 0,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 29,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Giant-Size Hulk",
+                "volume": 2,
+                "startyear": 2006,
+                "endyear": 0,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": null,
+            "covers": [],
+            "number": "1",
+            "title": "",
+            "series": {
+              "title": "Hulk: Planet Hulk (Panini Pocket Edition)",
+              "volume": 1,
+              "startyear": 2025,
+              "endyear": 0,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 15,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Giant-Size Hulk",
+                "volume": 2,
+                "startyear": 2006,
+                "endyear": 0,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": null,
+            "covers": [],
+            "number": "4",
+            "title": "Planet Hulk",
+            "series": {
+              "title": "Marvel Events",
+              "volume": 1,
+              "startyear": 2026,
+              "endyear": 0,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 15,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Giant-Size Hulk",
+                "volume": 2,
+                "startyear": 2006,
+                "endyear": 0,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        }
+      ],
+      "individuals": [
+        {
+          "name": "Randy Gentile",
+          "type": ["LETTERER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Mark Paniccia",
+          "type": ["EDITOR"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Peter David",
+          "type": ["WRITER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Virtual Calligraphy",
+          "type": ["LETTERER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Nathan Cosby",
+          "type": ["EDITOR"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Studio F",
+          "type": ["COLORIST"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Raul Fernandez",
+          "type": ["INKER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Juan Santacruz",
+          "type": ["PENCILER"],
+          "__typename": "Individual"
+        }
+      ],
+      "appearances": [
+        {
+          "name": "Black Widow's Gauntlets",
+          "type": "ITEM",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Los Angeles",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Hell Cycle",
+          "type": "VEHICLE",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "University of California, Los Angeles",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Champions Headquarters",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Bruce Banner (Earth-616)",
+          "type": "CHARACTER",
+          "role": "FEATURED",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Natalia Romanova (Earth-616)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Robert Drake (Earth-616)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Warren Worthington III (Earth-616)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Jennifer Walters (Earth-616)",
+          "type": "CHARACTER",
+          "role": "SUPPORTING",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Hercules Panhellenios (Earth-616)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Johnathon Blaze (Earth-616)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "California (State)",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Laynia Petrovna (Earth-616)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Champions of Los Angeles (Earth-616)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Westwood (Los Angeles)",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Agent Spooner",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        }
+      ],
+      "reprintOf": null,
+      "parent": null,
+      "onlyapp": false,
+      "firstapp": false,
+      "otheronlytb": false,
+      "onlytb": false,
+      "onlyoneprint": false,
+      "collectedmultipletimes": false,
+      "collected": true,
+      "exclusive": true,
+      "__typename": "Story"
+    },
+    {
+      "title": "Banner War",
+      "addinfo": "",
+      "part": "",
+      "number": 2,
+      "reprints": [],
+      "children": [
+        {
+          "issue": {
+            "collected": true,
+            "__typename": "Issue",
+            "cover": {
+              "url": "https://www.comicguide.de/pics/large/91529.jpg",
+              "__typename": "Cover"
+            },
+            "covers": [],
+            "number": "18",
+            "title": "Planet Hulk 1",
+            "series": {
+              "title": "Marvel Monster Edition",
+              "volume": 1,
+              "startyear": 2003,
+              "endyear": 2013,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 11,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Giant-Size Hulk",
+                "volume": 2,
+                "startyear": 2006,
+                "endyear": 0,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": null,
+            "covers": [],
+            "number": "4",
+            "title": "Planet Hulk",
+            "series": {
+              "title": "Marvel Events",
+              "volume": 1,
+              "startyear": 2026,
+              "endyear": 0,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 16,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Giant-Size Hulk",
+                "volume": 2,
+                "startyear": 2006,
+                "endyear": 0,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        }
+      ],
+      "individuals": [
+        {
+          "name": "Randy Gentile",
+          "type": ["LETTERER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Aaron Lopresti",
+          "type": ["PENCILER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Mark Paniccia",
+          "type": ["EDITOR"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Danny Miki",
+          "type": ["INKER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Greg Pak",
+          "type": ["WRITER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Virtual Calligraphy",
+          "type": ["LETTERER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Nathan Cosby",
+          "type": ["EDITOR"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Sotocolor",
+          "type": ["COLORIST"],
+          "__typename": "Individual"
+        }
+      ],
+      "appearances": [
+        {
+          "name": "Mjolnir",
+          "type": "ITEM",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Cloak of Levitation",
+          "type": "ITEM",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Sakaaran Natives",
+          "type": "RACE",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Sakaaran Imperials",
+          "type": "RACE",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Sakaar",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Sakaarans",
+          "type": "RACE",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Iron Man Armor Model 29",
+          "type": "ITEM",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Amebids",
+          "type": "RACE",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Peter Parker (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Reed Richards (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Thor Odinson (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Bruce Banner (Earth-616)",
+          "type": "CHARACTER",
+          "role": "FEATURED",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Anthony Stark (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Nicholas Fury (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Benjamin Grimm (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Stephen Strange (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "James Howlett (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Blackagar Boltagon (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Eye of Agamotto (Knowledge)",
+          "type": "ITEM",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Robert Reynolds (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Illuminati (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Jarella (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Korg (Earth-616)",
+          "type": "CHARACTER",
+          "role": "SUPPORTING",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Hiroim (Earth-616)",
+          "type": "CHARACTER",
+          "role": "OTHER",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Warbound (Earth-616)",
+          "type": "CHARACTER",
+          "role": "SUPPORTING",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "No-Name (Earth-616)",
+          "type": "CHARACTER",
+          "role": "SUPPORTING",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Miek (Earth-616)",
+          "type": "CHARACTER",
+          "role": "SUPPORTING",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "K'ai (Planet)",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "K'ai (City)",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Great Hall of Assembly",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        }
+      ],
+      "reprintOf": null,
+      "parent": null,
+      "onlyapp": false,
+      "firstapp": false,
+      "otheronlytb": false,
+      "onlytb": false,
+      "onlyoneprint": false,
+      "collectedmultipletimes": false,
+      "collected": true,
+      "exclusive": true,
+      "__typename": "Story"
+    },
+    {
+      "title": "The Last Titan",
+      "addinfo": "",
+      "part": "",
+      "number": 3,
+      "reprints": [],
+      "children": [
+        {
+          "issue": {
+            "collected": true,
+            "__typename": "Issue",
+            "cover": {
+              "url": "https://www.comicguide.de/pics/large/72068.jpg",
+              "__typename": "Cover"
+            },
+            "covers": [],
+            "number": "44",
+            "title": "Hulk: Dystopia",
+            "series": {
+              "title": "Marvel Exklusiv",
+              "volume": 1,
+              "startyear": 1998,
+              "endyear": 2017,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 2,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/f/f1/Incredible_Hulk_The_End_Vol_1_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Incredible Hulk: The End",
+                "volume": 1,
+                "startyear": 2002,
+                "endyear": 2002,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": {
+              "url": "https://www.comicguide.de/pics/large/137616.jpg",
+              "__typename": "Cover"
+            },
+            "covers": [],
+            "number": "1",
+            "title": "",
+            "series": {
+              "title": "Hulk: Dystopia",
+              "volume": 1,
+              "startyear": 2021,
+              "endyear": 0,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 3,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/f/f1/Incredible_Hulk_The_End_Vol_1_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Incredible Hulk: The End",
+                "volume": 1,
+                "startyear": 2002,
+                "endyear": 2002,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": {
+              "url": "https://www.comicguide.de/pics/large/137716.jpg",
+              "__typename": "Cover"
+            },
+            "covers": [
+              {
+                "parent": {
+                  "issue": {
+                    "cover": {
+                      "url": "https://static.wikia.nocookie.net/marveldatabase/images/d/db/Hulk_Future_Imperfect_Vol_1_2.jpg",
+                      "__typename": "Cover"
+                    },
+                    "__typename": "Issue"
+                  },
+                  "__typename": "Cover"
+                },
+                "__typename": "Cover"
+              }
+            ],
+            "number": "216",
+            "title": "Hulk: Dystopia",
+            "series": {
+              "title": "Die offizielle Marvel-Comic-Sammlung",
+              "volume": 1,
+              "startyear": 2013,
+              "endyear": 2023,
+              "publisher": {
+                "name": "Hachette",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 3,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/f/f1/Incredible_Hulk_The_End_Vol_1_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Incredible Hulk: The End",
+                "volume": 1,
+                "startyear": 2002,
+                "endyear": 2002,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": {
+              "url": "https://www.comicguide.de/pics/large/144519.jpg",
+              "__typename": "Cover"
+            },
+            "covers": [],
+            "number": "74",
+            "title": "Hulk: Dystopia",
+            "series": {
+              "title": "Marvel Must-Have",
+              "volume": 1,
+              "startyear": 2020,
+              "endyear": 0,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 3,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/f/f1/Incredible_Hulk_The_End_Vol_1_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Incredible Hulk: The End",
+                "volume": 1,
+                "startyear": 2002,
+                "endyear": 2002,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        },
+        {
+          "issue": {
+            "collected": false,
+            "__typename": "Issue",
+            "cover": null,
+            "covers": [],
+            "number": "4",
+            "title": "Planet Hulk",
+            "series": {
+              "title": "Marvel Events",
+              "volume": 1,
+              "startyear": 2026,
+              "endyear": 0,
+              "publisher": {
+                "name": "Panini - Marvel & Icon",
+                "us": false,
+                "__typename": "Publisher"
+              },
+              "__typename": "Series"
+            },
+            "variant": ""
+          },
+          "part": "",
+          "number": 17,
+          "parent": {
+            "issue": {
+              "cover": {
+                "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+                "__typename": "Cover"
+              },
+              "covers": [
+                {
+                  "parent": null,
+                  "__typename": "Cover"
+                }
+              ],
+              "number": "1",
+              "series": {
+                "title": "Giant-Size Hulk",
+                "volume": 2,
+                "startyear": 2006,
+                "endyear": 0,
+                "publisher": {
+                  "name": "Marvel Comics",
+                  "us": true,
+                  "__typename": "Publisher"
+                },
+                "__typename": "Series"
+              },
+              "collected": false,
+              "__typename": "Issue"
+            },
+            "__typename": "Story"
+          },
+          "addinfo": "",
+          "__typename": "Story"
+        }
+      ],
+      "individuals": [
+        {
+          "name": "Tom Brevoort",
+          "type": ["EDITOR"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Dan Kemp",
+          "type": ["COLORIST"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Avalon Studios",
+          "type": ["COLORIST"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "John Workman",
+          "type": ["LETTERER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Marc Sumerak",
+          "type": ["EDITOR"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Peter David",
+          "type": ["WRITER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Livesay",
+          "type": ["INKER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Dale Keown",
+          "type": ["PENCILER"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Bobbie Chase",
+          "type": ["EDITOR"],
+          "__typename": "Individual"
+        },
+        {
+          "name": "Joe Weems",
+          "type": ["INKER"],
+          "__typename": "Individual"
+        }
+      ],
+      "appearances": [
+        {
+          "name": "Kree",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Deviant Skrulls",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Costumed Adventurers Memorial Park",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Bruce Banner (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "FEATURED",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Recorder 211 (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "SUPPORTING",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Samuel Sterns (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Emil Blonsky (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Peter Parker (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Henry Pym (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Stephen Strange (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Hercules Panhellenios (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Janet Van Dyne (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "X-Men (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Robert Drake (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Warren Worthington III (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "James Howlett (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Ororo Munroe (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Matthew Murdock (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Thor Odinson (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Fantastic Four (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Reed Richards (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Susan Storm (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Benjamin Grimm (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Jonathan Storm (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Steven Rogers (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Anthony Stark (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Namor McKenzie (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Leonard Samson (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Jennifer Walters (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Elizabeth Ross (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Thaddeus Ross (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "James Wilson (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Jarella (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Richard Jones (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Marlo Chandler (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Rebecca Banner (Earth-2081)",
+          "type": "CHARACTER",
+          "role": "ANTAGONIST",
+          "__typename": "Appearance"
+        },
+        {
+          "name": "Earth-2081",
+          "type": "LOCATION",
+          "role": "",
+          "__typename": "Appearance"
+        }
+      ],
+      "reprintOf": {
+        "title": "The Last Titan",
+        "number": 1,
+        "issue": {
+          "cover": {
+            "url": "https://static.wikia.nocookie.net/marveldatabase/images/f/f1/Incredible_Hulk_The_End_Vol_1_1.jpg",
+            "__typename": "Cover"
+          },
+          "covers": [
+            {
+              "parent": null,
+              "__typename": "Cover"
+            }
+          ],
+          "number": "1",
+          "series": {
+            "title": "Incredible Hulk: The End",
+            "startyear": 2002,
+            "endyear": 2002,
+            "volume": 1,
+            "publisher": {
+              "name": "Marvel Comics",
+              "us": true,
+              "__typename": "Publisher"
+            },
+            "__typename": "Series"
+          },
+          "collected": false,
+          "__typename": "Issue"
+        },
+        "__typename": "Story"
+      },
+      "parent": null,
+      "onlyapp": false,
+      "firstapp": false,
+      "otheronlytb": false,
+      "onlytb": false,
+      "onlyoneprint": false,
+      "collectedmultipletimes": true,
+      "collected": true,
+      "exclusive": true,
+      "__typename": "Story"
+    }
+  ],
+  "variants": [
+    {
+      "covers": [
+        {
+          "parent": null,
+          "__typename": "Cover"
+        }
+      ],
+      "stories": [
+        {
+          "number": 1,
+          "__typename": "Story"
+        },
+        {
+          "number": 2,
+          "__typename": "Story"
+        },
+        {
+          "number": 3,
+          "__typename": "Story"
+        }
+      ],
+      "format": "Heft",
+      "variant": "",
+      "number": "1",
+      "comicguideid": 0,
+      "collected": false,
+      "series": {
+        "title": "Giant-Size Hulk",
+        "volume": 2,
+        "publisher": {
+          "name": "Marvel Comics",
+          "us": true,
+          "__typename": "Publisher"
+        },
+        "__typename": "Series"
+      },
+      "cover": {
+        "url": "https://static.wikia.nocookie.net/marveldatabase/images/5/59/Giant-Size_Hulk_Vol_2_1.jpg",
+        "__typename": "Cover"
+      },
+      "__typename": "Issue"
+    },
+    {
+      "covers": [
+        {
+          "parent": null,
+          "__typename": "Cover"
+        }
+      ],
+      "stories": [],
+      "format": "Heft",
+      "variant": "Textless",
+      "number": "1",
+      "comicguideid": 0,
+      "collected": false,
+      "series": {
+        "title": "Giant-Size Hulk",
+        "volume": 2,
+        "publisher": {
+          "name": "Marvel Comics",
+          "us": true,
+          "__typename": "Publisher"
+        },
+        "__typename": "Series"
+      },
+      "cover": {
+        "url": "https://static.wikia.nocookie.net/marveldatabase/images/c/ca/Giant-Size_Hulk_Vol_2_1_Textless.jpg",
+        "__typename": "Cover"
+      },
+      "__typename": "Issue"
+    }
+  ],
+  "arcs": [
+    {
+      "title": "Planet Hulk",
+      "type": "STORYARC",
+      "__typename": "Arc"
+    }
+  ],
+  "variant": "",
+  "verified": false,
+  "collected": false,
+  "addinfo": "",
+  "__typename": "Issue"
+} as const;

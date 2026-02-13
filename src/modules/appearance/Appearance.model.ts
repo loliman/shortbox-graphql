@@ -1,11 +1,12 @@
 import { Model, DataTypes, Sequelize } from 'sequelize';
+import type { DbModels } from '../../types/db';
 
 export class Appearance extends Model {
   public id!: number;
   public name!: string;
   public type!: string;
 
-  public static associate(models: any) {
+  public static associate(models: DbModels) {
     Appearance.belongsToMany(models.Story, {
       through: models.Story_Appearance,
       foreignKey: 'fk_appearance',

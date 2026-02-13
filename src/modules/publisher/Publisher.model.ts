@@ -1,4 +1,5 @@
 import { Model, DataTypes, Sequelize } from 'sequelize';
+import type { DbModels } from '../../types/db';
 
 export class Publisher extends Model {
   public id!: number;
@@ -8,8 +9,8 @@ export class Publisher extends Model {
   public startyear!: number;
   public endyear!: number | null;
 
-  public static associate(models: any) {
-    (Publisher as any).hasMany(models.Series, {
+  public static associate(models: DbModels) {
+    Publisher.hasMany(models.Series, {
       as: 'Series',
       foreignKey: 'fk_publisher',
       onDelete: 'cascade',

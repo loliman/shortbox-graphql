@@ -1,7 +1,7 @@
 import gql from 'graphql-tag';
 import { FilterService } from '../services/FilterService';
 import { FilterSchema } from '../types/schemas';
-import { QueryResolvers } from '../types/graphql';
+import { Filter, QueryResolvers } from '../types/graphql';
 
 export const typeDef = gql`
   input DateFilter {
@@ -55,7 +55,7 @@ export const resolvers: { Query: QueryResolvers } = {
       // Validate input
       const validatedFilter = FilterSchema.parse(filter);
 
-      return await filterService.export(validatedFilter as any, type, loggedIn);
+      return await filterService.export(validatedFilter as Filter, type, loggedIn);
     },
   },
 };

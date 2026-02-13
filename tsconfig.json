@@ -17,7 +17,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": "./",
     "paths": {
-      "*": ["node_modules/*", "src/*"]
+      "*": ["node_modules/*", "src/*"],
+      "@shortbox/contract": ["../shortbox-contract/index.d.ts"]
     }
   },
   "include": ["src/**/*"],

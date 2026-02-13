@@ -16,18 +16,24 @@ jest.mock('../src/models', () => ({
 }));
 
 describe('SeriesService', () => {
+  const service = new SeriesService(models as any);
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   describe('findSeries', () => {
     it('should call models.Series.findAll when no filter is provided', async () => {
-      (models.Series.findAll as jest.Mock).mockResolvedValue([{ title: 'Spider-Man' }]);
-      
-      const result = await SeriesService.findSeries('', { name: '*' }, 0, 50, false, null);
-      
+      (models.Series.findAll as jest.Mock).mockResolvedValue([
+        { id: 1, title: 'Spider-Man', volume: 1 },
+      ]);
+
+      const result = await service.findSeries('', { name: '*' } as any, 50, undefined, false, undefined);
+
       expect(models.Series.findAll).toHaveBeenCalled();
-      expect(result).toEqual([{ title: 'Spider-Man' }]);
+      expect(result.edges).toHaveLength(1);
+      expect(result.edges[0]?.node).toMatchObject({ title: 'Spider-Man', volume: 1 });
+      expect(result.pageInfo.hasNextPage).toBe(false);
     });
   });
 
@@ -40,14 +46,14 @@ describe('SeriesService', () => {
       (models.Publisher.findOne as jest.Mock).mockResolvedValue(mockPub);
       (models.Series.create as jest.Mock).mockResolvedValue(mockSeries);
 
-      const result = await SeriesService.createSeries({
+      const result = await service.createSeries({
         title: 'X-Men',
         volume: 1,
-        publisher: { name: 'Marvel' }
+        publisher: { name: 'Marvel' },
       }, mockTransaction);
 
       expect(models.Publisher.findOne).toHaveBeenCalledWith(expect.objectContaining({
-        where: { name: 'Marvel' }
+        where: { name: 'Marvel' },
       }));
       expect(models.Series.create).toHaveBeenCalled();
       expect(result).toEqual(mockSeries);

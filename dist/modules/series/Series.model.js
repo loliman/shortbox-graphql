@@ -15,7 +15,7 @@ class Series extends sequelize_1.Model {
             transaction,
         });
         for (const issue of issues) {
-            await issue.delete(transaction);
+            await issue.deleteInstance(transaction, models);
         }
         await this.destroy({ transaction });
     }

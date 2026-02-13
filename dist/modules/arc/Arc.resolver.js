@@ -10,11 +10,14 @@ exports.resolvers = {
             if (after) {
                 decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
             }
-            let where = {};
-            let order = [['title', 'ASC'], ['id', 'ASC']];
+            const where = {};
+            const order = [
+                ['title', 'ASC'],
+                ['id', 'ASC'],
+            ];
             if (decodedCursor) {
                 where[sequelize_1.Op.and] = [
-                    sequelize_1.Sequelize.literal(`(title, id) > (SELECT title, id FROM Arc WHERE id = ${decodedCursor})`)
+                    sequelize_1.Sequelize.literal(`(title, id) > (SELECT title, id FROM Arc WHERE id = ${decodedCursor})`),
                 ];
             }
             if (pattern && pattern !== '') {
@@ -29,9 +32,9 @@ exports.resolvers = {
             });
             const hasNextPage = results.length > limit;
             const nodes = results.slice(0, limit);
-            const edges = nodes.map(node => ({
+            const edges = nodes.map((node) => ({
                 cursor: Buffer.from(node.id.toString()).toString('base64'),
-                node: node
+                node,
             }));
             return {
                 edges,
@@ -40,7 +43,7 @@ exports.resolvers = {
                     hasPreviousPage: !!after,
                     startCursor: edges.length > 0 ? edges[0].cursor : null,
                     endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-                }
+                },
             };
         },
     },
@@ -51,13 +54,13 @@ exports.resolvers = {
             return String(parent.id);
         },
         title: (parent) => parent.title.trim(),
-        issues: async (parent, _, { models }) => (await models.Issue.findAll({
+        issues: async (parent, _, { models }) => await models.Issue.findAll({
             include: [
                 {
                     model: models.Arc,
                     where: { id: parent.id },
                 },
             ],
-        })),
+        }),
     },
 };

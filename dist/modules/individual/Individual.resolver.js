@@ -10,11 +10,14 @@ exports.resolvers = {
             if (after) {
                 decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
             }
-            let where = {};
-            let order = [['name', 'ASC'], ['id', 'ASC']];
+            const where = {};
+            const order = [
+                ['name', 'ASC'],
+                ['id', 'ASC'],
+            ];
             if (decodedCursor) {
                 where[sequelize_1.Op.and] = [
-                    sequelize_1.Sequelize.literal(`(name, id) > (SELECT name, id FROM Individual WHERE id = ${decodedCursor})`)
+                    sequelize_1.Sequelize.literal(`(name, id) > (SELECT name, id FROM Individual WHERE id = ${decodedCursor})`),
                 ];
             }
             if (pattern && pattern !== '') {
@@ -28,9 +31,9 @@ exports.resolvers = {
             });
             const hasNextPage = results.length > limit;
             const nodes = results.slice(0, limit);
-            const edges = nodes.map(node => ({
+            const edges = nodes.map((node) => ({
                 cursor: Buffer.from(node.id.toString()).toString('base64'),
-                node: node
+                node,
             }));
             return {
                 edges,
@@ -39,7 +42,7 @@ exports.resolvers = {
                     hasPreviousPage: !!after,
                     startCursor: edges.length > 0 ? edges[0].cursor : null,
                     endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-                }
+                },
             };
         },
     },
@@ -51,29 +54,31 @@ exports.resolvers = {
         },
         name: (parent) => parent.name,
         type: async (parent, _, { models }) => {
-            let where = {};
+            const where = {};
             let table = '';
-            if (parent.Stories && parent.Stories.length > 0) {
-                where.fk_story = parent.Stories[0].id;
+            const individualParent = parent;
+            if (individualParent.Stories && individualParent.Stories.length > 0) {
+                where.fk_story = individualParent.Stories[0].id;
                 table = 'Story_Individual';
             }
-            else if (parent.Covers && parent.Covers.length > 0) {
-                where.fk_cover = parent.Covers[0].id;
+            else if (individualParent.Covers && individualParent.Covers.length > 0) {
+                where.fk_cover = individualParent.Covers[0].id;
                 table = 'Cover_Individual';
             }
-            else if (parent.Issues && parent.Issues.length > 0) {
-                where.fk_issue = parent.Issues[0].id;
+            else if (individualParent.Issues && individualParent.Issues.length > 0) {
+                where.fk_issue = individualParent.Issues[0].id;
                 table = 'Issue_Individual';
             }
-            else if (parent.Features && parent.Features.length > 0) {
-                where.fk_feature = parent.Features[0].id;
+            else if (individualParent.Features && individualParent.Features.length > 0) {
+                where.fk_feature = individualParent.Features[0].id;
                 table = 'Feature_Individual';
             }
             else {
                 return [];
             }
-            where.fk_individual = parent.id;
-            let relation = await models[table].findAll({ where });
+            where.fk_individual = individualParent.id;
+            const relationModel = models[table];
+            const relation = await relationModel.findAll({ where });
             return relation.map((r) => r.type);
         },
     },

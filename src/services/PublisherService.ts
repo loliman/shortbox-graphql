@@ -1,7 +1,7 @@
 import models from '../models';
 import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
 import logger from '../util/logger';
-import { Filter, Publisher, PublisherInput } from '../types/graphql';
+import type { Filter, Publisher, PublisherInput } from '@shortbox/contract';
 
 export class PublisherService {
   constructor(
@@ -9,8 +9,16 @@ export class PublisherService {
     private requestId?: string,
   ) {}
 
-  private log(message: string, level: string = 'info') {
-    (logger as any)[level](message, { requestId: this.requestId });
+  private log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
+    if (level === 'error') {
+      logger.error(message, { requestId: this.requestId });
+      return;
+    }
+    if (level === 'warn') {
+      logger.warn(message, { requestId: this.requestId });
+      return;
+    }
+    logger.info(message, { requestId: this.requestId });
   }
 
   async findPublishers(
@@ -21,6 +29,20 @@ export class PublisherService {
     loggedIn: boolean,
     filter: Filter | undefined,
   ) {
+    type WhereMap = Record<string | symbol, unknown>;
+    type IssueWithSeriesPublisher = {
+      Series: {
+        Publisher: {
+          id: number;
+          name: string;
+        };
+      };
+    };
+    type PublisherNode = {
+      id: number;
+      name: string;
+      original: boolean;
+    };
     const limit = first || 50;
     let decodedCursor: number | undefined;
     if (after) {
@@ -28,15 +50,21 @@ export class PublisherService {
     }
 
     if (!filter) {
+      const where: WhereMap = { original: us };
       let options: FindOptions = {
-        order: [['name', 'ASC'], ['id', 'ASC']],
-        where: { original: us } as any,
+        order: [
+          ['name', 'ASC'],
+          ['id', 'ASC'],
+        ],
+        where,
         limit: limit + 1,
       };
 
       if (decodedCursor) {
-        (options.where as any)[Op.and as any] = [
-          Sequelize.literal(`(name, id) > (SELECT name, id FROM Publisher WHERE id = ${decodedCursor})`)
+        where[Op.and] = [
+          Sequelize.literal(
+            `(name, id) > (SELECT name, id FROM Publisher WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
 
@@ -45,7 +73,7 @@ export class PublisherService {
           ...options.where,
           name: { [Op.like]: '%' + pattern.replace(/\s/g, '%') + '%' },
         };
-        // Note: Complex ordering with cursor-based pagination is tricky. 
+        // Note: Complex ordering with cursor-based pagination is tricky.
         // For now we stick to name/id ordering when using pattern search to keep cursor stability.
       }
 
@@ -53,9 +81,9 @@ export class PublisherService {
       const hasNextPage = results.length > limit;
       const nodes = results.slice(0, limit);
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node: node as unknown as Publisher,
       }));
 
       return {
@@ -65,33 +93,42 @@ export class PublisherService {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models, this.requestId);
       const options = filterService.getFilterOptions(loggedIn, filter);
+      const whereWithSymbols = options.where as WhereMap;
       options.group = ['Series.fk_publisher'];
       options.limit = limit + 1;
 
       if (decodedCursor) {
-        (options.where as any)[Op.and as any] = [
-          ...((options.where as any)[Op.and as any] || []),
-          Sequelize.literal(`(Series->Publisher.name, Series->Publisher.id) > (SELECT name, id FROM Publisher WHERE id = ${decodedCursor})`)
+        const currentAnd = Array.isArray(whereWithSymbols[Op.and])
+          ? (whereWithSymbols[Op.and] as unknown[])
+          : [];
+        whereWithSymbols[Op.and] = [
+          ...currentAnd,
+          Sequelize.literal(
+            `(Series->Publisher.name, Series->Publisher.id) > (SELECT name, id FROM Publisher WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
-      
+
       const res = await this.models.Issue.findAll(options);
       const hasNextPage = res.length > limit;
-      const nodes = res.slice(0, limit).map((i: any) => ({
-        id: i.Series.Publisher.id,
-        name: i.Series.Publisher.name,
-        original: us,
-      }));
+      const nodes: PublisherNode[] = res.slice(0, limit).map((issue) => {
+        const issueNode = issue as unknown as IssueWithSeriesPublisher;
+        return {
+          id: issueNode.Series.Publisher.id,
+          name: issueNode.Series.Publisher.name,
+          original: us,
+        };
+      });
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node,
       }));
 
       return {
@@ -101,7 +138,7 @@ export class PublisherService {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     }
   }
@@ -121,7 +158,7 @@ export class PublisherService {
     });
 
     for (const s of series) {
-      await (s as any).deleteInstance(transaction, this.models);
+      await s.deleteInstance(transaction, this.models);
     }
 
     return await pub.destroy({ transaction });

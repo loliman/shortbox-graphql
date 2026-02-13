@@ -23,5 +23,16 @@ yarn-debug.log*
 yarn-error.log*
 
 .idea/
-/logs/
+
+# build artifacts
+/dist
+
+# runtime logs
+*.log
+/output.txt
+combined.log
+error.log
+
+# local runtime state
 /listen/
+/logs/

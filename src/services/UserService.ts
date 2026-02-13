@@ -1,31 +1,73 @@
 import models from '../models';
 import { Transaction } from 'sequelize';
 import logger from '../util/logger';
-import { UserInput } from '../types/graphql';
+import type { UserInput } from '@shortbox/contract';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 export class UserService {
+  private static readonly PASSWORD_PREFIX = 'scrypt';
+
   constructor(
     private models: typeof import('../models').default,
     private requestId?: string,
   ) {}
 
-  private log(message: string, level: string = 'info') {
-    (logger as any)[level](message, { requestId: this.requestId });
+  private log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
+    if (level === 'error') {
+      logger.error(message, { requestId: this.requestId });
+      return;
+    }
+    if (level === 'warn') {
+      logger.warn(message, { requestId: this.requestId });
+      return;
+    }
+    logger.info(message, { requestId: this.requestId });
+  }
+
+  private generateSessionId(): string {
+    return randomBytes(48).toString('base64url');
+  }
+
+  private hashPassword(password: string): string {
+    const salt = randomBytes(16).toString('base64url');
+    const hash = scryptSync(password, salt, 64).toString('base64url');
+    return `${UserService.PASSWORD_PREFIX}$${salt}$${hash}`;
+  }
+
+  private verifyPassword(inputPassword: string, storedPassword: string): boolean {
+    if (storedPassword.startsWith(`${UserService.PASSWORD_PREFIX}$`)) {
+      const [, salt, expectedHash] = storedPassword.split('$');
+      if (!salt || !expectedHash) return false;
+
+      const calculatedHash = scryptSync(inputPassword, salt, 64).toString('base64url');
+      const expectedBuffer = Buffer.from(expectedHash);
+      const actualBuffer = Buffer.from(calculatedHash);
+
+      if (expectedBuffer.length !== actualBuffer.length) return false;
+      return timingSafeEqual(expectedBuffer, actualBuffer);
+    }
+
+    const expectedBuffer = Buffer.from(storedPassword);
+    const actualBuffer = Buffer.from(inputPassword);
+    if (expectedBuffer.length !== actualBuffer.length) return false;
+    return timingSafeEqual(expectedBuffer, actualBuffer);
   }
 
   async login(user: UserInput, transaction: Transaction) {
     this.log(`Login attempt for user: ${user.name}`);
-    let sessionid = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 64; i++)
-      sessionid += possible.charAt(Math.floor(Math.random() * possible.length));
+    const sessionid = this.generateSessionId();
 
     let userRecord = await this.models.User.findOne({
-      where: { name: (user.name || '').trim(), password: user.password },
+      where: { name: (user.name || '').trim() },
       transaction,
     });
 
     if (!userRecord) return null;
+    if (!user.password || !this.verifyPassword(user.password, userRecord.password)) return null;
+
+    if (!userRecord.password.startsWith(`${UserService.PASSWORD_PREFIX}$`)) {
+      userRecord.password = this.hashPassword(user.password);
+    }
 
     userRecord.sessionid = sessionid;
     await userRecord.save({ transaction });

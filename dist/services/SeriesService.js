@@ -12,7 +12,15 @@ class SeriesService {
         this.requestId = requestId;
     }
     log(message, level = 'info') {
-        logger_1.default[level](message, { requestId: this.requestId });
+        if (level === 'error') {
+            logger_1.default.error(message, { requestId: this.requestId });
+            return;
+        }
+        if (level === 'warn') {
+            logger_1.default.warn(message, { requestId: this.requestId });
+            return;
+        }
+        logger_1.default.info(message, { requestId: this.requestId });
     }
     async findSeries(pattern, publisher, first, after, loggedIn, filter) {
         const limit = first || 50;
@@ -21,6 +29,7 @@ class SeriesService {
             decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
         }
         if (!filter) {
+            const where = {};
             let options = {
                 order: [
                     [sequelize_1.Sequelize.fn('sortabletitle', sequelize_1.Sequelize.col('title')), 'ASC'],
@@ -28,12 +37,12 @@ class SeriesService {
                     ['id', 'ASC'],
                 ],
                 include: [{ model: this.models.Publisher }],
-                where: {},
+                where,
                 limit: limit + 1,
             };
             if (decodedCursor) {
-                options.where[sequelize_1.Op.and] = [
-                    sequelize_1.Sequelize.literal(`(sortabletitle(title), volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`)
+                where[sequelize_1.Op.and] = [
+                    sequelize_1.Sequelize.literal(`(sortabletitle(title), volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`),
                 ];
             }
             if (publisher.name !== '*')
@@ -50,9 +59,9 @@ class SeriesService {
             const results = await this.models.Series.findAll(options);
             const hasNextPage = results.length > limit;
             const nodes = results.slice(0, limit);
-            const edges = nodes.map(node => ({
+            const edges = nodes.map((node) => ({
                 cursor: Buffer.from(node.id.toString()).toString('base64'),
-                node: node
+                node,
             }));
             return {
                 edges,
@@ -61,34 +70,41 @@ class SeriesService {
                     hasPreviousPage: !!after,
                     startCursor: edges.length > 0 ? edges[0].cursor : null,
                     endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-                }
+                },
             };
         }
         else {
             const { FilterService } = require('./FilterService');
             const filterService = new FilterService(this.models);
             const options = filterService.getFilterOptions(loggedIn, filter);
+            const whereWithSymbols = options.where;
             options.group = ['fk_series'];
             options.limit = limit + 1;
             if (decodedCursor) {
-                options.where[sequelize_1.Op.and] = [
-                    ...(options.where[sequelize_1.Op.and] || []),
-                    sequelize_1.Sequelize.literal(`(sortabletitle(Series.title), Series.volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`)
+                const currentAnd = Array.isArray(whereWithSymbols[sequelize_1.Op.and])
+                    ? whereWithSymbols[sequelize_1.Op.and]
+                    : [];
+                whereWithSymbols[sequelize_1.Op.and] = [
+                    ...currentAnd,
+                    sequelize_1.Sequelize.literal(`(sortabletitle(Series.title), Series.volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`),
                 ];
             }
             const res = await this.models.Issue.findAll(options);
             const hasNextPage = res.length > limit;
-            const nodes = res.slice(0, limit).map((i) => ({
-                id: i.Series.id,
-                title: i.Series.title,
-                volume: i.Series.volume,
-                startyear: i.Series.startyear,
-                endyear: i.Series.endyear,
-                fk_publisher: i.Series.fk_publisher,
-            }));
-            const edges = nodes.map(node => ({
+            const nodes = res.slice(0, limit).map((issue) => {
+                const issueNode = issue;
+                return {
+                    id: issueNode.Series.id,
+                    title: issueNode.Series.title,
+                    volume: issueNode.Series.volume,
+                    startyear: issueNode.Series.startyear,
+                    endyear: issueNode.Series.endyear,
+                    fk_publisher: issueNode.Series.fk_publisher,
+                };
+            });
+            const edges = nodes.map((node) => ({
                 cursor: Buffer.from(node.id.toString()).toString('base64'),
-                node: node
+                node,
             }));
             return {
                 edges,
@@ -97,7 +113,7 @@ class SeriesService {
                     hasPreviousPage: !!after,
                     startCursor: edges.length > 0 ? edges[0].cursor : null,
                     endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-                }
+                },
             };
         }
     }

@@ -1,7 +1,26 @@
 import models from '../models';
 import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
 import logger from '../util/logger';
-import { Filter, IssueInput, SeriesInput } from '../types/graphql';
+import type { Filter, IssueInput, SeriesInput } from '@shortbox/contract';
+
+const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
+  'updatedAt',
+  'createdAt',
+  'number',
+  'format',
+  'variant',
+  'title',
+  'id',
+]);
+
+const normalizeSortField = (field: string | undefined): string =>
+  field && ALLOWED_LAST_EDITED_SORT_FIELDS.has(field) ? field : 'updatedAt';
+
+const normalizeSortDirection = (direction: string | undefined): 'ASC' | 'DESC' => {
+  if (!direction) return 'DESC';
+  const normalized = direction.toUpperCase();
+  return normalized === 'ASC' || normalized === 'DESC' ? normalized : 'DESC';
+};
 
 export class IssueService {
   constructor(
@@ -9,8 +28,16 @@ export class IssueService {
     private requestId?: string,
   ) {}
 
-  private log(message: string, level: string = 'info') {
-    (logger as any)[level](message, { requestId: this.requestId });
+  private log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
+    if (level === 'error') {
+      logger.error(message, { requestId: this.requestId });
+      return;
+    }
+    if (level === 'warn') {
+      logger.warn(message, { requestId: this.requestId });
+      return;
+    }
+    logger.info(message, { requestId: this.requestId });
   }
 
   async findIssues(
@@ -21,6 +48,7 @@ export class IssueService {
     loggedIn: boolean,
     filter: Filter | undefined,
   ) {
+    type WhereMap = Record<string | symbol, unknown>;
     const limit = first || 50;
     let decodedCursor: number | undefined;
     if (after) {
@@ -28,6 +56,7 @@ export class IssueService {
     }
 
     if (!filter) {
+      const where: WhereMap = {};
       let options: FindOptions = {
         order: [
           ['number', 'ASC'],
@@ -46,13 +75,15 @@ export class IssueService {
             ],
           },
         ],
-        where: {} as any,
+        where,
         limit: limit + 1,
       };
 
       if (decodedCursor) {
-        (options.where as any)[Op.and as any] = [
-          Sequelize.literal(`(number, variant, Issue.id) > (SELECT number, variant, id FROM Issue WHERE id = ${decodedCursor})`)
+        where[Op.and] = [
+          Sequelize.literal(
+            `(number, variant, Issue.id) > (SELECT number, variant, id FROM Issue WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
 
@@ -70,9 +101,9 @@ export class IssueService {
       const hasNextPage = results.length > limit;
       const nodes = results.slice(0, limit);
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node,
       }));
 
       return {
@@ -82,18 +113,24 @@ export class IssueService {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models);
       const options = filterService.getFilterOptions(loggedIn, filter);
+      const whereWithSymbols = options.where as WhereMap;
       options.limit = limit + 1;
 
       if (decodedCursor) {
-        (options.where as any)[Op.and as any] = [
-          ...((options.where as any)[Op.and as any] || []),
-          Sequelize.literal(`(Issue.number, Issue.variant, Issue.id) > (SELECT number, variant, id FROM Issue WHERE id = ${decodedCursor})`)
+        const currentAnd = Array.isArray(whereWithSymbols[Op.and])
+          ? (whereWithSymbols[Op.and] as unknown[])
+          : [];
+        whereWithSymbols[Op.and] = [
+          ...currentAnd,
+          Sequelize.literal(
+            `(Issue.number, Issue.variant, Issue.id) > (SELECT number, variant, id FROM Issue WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
 
@@ -101,9 +138,9 @@ export class IssueService {
       const hasNextPage = results.length > limit;
       const nodes = results.slice(0, limit);
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node,
       }));
 
       return {
@@ -113,7 +150,7 @@ export class IssueService {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     }
   }
@@ -149,7 +186,7 @@ export class IssueService {
 
     if (!issue) throw new Error('Issue not found');
 
-    return await (issue as any).deleteInstance(transaction, this.models);
+    return await issue.deleteInstance(transaction, this.models);
   }
 
   async createIssue(item: IssueInput, transaction: Transaction) {
@@ -226,7 +263,7 @@ export class IssueService {
     res.number = (item.number || '').trim();
     res.format = item.format || '';
     res.variant = (item.variant || '').trim();
-    res.releasedate = item.releasedate;
+    res.releasedate = item.releasedate ?? '';
     res.pages = item.pages || 0;
     res.price = item.price || 0;
     res.currency = item.currency || '';
@@ -244,22 +281,25 @@ export class IssueService {
     direction: string | undefined,
     loggedIn: boolean,
   ) {
+    type WhereMap = Record<string | symbol, unknown>;
     const limit = first || 25;
     let decodedCursor: number | undefined;
     if (after) {
-      decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
+      const parsed = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
+      decodedCursor = Number.isFinite(parsed) ? parsed : undefined;
     }
 
-    const sortField = order || 'updatedAt';
-    const sortDirection = direction || 'DESC';
+    const sortField = normalizeSortField(order);
+    const sortDirection = normalizeSortDirection(direction);
 
+    const where: WhereMap = {};
     let options: FindOptions = {
       order: [
         [sortField, sortDirection],
         ['id', sortDirection],
       ],
       limit: limit + 1,
-      where: {} as any,
+      where,
       include: [
         {
           model: this.models.Series,
@@ -270,21 +310,52 @@ export class IssueService {
 
     if (decodedCursor) {
       const op = sortDirection.toUpperCase() === 'DESC' ? Op.lt : Op.gt;
-      (options.where as any)[Op.and as any] = [
-        Sequelize.literal(
-          `(${sortField}, id) ${op === Op.lt ? '<' : '>'} (SELECT ${sortField}, id FROM Issue WHERE id = ${decodedCursor})`,
-        ),
-      ];
+      const cursorRecord = await this.models.Issue.findByPk(decodedCursor, {
+        attributes: ['id', sortField],
+      });
+
+      if (cursorRecord) {
+        const cursorValue = cursorRecord.get(sortField as keyof typeof cursorRecord) as
+          | string
+          | number
+          | Date
+          | null
+          | undefined;
+
+        const currentAnd = Array.isArray(where[Op.and]) ? (where[Op.and] as unknown[]) : [];
+        if (cursorValue === null || cursorValue === undefined) {
+          where[Op.and] = [...currentAnd, { id: { [op]: decodedCursor } }];
+        } else {
+          where[Op.and] = [
+            ...currentAnd,
+            {
+              [Op.or]: [
+                { [sortField]: { [op]: cursorValue } },
+                { [sortField]: cursorValue, id: { [op]: decodedCursor } },
+              ],
+            },
+          ];
+        }
+      }
     }
 
     if (filter) {
-      const seriesInclude = (options.include as any[])[0];
-      const publisherInclude = seriesInclude.include[0];
+      const includeList = options.include as Array<{
+        where?: Record<string, unknown>;
+        include?: Array<{ where?: Record<string, unknown> }>;
+      }>;
+      const seriesInclude = includeList[0];
+      const publisherInclude = seriesInclude.include?.[0];
 
-      if (filter.us !== undefined && filter.us !== null) {
+      if (publisherInclude && filter.us !== undefined && filter.us !== null) {
         publisherInclude.where = { ...publisherInclude.where, original: filter.us ? 1 : 0 };
       }
-      if (filter.publishers && filter.publishers.length > 0 && filter.publishers[0]) {
+      if (
+        publisherInclude &&
+        filter.publishers &&
+        filter.publishers.length > 0 &&
+        filter.publishers[0]
+      ) {
         publisherInclude.where = {
           ...publisherInclude.where,
           name: filter.publishers[0].name,
@@ -305,7 +376,7 @@ export class IssueService {
 
     const edges = nodes.map((node) => ({
       cursor: Buffer.from(node.id.toString()).toString('base64'),
-      node: node as any,
+      node,
     }));
 
     return {
@@ -324,5 +395,80 @@ export class IssueService {
       where: { id: { [Op.in]: [...ids] } },
     });
     return ids.map((id) => issues.find((i) => i.id === id) || null);
+  }
+
+  async getStoriesByIssueIds(issueIds: readonly number[]) {
+    const stories = await this.models.Story.findAll({
+      where: { fk_issue: { [Op.in]: [...issueIds] } },
+      order: [
+        ['number', 'ASC'],
+        ['id', 'ASC'],
+      ],
+    });
+    return issueIds.map((issueId) => stories.filter((story) => story.fk_issue === issueId));
+  }
+
+  async getPrimaryCoversByIssueIds(issueIds: readonly number[]) {
+    const covers = await this.models.Cover.findAll({
+      where: {
+        fk_issue: { [Op.in]: [...issueIds] },
+        number: 0,
+      },
+      order: [['id', 'ASC']],
+    });
+    return issueIds.map((issueId) => covers.find((cover) => cover.fk_issue === issueId) || null);
+  }
+
+  async getCoversByIssueIds(issueIds: readonly number[]) {
+    const covers = await this.models.Cover.findAll({
+      where: { fk_issue: { [Op.in]: [...issueIds] } },
+      order: [
+        ['number', 'ASC'],
+        ['id', 'ASC'],
+      ],
+    });
+    return issueIds.map((issueId) => covers.filter((cover) => cover.fk_issue === issueId));
+  }
+
+  async getFeaturesByIssueIds(issueIds: readonly number[]) {
+    const features = await this.models.Feature.findAll({
+      where: { fk_issue: { [Op.in]: [...issueIds] } },
+      order: [
+        ['number', 'ASC'],
+        ['id', 'ASC'],
+      ],
+    });
+    return issueIds.map((issueId) => features.filter((feature) => feature.fk_issue === issueId));
+  }
+
+  async getVariantsBySeriesAndNumberKeys(keys: readonly string[]) {
+    if (keys.length === 0) return [];
+
+    const parsedKeys = keys.map((key) => {
+      const [seriesPart, ...numberParts] = key.split('::');
+      const fkSeries = parseInt(seriesPart || '', 10);
+      return {
+        key,
+        fkSeries: Number.isFinite(fkSeries) ? fkSeries : 0,
+        number: numberParts.join('::'),
+      };
+    });
+
+    const whereOr = parsedKeys.map(({ fkSeries, number }) => ({
+      fk_series: fkSeries,
+      number,
+    }));
+
+    const variants = await this.models.Issue.findAll({
+      where: { [Op.or]: whereOr },
+      order: [
+        ['variant', 'ASC'],
+        ['id', 'ASC'],
+      ],
+    });
+
+    return parsedKeys.map(({ fkSeries, number }) =>
+      variants.filter((variant) => variant.fk_series === fkSeries && variant.number === number),
+    );
   }
 }

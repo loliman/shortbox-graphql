@@ -1,8 +1,5 @@
 overwrite: true
-schema: 
-  - "src/api/generic.ts"
-  - "src/api/Filter.ts"
-  - "src/modules/**/*.schema.ts"
+schema: "../shortbox-contract/schema/shortbox.graphql"
 generates:
   src/types/graphql.ts:
     plugins:

@@ -3,11 +3,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolvers = void 0;
 const graphql_1 = require("graphql");
 const schemas_1 = require("../../types/schemas");
+const requireTransaction = (transaction) => {
+    if (!transaction) {
+        throw new graphql_1.GraphQLError('Transaktion konnte nicht erstellt werden', {
+            extensions: { code: 'INTERNAL_SERVER_ERROR' },
+        });
+    }
+    return transaction;
+};
 exports.resolvers = {
     Query: {
         publishers: async (_, { pattern, us, first, after, filter }, context) => {
             const { loggedIn, publisherService } = context;
-            return (await publisherService.findPublishers(pattern || undefined, us !== null && us !== undefined ? us : undefined, first || undefined, after || undefined, loggedIn, filter || undefined));
+            return await publisherService.findPublishers(pattern || undefined, us !== null && us !== undefined ? us : undefined, first || undefined, after || undefined, loggedIn, filter || undefined);
         },
         publisher: (_, { publisher }, { models }) => {
             schemas_1.PublisherInputSchema.parse(publisher);
@@ -26,13 +34,15 @@ exports.resolvers = {
                     extensions: { code: 'UNAUTHENTICATED' },
                 });
             try {
+                const tx = requireTransaction(transaction);
                 schemas_1.PublisherInputSchema.parse(item);
-                await publisherService.deletePublisher(item, transaction);
-                await transaction.commit();
+                await publisherService.deletePublisher(item, tx);
+                await tx.commit();
                 return true;
             }
             catch (e) {
-                await transaction.rollback();
+                if (transaction)
+                    await transaction.rollback();
                 if (e instanceof Error && e.name === 'ZodError') {
                     throw new graphql_1.GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
                 }
@@ -46,13 +56,15 @@ exports.resolvers = {
                     extensions: { code: 'UNAUTHENTICATED' },
                 });
             try {
+                const tx = requireTransaction(transaction);
                 schemas_1.PublisherInputSchema.parse(item);
-                let res = await publisherService.createPublisher(item, transaction);
-                await transaction.commit();
+                let res = await publisherService.createPublisher(item, tx);
+                await tx.commit();
                 return res;
             }
             catch (e) {
-                await transaction.rollback();
+                if (transaction)
+                    await transaction.rollback();
                 if (e instanceof Error && e.name === 'ZodError') {
                     throw new graphql_1.GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
                 }
@@ -66,14 +78,16 @@ exports.resolvers = {
                     extensions: { code: 'UNAUTHENTICATED' },
                 });
             try {
+                const tx = requireTransaction(transaction);
                 schemas_1.PublisherInputSchema.parse(old);
                 schemas_1.PublisherInputSchema.parse(item);
-                let res = await publisherService.editPublisher(old, item, transaction);
-                await transaction.commit();
+                let res = await publisherService.editPublisher(old, item, tx);
+                await tx.commit();
                 return res;
             }
             catch (e) {
-                await transaction.rollback();
+                if (transaction)
+                    await transaction.rollback();
                 if (e instanceof Error && e.name === 'ZodError') {
                     throw new graphql_1.GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
                 }
@@ -97,7 +111,7 @@ exports.resolvers = {
             });
             return res.length;
         },
-        lastEdited: async (parent, { limit }, { models }) => (await models.Issue.findAll({
+        lastEdited: async (parent, { limit }, { models }) => await models.Issue.findAll({
             include: [
                 {
                     model: models.Series,
@@ -106,8 +120,8 @@ exports.resolvers = {
             ],
             order: [['updatedAt', 'DESC']],
             limit: limit || 25,
-        })),
-        firstIssue: async (parent, _, { models }) => (await models.Issue.findOne({
+        }),
+        firstIssue: async (parent, _, { models }) => await models.Issue.findOne({
             include: [
                 {
                     model: models.Series,
@@ -118,8 +132,8 @@ exports.resolvers = {
                 ['number', 'ASC'],
                 ['variant', 'ASC'],
             ],
-        })),
-        lastIssue: async (parent, _, { models }) => (await models.Issue.findOne({
+        }),
+        lastIssue: async (parent, _, { models }) => await models.Issue.findOne({
             include: [
                 {
                     model: models.Series,
@@ -130,7 +144,7 @@ exports.resolvers = {
                 ['number', 'DESC'],
                 ['variant', 'DESC'],
             ],
-        })),
+        }),
         active: (parent) => !parent.endyear || parent.endyear === 0,
     },
 };

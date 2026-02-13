@@ -1,6 +1,13 @@
 import { Sequelize, Op } from 'sequelize';
 import { AppearanceResolvers } from '../../types/graphql';
 
+type AppearanceParent = {
+  id: number;
+  name: string;
+  type: string;
+  Stories?: Array<{ id: number }>;
+};
+
 export const resolvers: AppearanceResolvers = {
   Query: {
     apps: async (_, { pattern, type, first, after }, { models }) => {
@@ -10,12 +17,17 @@ export const resolvers: AppearanceResolvers = {
         decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
       }
 
-      let where: any = {};
-      let order: any = [['name', 'ASC'], ['id', 'ASC']];
+      const where: Record<string | symbol, unknown> = {};
+      const order: Array<[string, 'ASC' | 'DESC']> = [
+        ['name', 'ASC'],
+        ['id', 'ASC'],
+      ];
 
       if (decodedCursor) {
-        where[Op.and as any] = [
-          Sequelize.literal(`(name, id) > (SELECT name, id FROM Appearance WHERE id = ${decodedCursor})`)
+        where[Op.and] = [
+          Sequelize.literal(
+            `(name, id) > (SELECT name, id FROM Appearance WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
 
@@ -34,9 +46,9 @@ export const resolvers: AppearanceResolvers = {
       const hasNextPage = results.length > limit;
       const nodes = results.slice(0, limit);
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node,
       }));
 
       return {
@@ -46,7 +58,7 @@ export const resolvers: AppearanceResolvers = {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     },
   },
@@ -58,14 +70,15 @@ export const resolvers: AppearanceResolvers = {
     name: (parent) => parent.name.trim(),
     type: (parent) => (parent.type.trim() === '' ? 'CHARACTER' : parent.type),
     role: async (parent, _, { models }) => {
-      if (!(parent as any).Stories || (parent as any).Stories.length === 0) return '';
+      const appearanceParent = parent as unknown as AppearanceParent;
+      if (!appearanceParent.Stories || appearanceParent.Stories.length === 0) return '';
       let relation = await models.Story_Appearance.findOne({
         where: {
-          fk_story: (parent as any).Stories[0].id,
-          fk_appearance: parent.id,
+          fk_story: appearanceParent.Stories[0].id,
+          fk_appearance: appearanceParent.id,
         },
       });
-      return relation ? (relation as any).role : '';
+      return relation ? (relation as { role?: string }).role || '' : '';
     },
   },
 };

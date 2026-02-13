@@ -39,7 +39,8 @@ async function asyncForEach(array, callback) {
     }
 }
 function naturalCompare(a, b) {
-    var ax = [], bx = [];
+    const ax = [];
+    const bx = [];
     a.replace(/(\d+)|(\D+)/g, function (_, $1, $2) {
         ax.push([$1 || Infinity, $2 || '']);
         return _;
@@ -49,9 +50,9 @@ function naturalCompare(a, b) {
         return _;
     });
     while (ax.length && bx.length) {
-        var an = ax.shift();
-        var bn = bx.shift();
-        var nn = an[0] - bn[0] || an[1].localeCompare(bn[1]);
+        const an = ax.shift();
+        const bn = bx.shift();
+        const nn = Number(an[0]) - Number(bn[0]) || an[1].localeCompare(bn[1]);
         if (nn)
             return nn;
     }
@@ -99,62 +100,76 @@ function romanize(num) {
 function escapeSqlString(s) {
     return s.replace("'", '%');
 }
+const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 async function generateLabel(item) {
     if (!item)
         return '';
     if (item.name)
         return item.name;
-    if (item.volume) {
-        let year;
-        let publisher = item.publisher === null || item.publisher ? item.publisher : await item.getPublisher();
-        if (item.startyear)
+    if (isNumber(item.volume) && item.volume > 0) {
+        let year = '';
+        const publisher = item.publisher === null || item.publisher
+            ? item.publisher
+            : item.getPublisher
+                ? await item.getPublisher()
+                : null;
+        if (isNumber(item.startyear))
             if (item.startyear === item.endyear)
                 year = ' (' + item.startyear + ')';
-            else
+            else {
                 year =
                     ' (' +
                         item.startyear +
                         ' - ' +
                         (!item.endyear || item.endyear === 0 ? '...' : item.endyear) +
                         ')';
-        return (item.title +
+            }
+        return ((item.title || '') +
             ' (Vol. ' +
             romanize(item.volume) +
             ')' +
-            (year ? year : '') +
-            (publisher ? ' (' + publisher.name + ')' : ''));
+            year +
+            (publisher?.name ? ' (' + publisher.name + ')' : ''));
     }
     if (item.number) {
-        let year;
-        let series = item.series ? item.series : await item.getSeries();
-        let publisher = series.publisher ? series.publisher : await series.getPublisher();
-        if (series.startyear)
+        let year = '';
+        const series = item.series ? item.series : item.getSeries ? await item.getSeries() : null;
+        if (!series)
+            return '';
+        const publisher = series.publisher
+            ? series.publisher
+            : series.getPublisher
+                ? await series.getPublisher()
+                : null;
+        if (isNumber(series.startyear))
             if (series.startyear === series.endyear)
                 year = ' (' + series.startyear + ')';
-            else
+            else {
                 year =
                     ' (' +
                         series.startyear +
                         ' - ' +
                         (!series.endyear || series.endyear === 0 ? '...' : series.endyear) +
                         ')';
-        let title = series.title +
+            }
+        let title = (series.title || '') +
             ' (' +
-            publisher.name +
+            (publisher?.name || '') +
             ') ' +
-            (publisher ? '(Vol. ' + romanize(series.volume) + ')' : '') +
-            (year ? year : '');
+            (publisher && isNumber(series.volume) ? '(Vol. ' + romanize(series.volume) + ')' : '') +
+            year;
         let format = '';
-        if (item.format !== '' || item.variant != '') {
+        if ((item.format || '') !== '' || (item.variant || '') !== '') {
             format = ' (';
-            if (item.format !== '')
+            if (item.format)
                 format += item.format;
-            if (item.format !== '' && item.variant !== '')
+            if (item.format && item.variant)
                 format += '/';
-            if (item.variant !== '')
+            if (item.variant)
                 format += item.variant;
             format += ')';
         }
         return title + ' #' + item.number + format;
     }
+    return '';
 }

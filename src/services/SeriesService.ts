@@ -1,7 +1,7 @@
 import models from '../models';
 import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
 import logger from '../util/logger';
-import { Filter, PublisherInput, SeriesInput } from '../types/graphql';
+import type { Filter, PublisherInput, SeriesInput } from '@shortbox/contract';
 
 export class SeriesService {
   constructor(
@@ -9,8 +9,16 @@ export class SeriesService {
     private requestId?: string,
   ) {}
 
-  private log(message: string, level: string = 'info') {
-    (logger as any)[level](message, { requestId: this.requestId });
+  private log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
+    if (level === 'error') {
+      logger.error(message, { requestId: this.requestId });
+      return;
+    }
+    if (level === 'warn') {
+      logger.warn(message, { requestId: this.requestId });
+      return;
+    }
+    logger.info(message, { requestId: this.requestId });
   }
 
   async findSeries(
@@ -21,6 +29,17 @@ export class SeriesService {
     loggedIn: boolean,
     filter: Filter | undefined,
   ) {
+    type WhereMap = Record<string | symbol, unknown>;
+    type IssueWithSeries = {
+      Series: {
+        id: number;
+        title: string;
+        volume: number;
+        startyear: number;
+        endyear: number;
+        fk_publisher: number;
+      };
+    };
     const limit = first || 50;
     let decodedCursor: number | undefined;
     if (after) {
@@ -28,6 +47,7 @@ export class SeriesService {
     }
 
     if (!filter) {
+      const where: WhereMap = {};
       let options: FindOptions = {
         order: [
           [Sequelize.fn('sortabletitle', Sequelize.col('title')), 'ASC'],
@@ -35,17 +55,20 @@ export class SeriesService {
           ['id', 'ASC'],
         ],
         include: [{ model: this.models.Publisher }],
-        where: {} as any,
+        where,
         limit: limit + 1,
       };
 
       if (decodedCursor) {
-        (options.where as any)[Op.and as any] = [
-          Sequelize.literal(`(sortabletitle(title), volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`)
+        where[Op.and] = [
+          Sequelize.literal(
+            `(sortabletitle(title), volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
 
-      if (publisher.name !== '*') options.where = { ...options.where, '$Publisher.name$': publisher.name };
+      if (publisher.name !== '*')
+        options.where = { ...options.where, '$Publisher.name$': publisher.name };
 
       if (publisher.us !== undefined && publisher.us !== null)
         options.where = { ...options.where, '$Publisher.original$': publisher.us ? 1 : 0 };
@@ -62,9 +85,9 @@ export class SeriesService {
       const hasNextPage = results.length > limit;
       const nodes = results.slice(0, limit);
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node,
       }));
 
       return {
@@ -74,36 +97,45 @@ export class SeriesService {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models);
       const options = filterService.getFilterOptions(loggedIn, filter);
+      const whereWithSymbols = options.where as WhereMap;
       options.group = ['fk_series'];
       options.limit = limit + 1;
 
       if (decodedCursor) {
-        (options.where as any)[Op.and as any] = [
-          ...((options.where as any)[Op.and as any] || []),
-          Sequelize.literal(`(sortabletitle(Series.title), Series.volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`)
+        const currentAnd = Array.isArray(whereWithSymbols[Op.and])
+          ? (whereWithSymbols[Op.and] as unknown[])
+          : [];
+        whereWithSymbols[Op.and] = [
+          ...currentAnd,
+          Sequelize.literal(
+            `(sortabletitle(Series.title), Series.volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`,
+          ),
         ];
       }
 
       const res = await this.models.Issue.findAll(options);
       const hasNextPage = res.length > limit;
-      const nodes = res.slice(0, limit).map((i: any) => ({
-        id: i.Series.id,
-        title: i.Series.title,
-        volume: i.Series.volume,
-        startyear: i.Series.startyear,
-        endyear: i.Series.endyear,
-        fk_publisher: i.Series.fk_publisher,
-      }));
+      const nodes = res.slice(0, limit).map((issue) => {
+        const issueNode = issue as unknown as IssueWithSeries;
+        return {
+          id: issueNode.Series.id,
+          title: issueNode.Series.title,
+          volume: issueNode.Series.volume,
+          startyear: issueNode.Series.startyear,
+          endyear: issueNode.Series.endyear,
+          fk_publisher: issueNode.Series.fk_publisher,
+        };
+      });
 
-      const edges = nodes.map(node => ({
+      const edges = nodes.map((node) => ({
         cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as any
+        node,
       }));
 
       return {
@@ -113,7 +145,7 @@ export class SeriesService {
           hasPreviousPage: !!after,
           startCursor: edges.length > 0 ? edges[0].cursor : null,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        }
+        },
       };
     }
   }
@@ -136,7 +168,7 @@ export class SeriesService {
       throw new Error('Series not found');
     }
 
-    return await (series as any).deleteInstance(transaction, this.models);
+    return await series.deleteInstance(transaction, this.models);
   }
 
   async createSeries(item: SeriesInput, transaction: Transaction) {

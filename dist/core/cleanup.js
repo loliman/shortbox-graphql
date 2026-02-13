@@ -17,7 +17,7 @@ async function run() {
     const transaction = await models_1.default.sequelize.transaction();
     logger_1.default.info('Starting cleanup...');
     try {
-        let issues = await models_1.default.Issue.findAll({
+        const issues = await models_1.default.Issue.findAll({
             where: {
                 '$Series->Publisher.original$': 1,
             },
@@ -34,7 +34,7 @@ async function run() {
         let storyCount = 0;
         let coverCount = 0;
         await (0, util_1.asyncForEach)(issues, async (issue) => {
-            let variants = await models_1.default.Issue.findAll({
+            const variants = await models_1.default.Issue.findAll({
                 where: {
                     number: issue.number,
                     fk_series: issue.fk_series,
@@ -49,7 +49,7 @@ async function run() {
             });
             let del = true;
             await (0, util_1.asyncForEach)(variants, async (variant) => {
-                let covers = await models_1.default.Cover.findAll({
+                const covers = await models_1.default.Cover.findAll({
                     where: { fk_issue: variant.id },
                     transaction,
                 });
@@ -63,7 +63,7 @@ async function run() {
                     }
                 });
                 if (del) {
-                    let stories = await models_1.default.Story.findAll({
+                    const stories = await models_1.default.Story.findAll({
                         where: { fk_issue: variant.id },
                         transaction,
                     });
@@ -80,7 +80,7 @@ async function run() {
             });
             if (del)
                 await (0, util_1.asyncForEach)(variants, async (variant) => {
-                    let covers = await models_1.default.Cover.findAll({
+                    const covers = await models_1.default.Cover.findAll({
                         where: { fk_issue: variant.id },
                         transaction,
                     });
@@ -88,7 +88,7 @@ async function run() {
                         await cover.destroy({ transaction });
                         coverCount++;
                     });
-                    let stories = await models_1.default.Story.findAll({
+                    const stories = await models_1.default.Story.findAll({
                         where: { fk_issue: variant.id },
                         transaction,
                     });
@@ -103,7 +103,7 @@ async function run() {
         //Remove all US Issues without content
         let issueCount = 0;
         await (0, util_1.asyncForEach)(issues, async (issue) => {
-            let variants = await models_1.default.Issue.findAll({
+            const variants = await models_1.default.Issue.findAll({
                 where: {
                     number: issue.number,
                     fk_series: issue.fk_series,
@@ -142,7 +142,7 @@ async function run() {
         });
         logger_1.default.info(`Deleted ${issueCount} issues.`);
         //Remove all US Series without issues
-        let series = await models_1.default.Series.findAll({
+        const series = await models_1.default.Series.findAll({
             where: {
                 '$Publisher.original$': 1,
             },
@@ -163,7 +163,7 @@ async function run() {
         });
         logger_1.default.info(`Deleted ${seriesCount} series.`);
         //Remove all US publishers without series
-        let publishers = await models_1.default.Publisher.findAll({
+        const publishers = await models_1.default.Publisher.findAll({
             where: {
                 original: 1,
             },
@@ -183,7 +183,7 @@ async function run() {
         });
         logger_1.default.info(`Deleted ${publisherCount} publishers.`);
         //Remove all Individuals without content
-        let individuals = await models_1.default.Individual.findAll({ transaction });
+        const individuals = await models_1.default.Individual.findAll({ transaction });
         let individualCount = 0;
         await (0, util_1.asyncForEach)(individuals, async (individual) => {
             let c = await models_1.default.Cover_Individual.count({
@@ -219,7 +219,7 @@ async function run() {
         });
         logger_1.default.info(`Deleted ${individualCount} individuals.`);
         //Remove all arcs without content
-        let arcs = await models_1.default.Arc.findAll({ transaction });
+        const arcs = await models_1.default.Arc.findAll({ transaction });
         let arcCount = 0;
         await (0, util_1.asyncForEach)(arcs, async (arc) => {
             let c = await models_1.default.Issue_Arc.count({ where: { fk_arc: arc.id }, transaction });

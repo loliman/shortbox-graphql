@@ -10,11 +10,14 @@ exports.resolvers = {
             if (after) {
                 decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
             }
-            let where = {};
-            let order = [['name', 'ASC'], ['id', 'ASC']];
+            const where = {};
+            const order = [
+                ['name', 'ASC'],
+                ['id', 'ASC'],
+            ];
             if (decodedCursor) {
                 where[sequelize_1.Op.and] = [
-                    sequelize_1.Sequelize.literal(`(name, id) > (SELECT name, id FROM Appearance WHERE id = ${decodedCursor})`)
+                    sequelize_1.Sequelize.literal(`(name, id) > (SELECT name, id FROM Appearance WHERE id = ${decodedCursor})`),
                 ];
             }
             if (pattern && pattern !== '') {
@@ -29,9 +32,9 @@ exports.resolvers = {
             });
             const hasNextPage = results.length > limit;
             const nodes = results.slice(0, limit);
-            const edges = nodes.map(node => ({
+            const edges = nodes.map((node) => ({
                 cursor: Buffer.from(node.id.toString()).toString('base64'),
-                node: node
+                node,
             }));
             return {
                 edges,
@@ -40,7 +43,7 @@ exports.resolvers = {
                     hasPreviousPage: !!after,
                     startCursor: edges.length > 0 ? edges[0].cursor : null,
                     endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-                }
+                },
             };
         },
     },
@@ -53,15 +56,16 @@ exports.resolvers = {
         name: (parent) => parent.name.trim(),
         type: (parent) => (parent.type.trim() === '' ? 'CHARACTER' : parent.type),
         role: async (parent, _, { models }) => {
-            if (!parent.Stories || parent.Stories.length === 0)
+            const appearanceParent = parent;
+            if (!appearanceParent.Stories || appearanceParent.Stories.length === 0)
                 return '';
             let relation = await models.Story_Appearance.findOne({
                 where: {
-                    fk_story: parent.Stories[0].id,
-                    fk_appearance: parent.id,
+                    fk_story: appearanceParent.Stories[0].id,
+                    fk_appearance: appearanceParent.id,
                 },
             });
-            return relation ? relation.role : '';
+            return relation ? relation.role || '' : '';
         },
     },
 };

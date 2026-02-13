@@ -26,7 +26,15 @@ export interface CrawlerStory {
   onlyoneprint?: boolean;
   collected?: boolean;
   part?: string;
-  reprintOf?: any; // To avoid circular dependency issues for now
+  reprintOf?: CrawlerStoryReference;
+  individuals: CrawlerIndividual[];
+  appearances: CrawlerAppearance[];
+}
+
+export interface CrawlerStoryReference {
+  number?: number;
+  title: string;
+  issue: Pick<CrawlerIssue, 'number' | 'series'>;
   individuals: CrawlerIndividual[];
   appearances: CrawlerAppearance[];
 }
@@ -59,7 +67,7 @@ export interface CrawlerIssue {
   };
   variant?: string;
   cover: CrawlerCover;
-  variants: any[];
+  variants: CrawlerIssue[];
   stories: CrawlerStory[];
   individuals: CrawlerIndividual[];
   arcs: CrawlerArc[];

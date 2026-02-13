@@ -10,14 +10,24 @@ exports.typeDef = (0, graphql_tag_1.default) `
     deleteIssue(item: IssueInput!): Boolean
     createIssue(item: IssueInput!): Issue
     editIssue(old: IssueInput!, item: IssueInput!): Issue
-    crawlIssue(number: String!, title: String!, volume: Int!): Issue
-    uploadCover(file: Upload!, issue: IssueInput!): Boolean
   }
 
   extend type Query {
-    issues(pattern: String, series: SeriesInput!, first: Int, after: String, filter: Filter): IssueConnection
+    issues(
+      pattern: String
+      series: SeriesInput!
+      first: Int
+      after: String
+      filter: Filter
+    ): IssueConnection
     issue(issue: IssueInput!, edit: Boolean): Issue
-    lastEdited(filter: Filter, first: Int, after: String, order: String, direction: String): IssueConnection
+    lastEdited(
+      filter: Filter
+      first: Int
+      after: String
+      order: String
+      direction: String
+    ): IssueConnection
   }
 
   type IssueConnection {

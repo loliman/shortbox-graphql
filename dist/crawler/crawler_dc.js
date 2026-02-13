@@ -72,8 +72,11 @@ async function finalizeStories(issue) {
     });
 }
 async function crawlReprint(story) {
-    let issue = (await crawlIssue(story.reprintOf.issue.number, story.reprintOf.issue.series.title, story.reprintOf.issue.series.volume));
-    let originalStoryIndex = story.reprintOf.number;
+    if (!story.reprintOf)
+        return;
+    const reprint = story.reprintOf;
+    let issue = (await crawlIssue(reprint.issue.number, reprint.issue.series.title, reprint.issue.series.volume));
+    let originalStoryIndex = reprint.number;
     if (originalStoryIndex) {
         originalStoryIndex--;
     }
@@ -99,8 +102,12 @@ async function crawlReprint(story) {
     }
     if (!originalStoryIndex || originalStoryIndex - 1 > issue.stories.length)
         originalStoryIndex = 0;
-    story.reprintOf = JSON.parse(JSON.stringify(issue.stories[originalStoryIndex]));
-    story.reprintOf.issue = issue;
+    const reprintOf = JSON.parse(JSON.stringify(issue.stories[originalStoryIndex]));
+    reprintOf.issue = {
+        number: issue.number,
+        series: issue.series,
+    };
+    story.reprintOf = reprintOf;
 }
 function fixPublisher(issue) {
     if (!issue.series.publisher.name) {
@@ -134,7 +141,11 @@ async function fixVariants(issue) {
         let title = v.variant;
         if (issue.variants && issue.variants.map((o) => o.variant).includes(title)) {
             title =
-                title + ' ' + (issue.variants.map((o) => o.variant).filter((o) => o === title).length + 1);
+                title +
+                    ' ' +
+                    (issue.variants.map((o) => o.variant).filter((variant) => variant === title)
+                        .length +
+                        1);
         }
         let cover = {
             number: 0,
@@ -188,12 +199,12 @@ async function crawlCover(cover, issue) {
     while (cover.url.indexOf('%3A') !== -1)
         cover.url = cover.url.replace('%3A', '');
     try {
-        let $ = await request({
+        let $ = (await request({
             uri: API_URI +
                 '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
                 encodeURI(cover.url),
             transform: (body) => JSON.parse(body),
-        });
+        }));
         if (Object.keys($.query.pages)[0] === '-1') {
             $ = await request({
                 uri: API_URI +
@@ -242,8 +253,11 @@ async function crawlCover(cover, issue) {
                 transform: (body) => JSON.parse(body),
             });
         }
-        cover.url = $.query.pages[Object.keys($.query.pages)[0]].imageinfo[0].url;
-        cover.url = cover.url.substring(0, cover.url.indexOf('/revision/'));
+        const firstPage = $.query.pages[Object.keys($.query.pages)[0]];
+        const imageUrl = firstPage?.imageinfo?.[0]?.url || '';
+        cover.url = imageUrl.includes('/revision/')
+            ? imageUrl.substring(0, imageUrl.indexOf('/revision/'))
+            : imageUrl;
     }
     catch (e) {
         cover.url = '';
@@ -456,12 +470,18 @@ function extractAppearances(count, issue, indexOfLine, $) {
 }
 function extractReprint(content, count, type, issue) {
     createStory(count, issue);
+    const storyEntry = issue.stories[count - 1];
+    if (!storyEntry)
+        return;
     if (type.indexOf('Story') > 0) {
-        issue.stories[count - 1].reprintOf.number = Number.parseInt(content);
+        if (storyEntry.reprintOf) {
+            storyEntry.reprintOf.number = Number.parseInt(content);
+        }
     }
     else {
-        let original = {
-            series: {},
+        const original = {
+            number: '',
+            series: { title: '', volume: 1, publisher: {} },
         };
         if (content.indexOf('Vol') === -1) {
             original.series.title = content.substring(0, content.indexOf('#')).trim();
@@ -479,12 +499,20 @@ function extractReprint(content, count, type, issue) {
             original.number = content.substring(content.lastIndexOf(' ')).trim();
         }
         createStory(count, issue);
-        if (!issue.stories[count - 1].reprintOf) {
-            issue.stories[count - 1].reprintOf = {};
+        if (!storyEntry.reprintOf) {
+            storyEntry.reprintOf = {
+                title: '',
+                issue: { number: '', series: { title: '', volume: 1, publisher: {} } },
+                individuals: [],
+                appearances: [],
+            };
         }
-        issue.stories[count - 1].reprintOf.individuals = [];
-        issue.stories[count - 1].reprintOf.appearances = [];
-        issue.stories[count - 1].reprintOf.issue = original;
+        const storyRef = storyEntry.reprintOf;
+        if (!storyRef)
+            return;
+        storyRef.individuals = [];
+        storyRef.appearances = [];
+        storyRef.issue = original;
     }
 }
 function extractAdaptedFrom(content, count, issue) {
@@ -594,10 +622,10 @@ function extractNumberOfInfoboxLine(type) {
 }
 async function crawlSeries(issue) {
     try {
-        let $ = await request({
+        const $ = (await request({
             uri: INDEX_URI + '?action=render&title=' + generateSeriesUrl(issue.series),
             transform: (body) => cheerio_1.default.load(body),
-        });
+        }));
         extractPublisher($, issue);
         extractDates($, issue);
     }
@@ -610,13 +638,14 @@ function extractDates($, issue) {
     if (publicationDate.length > 0) {
         let text = $(publicationDate.get(0).nextSibling.nextSibling).text().trim();
         //let ongoing = text.indexOf("Ongoing") !== -1;
-        let date = text.replace(/[a-zA-Z :,—]/g, '').replaceAll(' ', '');
-        issue.series.startyear = date.substring(1, 5);
+        let date = text.replace(/[a-zA-Z :,—]/g, '').replace(/ /g, '');
+        const series = issue.series;
+        series.startyear = date.substring(1, 5);
         if (date.length === 11) {
-            issue.series.endyear = date.substring(7, 11);
+            series.endyear = date.substring(7, 11);
         }
         else {
-            issue.series.endyear = 0;
+            series.endyear = 0;
         }
     }
 }
@@ -734,10 +763,19 @@ function createStory(count, issue) {
 function createCover(count, issue) {
     if (issue.variants && !issue.variants[count - 1]) {
         issue.variants[count - 1] = {
+            number: issue.number,
+            format: issue.format,
+            currency: issue.currency,
+            releasedate: issue.releasedate,
+            series: JSON.parse(JSON.stringify(issue.series)),
             cover: {
                 number: 0,
                 individuals: [],
             },
+            variants: [],
+            stories: [],
+            individuals: [],
+            arcs: [],
         };
     }
 }

@@ -16,7 +16,32 @@ export const typeDef = gql`
   }
 `;
 
-const createUrl = (type: string, original: boolean, publisherName: string, seriesTitle: string, seriesVolume: number, number: string, format: string, variant: string) => {
+type SeriesWithPublisher = {
+  title: string;
+  volume: number;
+  startyear: number;
+  endyear: number | null;
+  Publisher: { name: string };
+};
+
+type IssueWithSeries = {
+  title: string;
+  number: string;
+  format: string;
+  variant: string;
+  Series: SeriesWithPublisher;
+};
+
+const createUrl = (
+  type: string,
+  original: boolean,
+  publisherName: string,
+  seriesTitle: string,
+  seriesVolume: number,
+  number: string,
+  format: string,
+  variant: string,
+) => {
   let url = original ? '/us/' : '/de/';
   url += encodeURIComponent(publisherName);
   if (type !== 'publisher') {
@@ -31,7 +56,13 @@ const createUrl = (type: string, original: boolean, publisherName: string, serie
   return url;
 };
 
-const createSeriesLabel = (seriesTitle: string, publisherName: string, volume: number, startyear: number, endyear: number | null) => {
+const createSeriesLabel = (
+  seriesTitle: string,
+  publisherName: string,
+  volume: number,
+  startyear: number,
+  endyear: number | null,
+) => {
   let years = ` (${startyear}`;
   if (endyear && endyear > startyear) {
     years += `-${endyear}`;
@@ -40,7 +71,13 @@ const createSeriesLabel = (seriesTitle: string, publisherName: string, volume: n
   return `${seriesTitle} (Vol. ${romanize(volume)})${years} (${publisherName})`;
 };
 
-const createIssueLabel = (seriesLabel: string, number: string, format: string, variant: string, issueTitle: string) => {
+const createIssueLabel = (
+  seriesLabel: string,
+  number: string,
+  format: string,
+  variant: string,
+  issueTitle: string,
+) => {
   let label = `${seriesLabel} #${number}`;
   let fmt = ` (${format}`;
   if (variant) {
@@ -65,68 +102,112 @@ export const resolvers: { Query: QueryResolvers; Node: Resolvers['Node'] } = {
       const publishers = await models.Publisher.findAll({
         where: {
           original: us,
-          name: { [Op.like]: searchPattern }
+          name: { [Op.like]: searchPattern },
         },
-        limit: 20
+        limit: 20,
       });
 
       // 2. Series
       const series = await models.Series.findAll({
-        include: [{
-          model: models.Publisher,
-          required: true,
-          where: { original: us }
-        }],
+        include: [
+          {
+            model: models.Publisher,
+            required: true,
+            where: { original: us },
+          },
+        ],
         where: {
-          title: { [Op.like]: searchPattern }
+          title: { [Op.like]: searchPattern },
         },
-        limit: 20
+        limit: 20,
       });
 
       // 3. Issues
       const issues = await models.Issue.findAll({
-        include: [{
-          model: models.Series,
-          required: true,
-          include: [{
-            model: models.Publisher,
+        include: [
+          {
+            model: models.Series,
             required: true,
-            where: { original: us }
-          }]
-        }],
+            include: [
+              {
+                model: models.Publisher,
+                required: true,
+                where: { original: us },
+              },
+            ],
+          },
+        ],
         where: {
           [Op.or]: [
             { title: { [Op.like]: searchPattern } },
-            { number: { [Op.like]: `${pattern}%` } }
-          ]
+            { number: { [Op.like]: `${pattern}%` } },
+          ],
         },
-        limit: 20
+        limit: 20,
       });
 
       const nodes = [
-        ...publishers.map(p => ({
+        ...publishers.map((p) => ({
           type: 'publisher',
           label: p.name,
-          url: createUrl('publisher', us, p.name, '', 0, '', '', '')
+          url: createUrl('publisher', us, p.name, '', 0, '', '', ''),
         })),
-        ...series.map(s => {
-          const label = createSeriesLabel(s.title, (s as any).Publisher.name, s.volume, s.startyear, s.endyear);
+        ...series.map((s) => {
+          const seriesNode = s as unknown as SeriesWithPublisher;
+          const label = createSeriesLabel(
+            seriesNode.title,
+            seriesNode.Publisher.name,
+            seriesNode.volume,
+            seriesNode.startyear,
+            seriesNode.endyear,
+          );
           return {
             type: 'series',
             label,
-            url: createUrl('series', us, (s as any).Publisher.name, s.title, s.volume, '', '', '')
+            url: createUrl(
+              'series',
+              us,
+              seriesNode.Publisher.name,
+              seriesNode.title,
+              seriesNode.volume,
+              '',
+              '',
+              '',
+            ),
           };
         }),
-        ...issues.map(i => {
-          const s = (i as any).Series;
-          const seriesLabel = createSeriesLabel(s.title, s.Publisher.name, s.volume, s.startyear, s.endyear);
-          const label = createIssueLabel(seriesLabel, i.number, i.format, i.variant, i.title);
+        ...issues.map((i) => {
+          const issueNode = i as unknown as IssueWithSeries;
+          const issueSeries = issueNode.Series;
+          const seriesLabel = createSeriesLabel(
+            issueSeries.title,
+            issueSeries.Publisher.name,
+            issueSeries.volume,
+            issueSeries.startyear,
+            issueSeries.endyear,
+          );
+          const label = createIssueLabel(
+            seriesLabel,
+            issueNode.number,
+            issueNode.format,
+            issueNode.variant,
+            issueNode.title,
+          );
           return {
             type: 'issue',
             label,
-            url: createUrl('issue', us, s.Publisher.name, s.title, s.volume, i.number, i.format, i.variant)
+            url: createUrl(
+              'issue',
+              us,
+              issueSeries.Publisher.name,
+              issueSeries.title,
+              issueSeries.volume,
+              issueNode.number,
+              issueNode.format,
+              issueNode.variant,
+            ),
           };
-        })
+        }),
       ];
 
       // Re-apply the specific ordering and pattern matching logic from the original SQL

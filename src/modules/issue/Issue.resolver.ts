@@ -2,19 +2,38 @@ import { IssueService } from '../../services/IssueService';
 import { GraphQLError } from 'graphql';
 import { IssueResolvers } from '../../types/graphql';
 import { IssueInputSchema } from '../../types/schemas';
+import { Transaction } from 'sequelize';
+
+type IssueParent = {
+  id: number;
+  fk_series: number;
+  number: string;
+  Series?: unknown;
+  getIndividuals?: () => Promise<unknown[]>;
+  getArcs?: () => Promise<unknown[]>;
+};
+
+const requireTransaction = (transaction: Transaction | undefined): Transaction => {
+  if (!transaction) {
+    throw new GraphQLError('Transaktion konnte nicht erstellt werden', {
+      extensions: { code: 'INTERNAL_SERVER_ERROR' },
+    });
+  }
+  return transaction;
+};
 
 export const resolvers: IssueResolvers = {
   Query: {
     issues: async (_, { pattern, series, first, after, filter }, context) => {
       const { loggedIn, issueService } = context;
-      return (await issueService.findIssues(
+      return await issueService.findIssues(
         pattern || undefined,
         series,
         first || undefined,
         after || undefined,
         loggedIn,
         filter || undefined,
-      )) as any;
+      );
     },
     issue: async (_, { issue }, { models }) => {
       IssueInputSchema.parse(issue);
@@ -42,7 +61,7 @@ export const resolvers: IssueResolvers = {
         after || undefined,
         order || undefined,
         direction || undefined,
-        loggedIn
+        loggedIn,
       );
     },
   },
@@ -55,12 +74,13 @@ export const resolvers: IssueResolvers = {
         });
 
       try {
+        const tx = requireTransaction(transaction);
         IssueInputSchema.parse(item);
-        await issueService.deleteIssue(item, transaction);
-        await transaction.commit();
+        await issueService.deleteIssue(item, tx);
+        await tx.commit();
         return true;
       } catch (e) {
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -75,12 +95,13 @@ export const resolvers: IssueResolvers = {
         });
 
       try {
+        const tx = requireTransaction(transaction);
         IssueInputSchema.parse(item);
-        let res = await issueService.createIssue(item, transaction);
-        await transaction.commit();
-        return res as any;
+        let res = await issueService.createIssue(item, tx);
+        await tx.commit();
+        return res;
       } catch (e) {
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -95,13 +116,14 @@ export const resolvers: IssueResolvers = {
         });
 
       try {
+        const tx = requireTransaction(transaction);
         IssueInputSchema.parse(old);
         IssueInputSchema.parse(item);
-        let res = await issueService.editIssue(old, item, transaction);
-        await transaction.commit();
-        return res as any;
+        let res = await issueService.editIssue(old, item, tx);
+        await tx.commit();
+        return res;
       } catch (e) {
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -111,28 +133,25 @@ export const resolvers: IssueResolvers = {
   },
   Issue: {
     series: async (parent, _, { seriesLoader }) =>
-      (parent as any).Series || (await seriesLoader.load(parent.fk_series)),
-    stories: async (parent, _, { models }) =>
-      (await models.Story.findAll({
-        where: { fk_issue: parent.id },
-        order: [['number', 'ASC']],
-      })) as any,
-    cover: async (parent, _, { models }) =>
-      (await models.Cover.findOne({ where: { fk_issue: parent.id, number: 0 } })) as any,
-    covers: async (parent, _, { models }) =>
-      (await models.Cover.findAll({
-        where: { fk_issue: parent.id },
-        order: [['number', 'ASC']],
-      })) as any,
+      (parent as IssueParent).Series ||
+      (await seriesLoader.load((parent as IssueParent).fk_series)),
+    stories: async (parent, _, { issueStoriesLoader }) =>
+      await issueStoriesLoader.load((parent as IssueParent).id),
+    cover: async (parent, _, { issueCoverLoader }) =>
+      await issueCoverLoader.load((parent as IssueParent).id),
+    covers: async (parent, _, { issueCoversLoader }) =>
+      await issueCoversLoader.load((parent as IssueParent).id),
     individuals: async (parent) =>
-      (parent as any).getIndividuals ? await (parent as any).getIndividuals() : [],
-    arcs: async (parent) => ((parent as any).getArcs ? await (parent as any).getArcs() : []),
-    features: async (parent, _, { models }) =>
-      (await models.Feature.findAll({ where: { fk_issue: parent.id } })) as any,
-    variants: async (parent, _, { models }) =>
-      (await models.Issue.findAll({
-        where: { fk_series: parent.fk_series, number: parent.number },
-        order: [['variant', 'ASC']],
-      })) as any,
+      (parent as IssueParent).getIndividuals
+        ? await (parent as IssueParent).getIndividuals?.()
+        : [],
+    arcs: async (parent) =>
+      (parent as IssueParent).getArcs ? await (parent as IssueParent).getArcs?.() : [],
+    features: async (parent, _, { issueFeaturesLoader }) =>
+      await issueFeaturesLoader.load((parent as IssueParent).id),
+    variants: async (parent, _, { issueVariantsLoader }) =>
+      await issueVariantsLoader.load(
+        `${(parent as IssueParent).fk_series}::${(parent as IssueParent).number}`,
+      ),
   },
 };

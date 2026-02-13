@@ -64,65 +64,73 @@ exports.resolvers = {
             const publishers = await models_1.default.Publisher.findAll({
                 where: {
                     original: us,
-                    name: { [sequelize_1.Op.like]: searchPattern }
+                    name: { [sequelize_1.Op.like]: searchPattern },
                 },
-                limit: 20
+                limit: 20,
             });
             // 2. Series
             const series = await models_1.default.Series.findAll({
-                include: [{
+                include: [
+                    {
                         model: models_1.default.Publisher,
                         required: true,
-                        where: { original: us }
-                    }],
+                        where: { original: us },
+                    },
+                ],
                 where: {
-                    title: { [sequelize_1.Op.like]: searchPattern }
+                    title: { [sequelize_1.Op.like]: searchPattern },
                 },
-                limit: 20
+                limit: 20,
             });
             // 3. Issues
             const issues = await models_1.default.Issue.findAll({
-                include: [{
+                include: [
+                    {
                         model: models_1.default.Series,
                         required: true,
-                        include: [{
+                        include: [
+                            {
                                 model: models_1.default.Publisher,
                                 required: true,
-                                where: { original: us }
-                            }]
-                    }],
+                                where: { original: us },
+                            },
+                        ],
+                    },
+                ],
                 where: {
                     [sequelize_1.Op.or]: [
                         { title: { [sequelize_1.Op.like]: searchPattern } },
-                        { number: { [sequelize_1.Op.like]: `${pattern}%` } }
-                    ]
+                        { number: { [sequelize_1.Op.like]: `${pattern}%` } },
+                    ],
                 },
-                limit: 20
+                limit: 20,
             });
             const nodes = [
-                ...publishers.map(p => ({
+                ...publishers.map((p) => ({
                     type: 'publisher',
                     label: p.name,
-                    url: createUrl('publisher', us, p.name, '', 0, '', '', '')
+                    url: createUrl('publisher', us, p.name, '', 0, '', '', ''),
                 })),
-                ...series.map(s => {
-                    const label = createSeriesLabel(s.title, s.Publisher.name, s.volume, s.startyear, s.endyear);
+                ...series.map((s) => {
+                    const seriesNode = s;
+                    const label = createSeriesLabel(seriesNode.title, seriesNode.Publisher.name, seriesNode.volume, seriesNode.startyear, seriesNode.endyear);
                     return {
                         type: 'series',
                         label,
-                        url: createUrl('series', us, s.Publisher.name, s.title, s.volume, '', '', '')
+                        url: createUrl('series', us, seriesNode.Publisher.name, seriesNode.title, seriesNode.volume, '', '', ''),
                     };
                 }),
-                ...issues.map(i => {
-                    const s = i.Series;
-                    const seriesLabel = createSeriesLabel(s.title, s.Publisher.name, s.volume, s.startyear, s.endyear);
-                    const label = createIssueLabel(seriesLabel, i.number, i.format, i.variant, i.title);
+                ...issues.map((i) => {
+                    const issueNode = i;
+                    const issueSeries = issueNode.Series;
+                    const seriesLabel = createSeriesLabel(issueSeries.title, issueSeries.Publisher.name, issueSeries.volume, issueSeries.startyear, issueSeries.endyear);
+                    const label = createIssueLabel(seriesLabel, issueNode.number, issueNode.format, issueNode.variant, issueNode.title);
                     return {
                         type: 'issue',
                         label,
-                        url: createUrl('issue', us, s.Publisher.name, s.title, s.volume, i.number, i.format, i.variant)
+                        url: createUrl('issue', us, issueSeries.Publisher.name, issueSeries.title, issueSeries.volume, issueNode.number, issueNode.format, issueNode.variant),
                     };
-                })
+                }),
             ];
             // Re-apply the specific ordering and pattern matching logic from the original SQL
             nodes.sort((a, b) => {

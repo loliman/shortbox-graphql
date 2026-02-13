@@ -1,5 +1,16 @@
 import axios from 'axios';
 import logger from '../util/logger';
+import type { CrawlerIssue } from './types';
+
+type RequestOptions<T = unknown> = {
+  uri?: string;
+  url?: string;
+  method?: string;
+  qs?: Record<string, unknown>;
+  body?: unknown;
+  headers?: Record<string, string>;
+  transform?: (body: string) => T;
+};
 
 export abstract class BaseCrawler {
   protected baseUri: string;
@@ -8,7 +19,7 @@ export abstract class BaseCrawler {
     this.baseUri = baseUri;
   }
 
-  protected async request(options: any) {
+  protected async request<T = unknown>(options: RequestOptions<T>): Promise<T> {
     try {
       const response = await axios({
         url: options.uri || options.url,
@@ -22,12 +33,12 @@ export abstract class BaseCrawler {
       if (options.transform) {
         return options.transform(response.data);
       }
-      return response.data;
+      return response.data as T;
     } catch (error) {
       logger.error(`Crawler request failed: ${options.uri || options.url}`, { error });
       throw error;
     }
   }
 
-  abstract crawlIssue(number: string, title: string, volume: number): Promise<any>;
+  abstract crawlIssue(number: string, title: string, volume: number): Promise<CrawlerIssue>;
 }

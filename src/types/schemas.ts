@@ -71,7 +71,7 @@ export const ArcInputSchema = z.object({
   type: z.string().optional(),
 });
 
-export const StoryInputSchema: z.ZodType<any> = z.lazy(() =>
+export const StoryInputSchema: z.ZodType<unknown> = z.lazy(() =>
   z.object({
     number: z.number().int(),
     title: z.string().optional(),
@@ -92,7 +92,7 @@ export const StoryInputSchema: z.ZodType<any> = z.lazy(() =>
   }),
 );
 
-export const CoverInputSchema: z.ZodType<any> = z.lazy(() =>
+export const CoverInputSchema: z.ZodType<unknown> = z.lazy(() =>
   z.object({
     number: z.number().int(),
     parent: CoverInputSchema.optional(),

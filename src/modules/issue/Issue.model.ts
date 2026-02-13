@@ -1,4 +1,5 @@
-import { Model, DataTypes, Sequelize } from 'sequelize';
+import { DataTypes, Model, Sequelize, Transaction } from 'sequelize';
+import type { DbModels } from '../../types/db';
 
 export class Issue extends Model {
   public id!: number;
@@ -20,7 +21,7 @@ export class Issue extends Model {
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 
-  public static associate(models: any) {
+  public static associate(models: DbModels) {
     Issue.hasMany(models.Story, {
       as: { singular: 'Issue', plural: 'Stories' },
       foreignKey: 'fk_issue',
@@ -35,7 +36,7 @@ export class Issue extends Model {
     Issue.belongsToMany(models.Arc, { through: models.Issue_Arc, foreignKey: 'fk_issue' });
   }
 
-  public async deleteInstance(transaction: any, models: any): Promise<void> {
+  public async deleteInstance(transaction: Transaction, models: DbModels): Promise<void> {
     // Logik zur Dateilöschung und Kaskadierung
     // In der finalen Version sollte das in einen Service
     const cover = await models.Cover.findOne({

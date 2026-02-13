@@ -13,7 +13,13 @@ exports.typeDef = (0, graphql_tag_1.default) `
   }
 
   extend type Query {
-    series(pattern: String, publisher: PublisherInput!, first: Int, after: String, filter: Filter): SeriesConnection
+    series(
+      pattern: String
+      publisher: PublisherInput!
+      first: Int
+      after: String
+      filter: Filter
+    ): SeriesConnection
     seriesd(series: SeriesInput!): Series
   }
 
