@@ -37,14 +37,7 @@ export class Issue extends Model {
   }
 
   public async deleteInstance(transaction: Transaction, models: DbModels): Promise<void> {
-    // Logik zur Dateilöschung und Kaskadierung
-    // In der finalen Version sollte das in einen Service
-    const cover = await models.Cover.findOne({
-      where: { fk_issue: this.id, number: 0 },
-      transaction,
-    });
-    // Hier müsste die File-Cleanup Logik rein (deleteFile)
-
+    // Kaskadiertes DB-Cleanup für abhängige Entitäten.
     await models.Story.destroy({ where: { fk_issue: this.id }, transaction });
     await models.Feature.destroy({ where: { fk_issue: this.id }, transaction });
     await models.Cover.destroy({ where: { fk_issue: this.id }, transaction });

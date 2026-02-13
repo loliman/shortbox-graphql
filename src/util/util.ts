@@ -1,37 +1,3 @@
-import crypto from 'crypto';
-import fs from 'fs';
-import { coverDir, wwwDir } from '../config/config';
-import { Readable } from 'stream';
-
-export const storeFile = ({
-  stream,
-  filename,
-}: {
-  stream: Readable & { truncated?: boolean };
-  filename: string;
-}): Promise<{ hash: string }> => {
-  let hash = crypto
-    .createHash('sha256')
-    .update(filename + new Date().toLocaleTimeString())
-    .digest('hex');
-  let path = wwwDir + '/' + coverDir + '/' + hash;
-
-  return new Promise((resolve, reject) =>
-    stream
-      .on('error', (error) => {
-        if (stream.truncated) fs.unlinkSync(path);
-        reject(error);
-      })
-      .pipe(fs.createWriteStream(path))
-      .on('error', (error) => reject(error))
-      .on('finish', () => resolve({ hash })),
-  );
-};
-
-export const deleteFile = (filename: string) => {
-  fs.unlinkSync(wwwDir + filename);
-};
-
 export async function asyncForEach<T>(
   array: T[],
   callback: (item: T, index: number, array: T[]) => Promise<void>,
