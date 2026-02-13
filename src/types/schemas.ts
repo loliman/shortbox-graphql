@@ -55,7 +55,6 @@ export const UserInputSchema = z.object({
   id: z.number().optional(),
   name: z.string().min(1, 'Name ist erforderlich'),
   password: z.string().min(1, 'Passwort ist erforderlich').optional(),
-  sessionid: z.string().optional(),
 });
 
 export const AppearanceInputSchema = z.object({

@@ -101,7 +101,7 @@ export const resolvers: UserResolvers = {
     },
     logout: async (
       _,
-      { user },
+      __,
       { loggedIn, transaction, userService, authenticatedUserId, authenticatedSessionId, response },
     ) => {
       if (!loggedIn)
@@ -113,22 +113,15 @@ export const resolvers: UserResolvers = {
       let committed = false;
       try {
         tx = requireTransaction(transaction);
-        UserInputSchema.parse(user);
-        const userId = authenticatedUserId || (user.id ? Number(user.id) : undefined);
-        const sessionid = authenticatedSessionId || user.sessionid || undefined;
+        const userId = authenticatedUserId;
+        const sessionid = authenticatedSessionId;
         if (!userId || !sessionid) {
           throw new GraphQLError('Ungültige Session', {
             extensions: { code: 'UNAUTHENTICATED' },
           });
         }
 
-        let success = await userService.logout(
-          {
-            id: userId,
-            sessionid,
-          },
-          tx,
-        );
+        let success = await userService.logout(userId, sessionid, tx);
 
         await tx.commit();
         committed = true;
@@ -136,15 +129,11 @@ export const resolvers: UserResolvers = {
         return !!success;
       } catch (e) {
         if (tx && !committed) await tx.rollback();
-        if (e instanceof Error && e.name === 'ZodError') {
-          throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
-        }
         throw e;
       }
     },
   },
   User: {
     id: (parent) => String(parent.id),
-    sessionid: (parent) => parent.sessionid || '',
   },
 };

@@ -74,11 +74,11 @@ export class UserService {
     return userRecord;
   }
 
-  async logout(user: UserInput, transaction: Transaction) {
-    this.log(`Logout for user ID: ${user.id}`);
+  async logout(userId: number, sessionid: string, transaction: Transaction) {
+    this.log(`Logout for user ID: ${userId}`);
     let [affectedCount] = await this.models.User.update(
       { sessionid: null },
-      { where: { id: user.id, sessionid: user.sessionid }, transaction },
+      { where: { id: userId, sessionid }, transaction },
     );
     return affectedCount !== 0;
   }
