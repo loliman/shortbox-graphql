@@ -8,6 +8,12 @@ type PasswordVerificationResult = {
   upgradePassword?: string;
 };
 
+type LoginSuccessResult = {
+  userRecord: any;
+  sessionToken: string;
+  csrfToken: string;
+};
+
 const parsePositiveInt = (value: string | undefined, fallback: number): number => {
   const parsed = parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -64,6 +70,14 @@ export class UserService {
   }
 
   private hashSessionToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private generateCsrfToken(): string {
+    return randomBytes(32).toString('base64url');
+  }
+
+  private hashCsrfToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
 
@@ -204,7 +218,11 @@ export class UserService {
     await state.save({ transaction });
   }
 
-  async login(user: LoginInput, transaction: Transaction, requestIp?: string) {
+  async login(
+    user: LoginInput,
+    transaction: Transaction,
+    requestIp?: string,
+  ): Promise<LoginSuccessResult | null> {
     const name = (user.name || '').trim();
     this.log(`Login attempt for user: ${name || 'unknown'}`);
     const now = new Date();
@@ -224,6 +242,8 @@ export class UserService {
 
     const sessionToken = this.generateSessionId();
     const sessionTokenHash = this.hashSessionToken(sessionToken);
+    const csrfToken = this.generateCsrfToken();
+    const csrfTokenHash = this.hashCsrfToken(csrfToken);
     const expiresAt = this.buildSessionExpiry();
 
     let userRecord = await this.models.User.findOne({
@@ -264,13 +284,14 @@ export class UserService {
       {
         fk_user: userRecord.id,
         tokenhash: sessionTokenHash,
+        csrftokenhash: csrfTokenHash,
         expiresat: expiresAt,
         revokedat: null,
       },
       { transaction },
     );
     await userRecord.save({ transaction });
-    return { userRecord, sessionToken };
+    return { userRecord, sessionToken, csrfToken };
   }
 
   async logout(userId: number, sessionTokenHash: string, transaction: Transaction) {

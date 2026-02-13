@@ -4,7 +4,6 @@ import { UserResolvers } from '../../types/graphql';
 import { LoginInputSchema } from '../../types/schemas';
 import { Transaction } from 'sequelize';
 import type { ServerResponse } from 'http';
-import { randomBytes } from 'crypto';
 
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'sb_session';
 const CSRF_COOKIE_NAME = process.env.CSRF_COOKIE_NAME || 'sb_csrf';
@@ -66,10 +65,6 @@ const buildExpiredSessionCookie = () => {
   if (secure) parts.push('Secure');
   if (domain) parts.push(`Domain=${domain}`);
   return parts.join('; ');
-};
-
-const generateCsrfToken = (): string => {
-  return randomBytes(32).toString('base64url');
 };
 
 const buildCsrfCookie = (token: string) => {
@@ -141,7 +136,7 @@ export const resolvers: UserResolvers = {
         await tx.commit();
         committed = true;
         appendSetCookie(response, buildSessionCookie(loginResult.sessionToken));
-        appendSetCookie(response, buildCsrfCookie(generateCsrfToken()));
+        appendSetCookie(response, buildCsrfCookie(loginResult.csrfToken));
         return loginResult.userRecord;
       } catch (e) {
         if (tx && !committed) await tx.rollback();

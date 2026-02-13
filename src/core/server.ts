@@ -10,7 +10,7 @@ import logger from '../util/logger';
 import { Op, Transaction } from 'sequelize';
 import { IncomingMessage } from 'http';
 import type { ServerResponse } from 'http';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import http from 'http';
 import { parse as parseUrl } from 'url';
 
@@ -107,6 +107,7 @@ export interface Context {
   loggedIn: boolean;
   authenticatedUserId?: number;
   authenticatedSessionTokenHash?: string;
+  authenticatedCsrfTokenHash?: string;
   requestIp?: string;
   operationName: string;
   requestId: string;
@@ -189,6 +190,14 @@ const parseRequestIp = (request: IncomingMessage): string | undefined => {
 
 const hashSessionToken = (token: string): string => {
   return createHash('sha256').update(token).digest('hex');
+};
+
+const safeTokenEquals = (left: string | undefined, right: string | undefined): boolean => {
+  if (!left || !right) return false;
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return timingSafeEqual(leftBuffer, rightBuffer);
 };
 
 const resolveOperationAccess = (
@@ -365,6 +374,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           loggedIn: true,
           authenticatedUserId: undefined,
           authenticatedSessionTokenHash: undefined,
+          authenticatedCsrfTokenHash: undefined,
           requestIp,
           operationName,
           requestId,
@@ -394,6 +404,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
       let loggedIn = false;
       let authenticatedUserId: number | undefined;
       let authenticatedSessionTokenHash: string | undefined;
+      let authenticatedCsrfTokenHash: string | undefined;
       const authorization =
         typeof request.headers.authorization === 'string'
           ? request.headers.authorization
@@ -424,6 +435,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           loggedIn = true;
           authenticatedUserId = session.fk_user;
           authenticatedSessionTokenHash = tokenHash;
+          authenticatedCsrfTokenHash = session.csrftokenhash || undefined;
 
           const remainingMs = session.expiresat.getTime() - now.getTime();
           if (remainingMs < SESSION_REFRESH_THRESHOLD_SECONDS * 1000) {
@@ -445,6 +457,13 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
       if (CSRF_PROTECTION_ENABLED && isMutation && !isPublicMutation) {
         const csrfHeaderToken = parseCsrfToken(getRequestHeader(request.headers, CSRF_HEADER_NAME));
         if (!csrfCookieToken || !csrfHeaderToken || csrfCookieToken !== csrfHeaderToken) {
+          throw new GraphQLError('Ungültiges CSRF-Token', {
+            extensions: { code: 'FORBIDDEN' },
+          });
+        }
+
+        const csrfHeaderTokenHash = hashSessionToken(csrfHeaderToken);
+        if (!safeTokenEquals(authenticatedCsrfTokenHash, csrfHeaderTokenHash)) {
           throw new GraphQLError('Ungültiges CSRF-Token', {
             extensions: { code: 'FORBIDDEN' },
           });
@@ -497,6 +516,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         loggedIn,
         authenticatedUserId,
         authenticatedSessionTokenHash,
+        authenticatedCsrfTokenHash,
         requestIp,
         operationName,
         requestId,

@@ -5,6 +5,7 @@ export class UserSession extends Model {
   public id!: number;
   public fk_user!: number;
   public tokenhash!: string;
+  public csrftokenhash!: string | null;
   public expiresat!: Date;
   public revokedat!: Date | null;
   public readonly createdAt!: Date;
@@ -40,6 +41,10 @@ export default (sequelize: Sequelize) => {
         allowNull: false,
         unique: true,
       },
+      csrftokenhash: {
+        type: DataTypes.STRING(128),
+        allowNull: true,
+      },
       expiresat: {
         type: DataTypes.DATE,
         allowNull: false,
@@ -54,6 +59,7 @@ export default (sequelize: Sequelize) => {
       tableName: 'UserSession',
       indexes: [
         { unique: true, fields: ['tokenhash'] },
+        { fields: ['csrftokenhash'] },
         { fields: ['fk_user'] },
         { fields: ['expiresat'] },
         { fields: ['revokedat'] },
