@@ -93,9 +93,14 @@ const allowedCorsOrigins =
 const allowedCorsMethods = 'GET,POST,OPTIONS';
 const AUTH_HEADER_SESSION_ENABLED =
   (process.env.ALLOW_AUTH_HEADER_SESSION || '').toLowerCase() === 'true';
-const allowedCorsHeaders = AUTH_HEADER_SESSION_ENABLED
-  ? 'content-type,authorization'
-  : 'content-type';
+const CSRF_PROTECTION_ENABLED = (process.env.CSRF_PROTECTION_ENABLED || 'true').toLowerCase() !== 'false';
+const CSRF_COOKIE_NAME = process.env.CSRF_COOKIE_NAME || 'sb_csrf';
+const CSRF_HEADER_NAME = (process.env.CSRF_HEADER_NAME || 'x-csrf-token').toLowerCase();
+const allowedCorsHeaders = [
+  'content-type',
+  ...(AUTH_HEADER_SESSION_ENABLED ? ['authorization'] : []),
+  ...(CSRF_PROTECTION_ENABLED ? [CSRF_HEADER_NAME] : []),
+].join(',');
 const parsedBodyLimitBytes = parseInt(process.env.GRAPHQL_BODY_LIMIT_BYTES || '1048576', 10);
 const GRAPHQL_BODY_LIMIT_BYTES = Number.isFinite(parsedBodyLimitBytes)
   ? parsedBodyLimitBytes
@@ -158,6 +163,21 @@ const parseSessionToken = (token: string | undefined): string | null => {
   const normalized = token.trim().replace(/^"|"$/g, '');
   if (normalized.length < 32) return null;
   return normalized;
+};
+
+const parseCsrfToken = (token: string | undefined): string | null => {
+  if (!token) return null;
+  const normalized = token.trim().replace(/^"|"$/g, '');
+  if (normalized.length < 16) return null;
+  return normalized;
+};
+
+const getRequestHeader = (
+  headers: IncomingMessage['headers'],
+  headerName: string,
+): string | undefined => {
+  const raw = headers[headerName.toLowerCase()];
+  return typeof raw === 'string' ? raw : raw?.[0];
 };
 
 const parseRequestIp = (request: IncomingMessage): string | undefined => {
@@ -366,6 +386,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
       const cookieHeader =
         typeof request.headers.cookie === 'string' ? request.headers.cookie : request.headers.cookie?.[0];
       const parsedCookies = parseCookies(cookieHeader);
+      const csrfCookieToken = parseCsrfToken(parsedCookies[CSRF_COOKIE_NAME]);
 
       if (authorization && !AUTH_HEADER_SESSION_ENABLED) {
         throw new GraphQLError('Authorization-Header Sessions sind deaktiviert', {
@@ -417,6 +438,15 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
+      }
+
+      if (CSRF_PROTECTION_ENABLED && isMutation && !isPublicMutation) {
+        const csrfHeaderToken = parseCsrfToken(getRequestHeader(request.headers, CSRF_HEADER_NAME));
+        if (!csrfCookieToken || !csrfHeaderToken || csrfCookieToken !== csrfHeaderToken) {
+          throw new GraphQLError('Ungültiges CSRF-Token', {
+            extensions: { code: 'FORBIDDEN' },
+          });
+        }
       }
 
       const publisherService = new PublisherService(models, requestId);
