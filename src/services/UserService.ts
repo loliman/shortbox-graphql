@@ -1,6 +1,6 @@
 import { Op, Transaction } from 'sequelize';
 import logger from '../util/logger';
-import type { UserInput } from '@shortbox/contract';
+import type { LoginInput } from '@shortbox/contract';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 type LoginRateLimitState = {
@@ -176,7 +176,7 @@ export class UserService {
     UserService.loginRateLimitStateByKey.set(key, state);
   }
 
-  async login(user: UserInput, transaction: Transaction, requestIp?: string) {
+  async login(user: LoginInput, transaction: Transaction, requestIp?: string) {
     const name = (user.name || '').trim();
     this.log(`Login attempt for user: ${name || 'unknown'}`);
     const nowMs = Date.now();

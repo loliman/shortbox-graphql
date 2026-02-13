@@ -2,14 +2,13 @@ import gql from 'graphql-tag';
 
 export const typeDef = gql`
   extend type Mutation {
-    login(user: UserInput!): User
-    logout: Boolean
+    login(credentials: LoginInput!): User!
+    logout: Boolean!
   }
 
-  input UserInput {
-    id: Int
-    name: String
-    password: String
+  input LoginInput {
+    name: String!
+    password: String!
   }
 
   type User {

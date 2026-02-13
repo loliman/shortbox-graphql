@@ -1,7 +1,7 @@
 import { LoginRateLimitError, UserService } from '../../services/UserService';
 import { GraphQLError } from 'graphql';
 import { UserResolvers } from '../../types/graphql';
-import { UserInputSchema } from '../../types/schemas';
+import { LoginInputSchema } from '../../types/schemas';
 import { Transaction } from 'sequelize';
 import type { ServerResponse } from 'http';
 
@@ -68,7 +68,7 @@ export const resolvers: UserResolvers = {
     },
   },
   Mutation: {
-    login: async (_, { user }, { transaction, loggedIn, userService, response, requestIp }) => {
+    login: async (_, { credentials }, { transaction, loggedIn, userService, response, requestIp }) => {
       if (loggedIn)
         throw new GraphQLError('Du bist bereits eingeloggt', {
           extensions: { code: 'BAD_USER_INPUT' },
@@ -78,8 +78,8 @@ export const resolvers: UserResolvers = {
       let committed = false;
       try {
         tx = requireTransaction(transaction);
-        UserInputSchema.parse(user);
-        let loginResult = await userService.login(user, tx, requestIp);
+        LoginInputSchema.parse(credentials);
+        let loginResult = await userService.login(credentials, tx, requestIp);
 
         if (!loginResult) {
           throw new GraphQLError('Login fehlgeschlagen', {

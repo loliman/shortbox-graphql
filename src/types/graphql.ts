@@ -17,6 +17,7 @@ import type {
   Issue,
   IssueConnection,
   IssueInput,
+  LoginInput,
   Node,
   NumberFilter,
   PageInfo,
@@ -30,7 +31,6 @@ import type {
   Story,
   StoryInput,
   User,
-  UserInput,
 } from '@shortbox/contract';
 import type { Context } from '../core/server';
 
@@ -53,6 +53,7 @@ export type {
   Issue,
   IssueConnection,
   IssueInput,
+  LoginInput,
   Node,
   NumberFilter,
   PageInfo,
@@ -66,7 +67,6 @@ export type {
   Story,
   StoryInput,
   User,
-  UserInput,
 };
 
 export type ResolverFn<Parent = unknown, Args = unknown, Result = unknown> = (
