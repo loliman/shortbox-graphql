@@ -91,14 +91,11 @@ const CORS_FAIL_CLOSED = (process.env.CORS_FAIL_CLOSED || 'true').toLowerCase() 
 const allowedCorsOrigins =
   configuredCorsOrigins.length > 0 ? configuredCorsOrigins : defaultCorsOrigins;
 const allowedCorsMethods = 'GET,POST,OPTIONS';
-const AUTH_HEADER_SESSION_ENABLED =
-  (process.env.ALLOW_AUTH_HEADER_SESSION || '').toLowerCase() === 'true';
 const CSRF_PROTECTION_ENABLED = (process.env.CSRF_PROTECTION_ENABLED || 'true').toLowerCase() !== 'false';
 const CSRF_COOKIE_NAME = process.env.CSRF_COOKIE_NAME || 'sb_csrf';
 const CSRF_HEADER_NAME = (process.env.CSRF_HEADER_NAME || 'x-csrf-token').toLowerCase();
 const allowedCorsHeaders = [
   'content-type',
-  ...(AUTH_HEADER_SESSION_ENABLED ? ['authorization'] : []),
   ...(CSRF_PROTECTION_ENABLED ? [CSRF_HEADER_NAME] : []),
 ].join(',');
 const parsedBodyLimitBytes = parseInt(process.env.GRAPHQL_BODY_LIMIT_BYTES || '1048576', 10);
@@ -406,20 +403,13 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
       const parsedCookies = parseCookies(cookieHeader);
       const csrfCookieToken = parseCsrfToken(parsedCookies[CSRF_COOKIE_NAME]);
 
-      if (authorization && !AUTH_HEADER_SESSION_ENABLED) {
-        throw new GraphQLError('Authorization-Header Sessions sind deaktiviert', {
+      if (authorization) {
+        throw new GraphQLError('Authorization-Header Sessions werden nicht unterstützt', {
           extensions: { code: 'BAD_USER_INPUT' },
         });
       }
 
-      const headerToken =
-        AUTH_HEADER_SESSION_ENABLED && authorization
-          ? authorization.startsWith('Bearer ')
-            ? authorization.substring(7)
-            : authorization
-          : undefined;
-      const sessionToken =
-        parseSessionToken(parsedCookies[SESSION_COOKIE_NAME]) || parseSessionToken(headerToken);
+      const sessionToken = parseSessionToken(parsedCookies[SESSION_COOKIE_NAME]);
 
       if (sessionToken) {
         const tokenHash = hashSessionToken(sessionToken);
@@ -441,12 +431,6 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
             await session.save();
           }
         }
-      }
-
-      if (AUTH_HEADER_SESSION_ENABLED && authorization && !loggedIn) {
-        throw new GraphQLError('Ungültige Session', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
       }
 
       const requestQuery = request.body?.query;
