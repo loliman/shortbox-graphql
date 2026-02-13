@@ -1,7 +1,7 @@
 import { ApolloServer } from '@apollo/server';
 import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
 import { HeaderMap } from '@apollo/server';
-import { GraphQLError } from 'graphql';
+import { GraphQLError, getOperationAST, parse } from 'graphql';
 import { merge } from 'lodash';
 import models from '../models';
 import DataLoader from 'dataloader';
@@ -170,10 +170,35 @@ const hashSessionToken = (token: string): string => {
   return createHash('sha256').update(token).digest('hex');
 };
 
-const extractMutationRootField = (query: string | undefined): string | null => {
-  if (!query) return null;
-  const match = query.match(/mutation(?:\s+\w+)?(?:\s*\([^)]+\))?\s*\{\s*(\w+)/s);
-  return match?.[1] || null;
+const resolveOperationAccess = (
+  query: string | undefined,
+  operationName: string | undefined,
+): { isMutation: boolean; isPublicMutation: boolean } => {
+  if (!query) return { isMutation: false, isPublicMutation: false };
+
+  try {
+    const documentNode = parse(query);
+    const operation = getOperationAST(documentNode, operationName);
+
+    if (!operation || operation.operation !== 'mutation') {
+      return { isMutation: false, isPublicMutation: false };
+    }
+    if (operation.selectionSet.selections.length === 0) {
+      return { isMutation: true, isPublicMutation: false };
+    }
+
+    const hasOnlyPublicMutationFields = operation.selectionSet.selections.every((selection) => {
+      if (selection.kind !== 'Field') return false;
+      return selection.name.value === 'login';
+    });
+
+    return {
+      isMutation: true,
+      isPublicMutation: hasOnlyPublicMutationFields,
+    };
+  } catch {
+    return { isMutation: false, isPublicMutation: false };
+  }
 };
 
 const isOriginAllowed = (origin: string | undefined): boolean => {
@@ -289,7 +314,8 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
     request.body = parsedBody;
 
     const buildContext = async (): Promise<Context> => {
-      const operationName = request.body?.operationName || 'UNKNOWN';
+      const rawOperationName = request.body?.operationName;
+      const operationName = rawOperationName || 'UNKNOWN';
       const requestId = randomBytes(8).toString('hex');
       const now = new Date();
       const requestIp = parseRequestIp(request);
@@ -373,12 +399,10 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         });
       }
 
-      const requestQuery = request.body?.query || '';
-      const isMutation = requestQuery.trim().startsWith('mutation');
-      const mutationRootField = isMutation ? extractMutationRootField(requestQuery) : null;
-      const mutationIsPublic = mutationRootField === 'login';
+      const requestQuery = request.body?.query;
+      const { isMutation, isPublicMutation } = resolveOperationAccess(requestQuery, rawOperationName);
 
-      if (isMutation && !mutationIsPublic && !loggedIn) {
+      if (isMutation && !isPublicMutation && !loggedIn) {
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
