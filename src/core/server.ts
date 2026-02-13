@@ -101,6 +101,7 @@ export interface Context {
   loggedIn: boolean;
   authenticatedUserId?: number;
   authenticatedSessionTokenHash?: string;
+  requestIp?: string;
   operationName: string;
   requestId: string;
   now: Date;
@@ -153,6 +154,16 @@ const parseSessionToken = (token: string | undefined): string | null => {
   const normalized = token.trim().replace(/^"|"$/g, '');
   if (normalized.length < 32) return null;
   return normalized;
+};
+
+const parseRequestIp = (request: IncomingMessage): string | undefined => {
+  const forwarded = request.headers['x-forwarded-for'];
+  const forwardedRaw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  if (typeof forwardedRaw === 'string') {
+    const forwardedIp = forwardedRaw.split(',')[0]?.trim();
+    if (forwardedIp) return forwardedIp;
+  }
+  return request.socket.remoteAddress || undefined;
 };
 
 const hashSessionToken = (token: string): string => {
@@ -281,6 +292,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
       const operationName = request.body?.operationName || 'UNKNOWN';
       const requestId = randomBytes(8).toString('hex');
       const now = new Date();
+      const requestIp = parseRequestIp(request);
       logger.info(`[>>>] [${operationName.toUpperCase()}]`, { requestId });
 
       if (mockModeEnabled) {
@@ -288,6 +300,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           loggedIn: true,
           authenticatedUserId: undefined,
           authenticatedSessionTokenHash: undefined,
+          requestIp,
           operationName,
           requestId,
           now,
@@ -417,6 +430,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         loggedIn,
         authenticatedUserId,
         authenticatedSessionTokenHash,
+        requestIp,
         operationName,
         requestId,
         now,

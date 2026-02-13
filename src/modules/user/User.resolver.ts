@@ -1,4 +1,4 @@
-import { UserService } from '../../services/UserService';
+import { LoginRateLimitError, UserService } from '../../services/UserService';
 import { GraphQLError } from 'graphql';
 import { UserResolvers } from '../../types/graphql';
 import { UserInputSchema } from '../../types/schemas';
@@ -68,7 +68,7 @@ export const resolvers: UserResolvers = {
     },
   },
   Mutation: {
-    login: async (_, { user }, { transaction, loggedIn, userService, response }) => {
+    login: async (_, { user }, { transaction, loggedIn, userService, response, requestIp }) => {
       if (loggedIn)
         throw new GraphQLError('Du bist bereits eingeloggt', {
           extensions: { code: 'BAD_USER_INPUT' },
@@ -79,7 +79,7 @@ export const resolvers: UserResolvers = {
       try {
         tx = requireTransaction(transaction);
         UserInputSchema.parse(user);
-        let loginResult = await userService.login(user, tx);
+        let loginResult = await userService.login(user, tx, requestIp);
 
         if (!loginResult) {
           throw new GraphQLError('Login fehlgeschlagen', {
@@ -93,6 +93,15 @@ export const resolvers: UserResolvers = {
         return loginResult.userRecord;
       } catch (e) {
         if (tx && !committed) await tx.rollback();
+        if (e instanceof LoginRateLimitError) {
+          if (response) response.setHeader('Retry-After', String(e.retryAfterSeconds));
+          throw new GraphQLError('Zu viele Login-Versuche, bitte später erneut versuchen', {
+            extensions: {
+              code: 'TOO_MANY_REQUESTS',
+              retryAfterSeconds: e.retryAfterSeconds,
+            },
+          });
+        }
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
