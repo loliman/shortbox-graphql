@@ -1,5 +1,6 @@
 import { Sequelize, Op } from 'sequelize';
 import { ArcResolvers } from '../../types/graphql';
+import { buildConnectionFromNodes, decodeCursorId } from '../../core/cursor';
 
 type ArcParent = { id: number; title: string };
 
@@ -7,10 +8,7 @@ export const resolvers: ArcResolvers = {
   Query: {
     arcs: async (_, { pattern, type, first, after }, { models }) => {
       const limit = first || 50;
-      let decodedCursor: number | undefined;
-      if (after) {
-        decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
-      }
+      const decodedCursor = decodeCursorId(after || undefined);
 
       const where: Record<string | symbol, unknown> = {};
       const order: Array<[string, 'ASC' | 'DESC']> = [
@@ -37,24 +35,7 @@ export const resolvers: ArcResolvers = {
         order,
         limit: limit + 1,
       });
-
-      const hasNextPage = results.length > limit;
-      const nodes = results.slice(0, limit);
-
-      const edges = nodes.map((node) => ({
-        cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node,
-      }));
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage,
-          hasPreviousPage: !!after,
-          startCursor: edges.length > 0 ? edges[0].cursor : null,
-          endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        },
-      };
+      return buildConnectionFromNodes(results, limit, after || undefined);
     },
   },
   Arc: {

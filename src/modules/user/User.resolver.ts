@@ -1,23 +1,68 @@
-import { LoginRateLimitError, UserService } from '../../services/UserService';
+import { LoginRateLimitError } from '../../services/UserService';
 import { GraphQLError } from 'graphql';
 import { UserResolvers } from '../../types/graphql';
 import { LoginInputSchema } from '../../types/schemas';
-import { Transaction } from 'sequelize';
+import type { Request, Response } from 'express';
+import { issueCsrfToken } from '../../core/csrf';
 import {
-  appendSetCookie,
-  buildCsrfCookie,
-  buildExpiredCsrfCookie,
-  buildExpiredSessionCookie,
-  buildSessionCookie,
-} from './authCookies';
+  resolveCookieSecurity,
+  SESSION_COOKIE_NAME,
+  sessionCookieSameSite,
+} from '../../core/cookies';
+import { CSRF_COOKIE_NAME } from '../../core/server-config';
 
-const requireTransaction = (transaction: Transaction | undefined): Transaction => {
-  if (!transaction) {
-    throw new GraphQLError('Transaktion konnte nicht erstellt werden', {
+const requireRequest = (request: Request | undefined): Request => {
+  if (!request) {
+    throw new GraphQLError('Request-Kontext fehlt', {
       extensions: { code: 'INTERNAL_SERVER_ERROR' },
     });
   }
-  return transaction;
+  return request;
+};
+
+const requireResponse = (response: Response | undefined): Response => {
+  if (!response) {
+    throw new GraphQLError('Response-Kontext fehlt', {
+      extensions: { code: 'INTERNAL_SERVER_ERROR' },
+    });
+  }
+  return response;
+};
+
+const regenerateSession = async (request: Request): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    request.session.regenerate((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+};
+
+const saveSession = async (request: Request): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    request.session.save((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+};
+
+const destroySession = async (request: Request): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    request.session.destroy((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 };
 
 export const resolvers: UserResolvers = {
@@ -28,18 +73,23 @@ export const resolvers: UserResolvers = {
     },
   },
   Mutation: {
-    login: async (_, { credentials }, { transaction, loggedIn, userService, response, requestIp }) => {
+    login: async (
+      _,
+      { credentials },
+      { loggedIn, models, userService, response, requestIp, request },
+    ) => {
       if (loggedIn)
         throw new GraphQLError('Du bist bereits eingeloggt', {
           extensions: { code: 'BAD_USER_INPUT' },
         });
 
-      let tx: Transaction | undefined;
-      let committed = false;
       try {
-        tx = requireTransaction(transaction);
         LoginInputSchema.parse(credentials);
-        let loginResult = await userService.login(credentials, tx, requestIp);
+        const requestObject = requireRequest(request);
+        const responseObject = requireResponse(response);
+        const loginResult = await models.sequelize.transaction(async (tx) => {
+          return await userService.login(credentials, tx, requestIp);
+        });
 
         if (!loginResult) {
           throw new GraphQLError('Login fehlgeschlagen', {
@@ -47,13 +97,12 @@ export const resolvers: UserResolvers = {
           });
         }
 
-        await tx.commit();
-        committed = true;
-        appendSetCookie(response, buildSessionCookie(loginResult.sessionToken));
-        appendSetCookie(response, buildCsrfCookie(loginResult.csrfToken));
-        return loginResult.userRecord;
+        await regenerateSession(requestObject);
+        requestObject.session.userId = loginResult.id;
+        await saveSession(requestObject);
+        issueCsrfToken(requestObject, responseObject, true);
+        return loginResult;
       } catch (e) {
-        if (tx && !committed) await tx.rollback();
         if (e instanceof LoginRateLimitError) {
           if (response) response.setHeader('Retry-After', String(e.retryAfterSeconds));
           throw new GraphQLError('Zu viele Login-Versuche, bitte später erneut versuchen', {
@@ -72,36 +121,46 @@ export const resolvers: UserResolvers = {
     logout: async (
       _,
       __,
-      { loggedIn, transaction, userService, authenticatedUserId, authenticatedSessionTokenHash, response },
+      { loggedIn, models, userService, authenticatedUserId, response, request },
     ) => {
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
 
-      let tx: Transaction | undefined;
-      let committed = false;
       try {
-        tx = requireTransaction(transaction);
+        const requestObject = requireRequest(request);
         const userId = authenticatedUserId;
-        const sessionTokenHash = authenticatedSessionTokenHash;
-        if (!userId || !sessionTokenHash) {
+        if (!userId) {
           throw new GraphQLError('Ungültige Session', {
             extensions: { code: 'UNAUTHENTICATED' },
           });
         }
 
-        let success = await userService.logout(userId, sessionTokenHash, tx);
+        const success = await models.sequelize.transaction(async (tx) => {
+          return await userService.logout(userId, tx);
+        });
 
-        await tx.commit();
-        committed = true;
         if (success) {
-          appendSetCookie(response, buildExpiredSessionCookie());
-          appendSetCookie(response, buildExpiredCsrfCookie());
+          await destroySession(requestObject);
+          const responseObject = requireResponse(response);
+          const { secure, domain } = resolveCookieSecurity();
+          responseObject.clearCookie(SESSION_COOKIE_NAME, {
+            path: '/',
+            sameSite: sessionCookieSameSite,
+            secure,
+            domain,
+            httpOnly: true,
+          });
+          responseObject.clearCookie(CSRF_COOKIE_NAME, {
+            path: '/',
+            sameSite: sessionCookieSameSite,
+            secure,
+            domain,
+          });
         }
         return !!success;
       } catch (e) {
-        if (tx && !committed) await tx.rollback();
         throw e;
       }
     },

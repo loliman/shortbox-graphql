@@ -2,22 +2,12 @@ import { SeriesService } from '../../services/SeriesService';
 import { GraphQLError } from 'graphql';
 import { SeriesResolvers } from '../../types/graphql';
 import { SeriesInputSchema } from '../../types/schemas';
-import { Transaction } from 'sequelize';
 
 type SeriesParent = {
   id: number;
   fk_publisher: number;
   endyear?: number | null;
   Publisher?: unknown;
-};
-
-const requireTransaction = (transaction: Transaction | undefined): Transaction => {
-  if (!transaction) {
-    throw new GraphQLError('Transaktion konnte nicht erstellt werden', {
-      extensions: { code: 'INTERNAL_SERVER_ERROR' },
-    });
-  }
-  return transaction;
 };
 
 export const resolvers: SeriesResolvers = {
@@ -47,20 +37,19 @@ export const resolvers: SeriesResolvers = {
   },
   Mutation: {
     deleteSeries: async (_, { item }, context) => {
-      const { loggedIn, transaction, seriesService } = context;
+      const { loggedIn, models, seriesService } = context;
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
 
       try {
-        const tx = requireTransaction(transaction);
         SeriesInputSchema.parse(item);
-        await seriesService.deleteSeries(item, tx);
-        await tx.commit();
-        return true;
+        return await models.sequelize.transaction(async (tx) => {
+          await seriesService.deleteSeries(item, tx);
+          return true;
+        });
       } catch (e) {
-        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -68,20 +57,18 @@ export const resolvers: SeriesResolvers = {
       }
     },
     createSeries: async (_, { item }, context) => {
-      const { loggedIn, transaction, seriesService } = context;
+      const { loggedIn, models, seriesService } = context;
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
 
       try {
-        const tx = requireTransaction(transaction);
         SeriesInputSchema.parse(item);
-        let res = await seriesService.createSeries(item, tx);
-        await tx.commit();
-        return res;
+        return await models.sequelize.transaction(async (tx) => {
+          return await seriesService.createSeries(item, tx);
+        });
       } catch (e) {
-        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -89,21 +76,19 @@ export const resolvers: SeriesResolvers = {
       }
     },
     editSeries: async (_, { old, item }, context) => {
-      const { loggedIn, transaction, seriesService } = context;
+      const { loggedIn, models, seriesService } = context;
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
 
       try {
-        const tx = requireTransaction(transaction);
         SeriesInputSchema.parse(old);
         SeriesInputSchema.parse(item);
-        let res = await seriesService.editSeries(old, item, tx);
-        await tx.commit();
-        return res;
+        return await models.sequelize.transaction(async (tx) => {
+          return await seriesService.editSeries(old, item, tx);
+        });
       } catch (e) {
-        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -116,9 +101,10 @@ export const resolvers: SeriesResolvers = {
       (parent as SeriesParent).Publisher ||
       (await publisherLoader.load((parent as SeriesParent).fk_publisher)),
     issueCount: async (parent, _, { models }) =>
-      await models.Issue.count({ where: { fk_series: (parent as SeriesParent).id }, group: ['number'] }).then(
-        (res) => (Array.isArray(res) ? res.length : Number(res)),
-      ),
+      await models.Issue.count({
+        where: { fk_series: (parent as SeriesParent).id },
+        group: ['number'],
+      }).then((res) => (Array.isArray(res) ? res.length : Number(res))),
     firstIssue: async (parent, _, { models }) =>
       await models.Issue.findOne({
         where: { fk_series: (parent as SeriesParent).id },

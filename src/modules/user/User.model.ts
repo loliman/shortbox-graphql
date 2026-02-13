@@ -1,17 +1,9 @@
 import { Model, DataTypes, Sequelize } from 'sequelize';
-import type { DbModels } from '../../types/db';
 
 export class User extends Model {
   public id!: number;
   public name!: string;
   public password!: string;
-
-  public static associate(models: DbModels) {
-    User.hasMany(models.UserSession, {
-      foreignKey: 'fk_user',
-      onDelete: 'cascade',
-    });
-  }
 }
 
 export default (sequelize: Sequelize) => {

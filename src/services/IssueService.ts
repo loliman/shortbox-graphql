@@ -2,6 +2,7 @@ import models from '../models';
 import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
 import logger from '../util/logger';
 import type { Filter, IssueInput, SeriesInput } from '@shortbox/contract';
+import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
 
 const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
   'updatedAt',
@@ -50,10 +51,7 @@ export class IssueService {
   ) {
     type WhereMap = Record<string | symbol, unknown>;
     const limit = first || 50;
-    let decodedCursor: number | undefined;
-    if (after) {
-      decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
-    }
+    const decodedCursor = decodeCursorId(after || undefined);
 
     if (!filter) {
       const where: WhereMap = {};
@@ -98,23 +96,7 @@ export class IssueService {
       }
 
       const results = await this.models.Issue.findAll(options);
-      const hasNextPage = results.length > limit;
-      const nodes = results.slice(0, limit);
-
-      const edges = nodes.map((node) => ({
-        cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node,
-      }));
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage,
-          hasPreviousPage: !!after,
-          startCursor: edges.length > 0 ? edges[0].cursor : null,
-          endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        },
-      };
+      return buildConnectionFromNodes(results, limit, after || undefined);
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models);
@@ -135,23 +117,7 @@ export class IssueService {
       }
 
       const results = await this.models.Issue.findAll(options);
-      const hasNextPage = results.length > limit;
-      const nodes = results.slice(0, limit);
-
-      const edges = nodes.map((node) => ({
-        cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node,
-      }));
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage,
-          hasPreviousPage: !!after,
-          startCursor: edges.length > 0 ? edges[0].cursor : null,
-          endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        },
-      };
+      return buildConnectionFromNodes(results, limit, after || undefined);
     }
   }
 
@@ -283,11 +249,7 @@ export class IssueService {
   ) {
     type WhereMap = Record<string | symbol, unknown>;
     const limit = first || 25;
-    let decodedCursor: number | undefined;
-    if (after) {
-      const parsed = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
-      decodedCursor = Number.isFinite(parsed) ? parsed : undefined;
-    }
+    const decodedCursor = decodeCursorId(after || undefined);
 
     const sortField = normalizeSortField(order);
     const sortDirection = normalizeSortDirection(direction);
@@ -371,23 +333,7 @@ export class IssueService {
     }
 
     const results = await this.models.Issue.findAll(options);
-    const hasNextPage = results.length > limit;
-    const nodes = results.slice(0, limit);
-
-    const edges = nodes.map((node) => ({
-      cursor: Buffer.from(node.id.toString()).toString('base64'),
-      node,
-    }));
-
-    return {
-      edges,
-      pageInfo: {
-        hasNextPage,
-        hasPreviousPage: !!after,
-        startCursor: edges.length > 0 ? edges[0].cursor : null,
-        endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-      },
-    };
+    return buildConnectionFromNodes(results, limit, after || undefined);
   }
 
   async getIssuesByIds(ids: readonly number[]) {

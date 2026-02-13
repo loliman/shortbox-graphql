@@ -2,6 +2,7 @@ import models from '../models';
 import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
 import logger from '../util/logger';
 import type { Filter, PublisherInput, SeriesInput } from '@shortbox/contract';
+import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
 
 export class SeriesService {
   constructor(
@@ -41,10 +42,7 @@ export class SeriesService {
       };
     };
     const limit = first || 50;
-    let decodedCursor: number | undefined;
-    if (after) {
-      decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
-    }
+    const decodedCursor = decodeCursorId(after || undefined);
 
     if (!filter) {
       const where: WhereMap = {};
@@ -82,23 +80,7 @@ export class SeriesService {
       }
 
       const results = await this.models.Series.findAll(options);
-      const hasNextPage = results.length > limit;
-      const nodes = results.slice(0, limit);
-
-      const edges = nodes.map((node) => ({
-        cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node,
-      }));
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage,
-          hasPreviousPage: !!after,
-          startCursor: edges.length > 0 ? edges[0].cursor : null,
-          endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        },
-      };
+      return buildConnectionFromNodes(results, limit, after || undefined);
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models);
@@ -120,8 +102,7 @@ export class SeriesService {
       }
 
       const res = await this.models.Issue.findAll(options);
-      const hasNextPage = res.length > limit;
-      const nodes = res.slice(0, limit).map((issue) => {
+      const nodes = res.map((issue) => {
         const issueNode = issue as unknown as IssueWithSeries;
         return {
           id: issueNode.Series.id,
@@ -132,21 +113,7 @@ export class SeriesService {
           fk_publisher: issueNode.Series.fk_publisher,
         };
       });
-
-      const edges = nodes.map((node) => ({
-        cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node,
-      }));
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage,
-          hasPreviousPage: !!after,
-          startCursor: edges.length > 0 ? edges[0].cursor : null,
-          endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        },
-      };
+      return buildConnectionFromNodes(nodes, limit, after || undefined);
     }
   }
 

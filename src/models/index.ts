@@ -11,8 +11,6 @@ import ArcFactory from '../modules/arc/Arc.model';
 import IndividualFactory from '../modules/individual/Individual.model';
 import AppearanceFactory from '../modules/appearance/Appearance.model';
 import UserFactory from '../modules/user/User.model';
-import UserSessionFactory from '../modules/user/UserSession.model';
-import LoginAttemptFactory from '../modules/user/LoginAttempt.model';
 import FeatureFactory from '../modules/feature/Feature.model';
 
 // Import Join Tables
@@ -40,8 +38,6 @@ db.Arc = ArcFactory(sequelize);
 db.Individual = IndividualFactory(sequelize);
 db.Appearance = AppearanceFactory(sequelize);
 db.User = UserFactory(sequelize);
-db.UserSession = UserSessionFactory(sequelize);
-db.LoginAttempt = LoginAttemptFactory(sequelize);
 db.Feature = FeatureFactory(sequelize);
 
 db.Issue_Individual = Issue_IndividualFactory(sequelize);

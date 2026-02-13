@@ -1,26 +1,12 @@
 import models from '../models';
 import { asyncForEach } from '../util/util';
 import { CronJob } from 'cron';
-import { Op } from 'sequelize';
 import logger from '../util/logger';
+const CLEANUP_CRON = process.env.CLEANUP_CRON || '0 3 * * *';
 
-const parsedSessionRetentionDays = parseInt(process.env.SESSION_RETENTION_DAYS || '30', 10);
-const SESSION_RETENTION_DAYS =
-  Number.isFinite(parsedSessionRetentionDays) && parsedSessionRetentionDays >= 0
-    ? parsedSessionRetentionDays
-    : 30;
-const parsedLoginAttemptRetentionDays = parseInt(
-  process.env.LOGIN_ATTEMPT_RETENTION_DAYS || String(SESSION_RETENTION_DAYS),
-  10,
-);
-const LOGIN_ATTEMPT_RETENTION_DAYS =
-  Number.isFinite(parsedLoginAttemptRetentionDays) && parsedLoginAttemptRetentionDays >= 0
-    ? parsedLoginAttemptRetentionDays
-    : SESSION_RETENTION_DAYS;
-
-//Job will on every full hour
+// Runs daily at 03:00 server time by default.
 export const cleanup = new CronJob(
-  '0 3 * * *',
+  CLEANUP_CRON,
   () => {
     run();
   },
@@ -270,31 +256,6 @@ export async function run() {
       }
     });
     logger.info(`Deleted ${arcCount} arcs.`);
-
-    // Keep session table small and remove stale rows.
-    const now = new Date();
-    const revokedRetentionCutoff = new Date(now.getTime() - SESSION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-    const deletedSessions = await models.UserSession.destroy({
-      where: {
-        [Op.or]: [
-          { expiresat: { [Op.lte]: now } },
-          { revokedat: { [Op.lte]: revokedRetentionCutoff } },
-        ],
-      },
-      transaction,
-    });
-    logger.info(`Deleted ${deletedSessions} sessions.`);
-
-    const loginAttemptRetentionCutoff = new Date(
-      now.getTime() - LOGIN_ATTEMPT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
-    );
-    const deletedLoginAttempts = await models.LoginAttempt.destroy({
-      where: {
-        updatedAt: { [Op.lte]: loginAttemptRetentionCutoff },
-      },
-      transaction,
-    });
-    logger.info(`Deleted ${deletedLoginAttempts} login attempts.`);
 
     await transaction.commit();
     logger.info('Cleanup done.');

@@ -1,17 +1,12 @@
-import { Op, Transaction } from 'sequelize';
+import { Transaction } from 'sequelize';
 import logger from '../util/logger';
 import type { LoginInput } from '@shortbox/contract';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { RateLimiterMemory, type RateLimiterRes } from 'rate-limiter-flexible';
 
 type PasswordVerificationResult = {
   valid: boolean;
   upgradePassword?: string;
-};
-
-type LoginSuccessResult = {
-  userRecord: any;
-  sessionToken: string;
-  csrfToken: string;
 };
 
 const parsePositiveInt = (value: string | undefined, fallback: number): number => {
@@ -31,10 +26,6 @@ export class LoginRateLimitError extends Error {
 
 export class UserService {
   private static readonly PASSWORD_PREFIX = 'scrypt';
-  private static readonly SESSION_TTL_SECONDS = (() => {
-    const parsed = parseInt(process.env.SESSION_TTL_SECONDS || '1209600', 10);
-    return Number.isFinite(parsed) ? parsed : 1209600;
-  })();
   private static readonly LOGIN_RATE_LIMIT_MAX_ATTEMPTS = parsePositiveInt(
     process.env.LOGIN_MAX_ATTEMPTS,
     8,
@@ -47,6 +38,12 @@ export class UserService {
     process.env.LOGIN_LOCK_SECONDS,
     900,
   );
+  private static readonly loginRateLimiter = new RateLimiterMemory({
+    keyPrefix: 'login',
+    points: UserService.LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    duration: UserService.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    blockDuration: UserService.LOGIN_RATE_LIMIT_LOCK_SECONDS,
+  });
 
   constructor(
     private models: typeof import('../models').default,
@@ -65,22 +62,6 @@ export class UserService {
     logger.info(message, { requestId: this.requestId });
   }
 
-  private generateSessionId(): string {
-    return randomBytes(48).toString('base64url');
-  }
-
-  private hashSessionToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
-  }
-
-  private generateCsrfToken(): string {
-    return randomBytes(32).toString('base64url');
-  }
-
-  private hashCsrfToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
-  }
-
   private sha256Hex(value: string): string {
     return createHash('sha256').update(value).digest('hex');
   }
@@ -96,17 +77,16 @@ export class UserService {
     return timingSafeEqual(leftBuffer, rightBuffer);
   }
 
-  private buildSessionExpiry(reference = new Date()): Date {
-    return new Date(reference.getTime() + UserService.SESSION_TTL_SECONDS * 1000);
-  }
-
   private hashPassword(password: string): string {
     const salt = randomBytes(16).toString('base64url');
     const hash = scryptSync(password, salt, 64).toString('base64url');
     return `${UserService.PASSWORD_PREFIX}$${salt}$${hash}`;
   }
 
-  private verifyPassword(inputPassword: string, storedPassword: string): PasswordVerificationResult {
+  private verifyPassword(
+    inputPassword: string,
+    storedPassword: string,
+  ): PasswordVerificationResult {
     if (storedPassword.startsWith(`${UserService.PASSWORD_PREFIX}$`)) {
       const [, salt, expectedHash] = storedPassword.split('$');
       if (!salt || !expectedHash) return { valid: false };
@@ -118,7 +98,8 @@ export class UserService {
     }
 
     if (this.safeEqual(storedPassword, inputPassword)) {
-      const legacyClientSentHash = this.isSha256Hex(storedPassword) && this.isSha256Hex(inputPassword);
+      const legacyClientSentHash =
+        this.isSha256Hex(storedPassword) && this.isSha256Hex(inputPassword);
       return {
         valid: true,
         upgradePassword: legacyClientSentHash ? undefined : inputPassword,
@@ -144,92 +125,49 @@ export class UserService {
     return `${normalizedName}|${normalizedIp}`;
   }
 
-  private async clearLoginRateLimit(key: string, transaction: Transaction) {
-    await this.models.LoginAttempt.destroy({
-      where: { scope: key },
-      transaction,
-    });
+  private toRetryAfterSeconds(msBeforeNext: number | undefined): number {
+    if (!msBeforeNext || msBeforeNext <= 0) return 1;
+    return Math.max(1, Math.ceil(msBeforeNext / 1000));
   }
 
-  private async ensureLoginRateLimitNotExceeded(
-    key: string,
-    now: Date,
-    transaction: Transaction,
-  ) {
-    const state = await this.models.LoginAttempt.findOne({
-      where: { scope: key },
-      transaction,
-    });
+  private asRateLimiterRes(error: unknown): RateLimiterRes | null {
+    if (!error || typeof error !== 'object') return null;
+    if (!('msBeforeNext' in error) || !('remainingPoints' in error)) return null;
+    return error as RateLimiterRes;
+  }
+
+  private async clearLoginRateLimit(key: string) {
+    await UserService.loginRateLimiter.delete(key);
+  }
+
+  private async ensureLoginRateLimitNotExceeded(key: string) {
+    const state = await UserService.loginRateLimiter.get(key);
     if (!state) return;
 
-    if (state.lockeduntilat && state.lockeduntilat > now) {
-      const retryAfterSeconds = Math.max(
-        1,
-        Math.ceil((state.lockeduntilat.getTime() - now.getTime()) / 1000),
-      );
-      throw new LoginRateLimitError(retryAfterSeconds);
-    }
-
-    const windowMs = UserService.LOGIN_RATE_LIMIT_WINDOW_SECONDS * 1000;
-    const isWindowExpired = now.getTime() - state.windowstartat.getTime() > windowMs;
-    const wasLockExpired = Boolean(state.lockeduntilat && state.lockeduntilat <= now);
-    if (isWindowExpired || wasLockExpired) {
-      await state.destroy({ transaction });
+    if (state.remainingPoints <= 0 && state.msBeforeNext > 0) {
+      throw new LoginRateLimitError(this.toRetryAfterSeconds(state.msBeforeNext));
     }
   }
 
-  private async registerLoginFailure(key: string, now: Date, transaction: Transaction) {
-    const windowMs = UserService.LOGIN_RATE_LIMIT_WINDOW_SECONDS * 1000;
-    const lockMs = UserService.LOGIN_RATE_LIMIT_LOCK_SECONDS * 1000;
-
-    const state = await this.models.LoginAttempt.findOne({
-      where: { scope: key },
-      transaction,
-    });
-
-    if (!state) {
-      await this.models.LoginAttempt.create(
-        {
-          scope: key,
-          failures: 1,
-          windowstartat: now,
-          lockeduntilat: null,
-        },
-        { transaction },
-      );
-      return;
+  private async registerLoginFailure(key: string) {
+    try {
+      await UserService.loginRateLimiter.consume(key, 1);
+    } catch (error) {
+      const state = this.asRateLimiterRes(error);
+      if (state) {
+        throw new LoginRateLimitError(this.toRetryAfterSeconds(state.msBeforeNext));
+      }
+      throw error;
     }
-
-    const isWindowExpired = now.getTime() - state.windowstartat.getTime() > windowMs;
-    const wasLockExpired = Boolean(state.lockeduntilat && state.lockeduntilat <= now);
-    if (isWindowExpired || wasLockExpired) {
-      state.failures = 0;
-      state.windowstartat = now;
-      state.lockeduntilat = null;
-    }
-
-    state.failures += 1;
-    if (state.failures >= UserService.LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
-      state.failures = 0;
-      state.windowstartat = now;
-      state.lockeduntilat = new Date(now.getTime() + lockMs);
-    }
-
-    await state.save({ transaction });
   }
 
-  async login(
-    user: LoginInput,
-    transaction: Transaction,
-    requestIp?: string,
-  ): Promise<LoginSuccessResult | null> {
+  async login(user: LoginInput, transaction: Transaction, requestIp?: string): Promise<any | null> {
     const name = (user.name || '').trim();
     this.log(`Login attempt for user: ${name || 'unknown'}`);
-    const now = new Date();
     const loginRateLimitKey = this.buildLoginRateLimitKey(name, requestIp);
 
     try {
-      await this.ensureLoginRateLimitNotExceeded(loginRateLimitKey, now, transaction);
+      await this.ensureLoginRateLimitNotExceeded(loginRateLimitKey);
     } catch (error) {
       if (error instanceof LoginRateLimitError) {
         this.log(
@@ -240,33 +178,27 @@ export class UserService {
       throw error;
     }
 
-    const sessionToken = this.generateSessionId();
-    const sessionTokenHash = this.hashSessionToken(sessionToken);
-    const csrfToken = this.generateCsrfToken();
-    const csrfTokenHash = this.hashCsrfToken(csrfToken);
-    const expiresAt = this.buildSessionExpiry();
-
     let userRecord = await this.models.User.findOne({
       where: { name },
       transaction,
     });
 
     if (!userRecord) {
-      await this.registerLoginFailure(loginRateLimitKey, now, transaction);
+      await this.registerLoginFailure(loginRateLimitKey);
       return null;
     }
     if (!user.password) {
-      await this.registerLoginFailure(loginRateLimitKey, now, transaction);
+      await this.registerLoginFailure(loginRateLimitKey);
       return null;
     }
 
     const passwordVerification = this.verifyPassword(user.password, userRecord.password);
     if (!passwordVerification.valid) {
-      await this.registerLoginFailure(loginRateLimitKey, now, transaction);
+      await this.registerLoginFailure(loginRateLimitKey);
       return null;
     }
 
-    await this.clearLoginRateLimit(loginRateLimitKey, transaction);
+    await this.clearLoginRateLimit(loginRateLimitKey);
 
     if (
       !userRecord.password.startsWith(`${UserService.PASSWORD_PREFIX}$`) &&
@@ -275,39 +207,13 @@ export class UserService {
       userRecord.password = this.hashPassword(passwordVerification.upgradePassword);
     }
 
-    // One active session per user is enough for this single-admin setup.
-    await this.models.UserSession.update(
-      { revokedat: new Date() },
-      { where: { fk_user: userRecord.id, revokedat: null }, transaction },
-    );
-    await this.models.UserSession.create(
-      {
-        fk_user: userRecord.id,
-        tokenhash: sessionTokenHash,
-        csrftokenhash: csrfTokenHash,
-        expiresat: expiresAt,
-        revokedat: null,
-      },
-      { transaction },
-    );
     await userRecord.save({ transaction });
-    return { userRecord, sessionToken, csrfToken };
+    return userRecord;
   }
 
-  async logout(userId: number, sessionTokenHash: string, transaction: Transaction) {
+  async logout(userId: number, transaction: Transaction) {
     this.log(`Logout for user ID: ${userId}`);
-    let [affectedCount] = await this.models.UserSession.update(
-      { revokedat: new Date() },
-      {
-        where: {
-          fk_user: userId,
-          tokenhash: sessionTokenHash,
-          revokedat: null,
-          expiresat: { [Op.gt]: new Date() },
-        },
-        transaction,
-      },
-    );
-    return affectedCount !== 0;
+    void transaction;
+    return true;
   }
 }

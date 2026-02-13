@@ -1,12 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { QueryInterface, Sequelize, Transaction } from 'sequelize';
-
-type MigrationContext = {
-  queryInterface: QueryInterface;
-  sequelize: Sequelize;
-  transaction: Transaction;
-};
+import { QueryInterface, Transaction } from 'sequelize';
+import type { MigrationFn } from 'umzug';
 
 const FUNCTION_DEPLOY_ORDER = [
   'toroman',
@@ -77,24 +72,42 @@ const dropFunctionIfExists = async (
   });
 };
 
-export async function up({ queryInterface, transaction }: MigrationContext) {
-  const parsedFunctions = parseFunctionsFile();
-  const orderedFunctions = sortFunctionsByDependency(parsedFunctions);
-
-  for (const fn of orderedFunctions) {
-    await dropFunctionIfExists(queryInterface, fn.name, transaction);
+const withTransaction = async (
+  queryInterface: QueryInterface,
+  run: (transaction: Transaction) => Promise<void>,
+) => {
+  const transaction = await queryInterface.sequelize.transaction();
+  try {
+    await run(transaction);
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
   }
+};
 
-  for (const fn of orderedFunctions) {
-    await queryInterface.sequelize.query(fn.statement, { transaction });
-  }
-}
+export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
+  await withTransaction(queryInterface, async (transaction) => {
+    const parsedFunctions = parseFunctionsFile();
+    const orderedFunctions = sortFunctionsByDependency(parsedFunctions);
 
-export async function down({ queryInterface, transaction }: MigrationContext) {
-  const parsedFunctions = parseFunctionsFile();
-  const orderedFunctions = sortFunctionsByDependency(parsedFunctions);
+    for (const fn of orderedFunctions) {
+      await dropFunctionIfExists(queryInterface, fn.name, transaction);
+    }
 
-  for (const fn of orderedFunctions.reverse()) {
-    await dropFunctionIfExists(queryInterface, fn.name, transaction);
-  }
-}
+    for (const fn of orderedFunctions) {
+      await queryInterface.sequelize.query(fn.statement, { transaction });
+    }
+  });
+};
+
+export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
+  await withTransaction(queryInterface, async (transaction) => {
+    const parsedFunctions = parseFunctionsFile();
+    const orderedFunctions = sortFunctionsByDependency(parsedFunctions);
+
+    for (const fn of orderedFunctions.reverse()) {
+      await dropFunctionIfExists(queryInterface, fn.name, transaction);
+    }
+  });
+};

@@ -24,7 +24,14 @@ module.exports = [
       'prettier/prettier': 'warn',
       '@typescript-eslint/no-var-requires': 'off',
       '@typescript-eslint/no-require-imports': 'off',
-      '@typescript-eslint/ban-ts-comment': 'off'
+      '@typescript-eslint/ban-ts-comment': 'off',
+    },
+  },
+  {
+    files: ['src/mock/fixtures/**/*.ts', 'src/types/graphql.ts'],
+    rules: {
+      // Fixture and generated files are intentionally not prettier-normalized.
+      'prettier/prettier': 'off',
     },
   },
 ];

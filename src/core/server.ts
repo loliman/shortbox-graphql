@@ -1,18 +1,32 @@
 import { ApolloServer } from '@apollo/server';
 import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
-import { HeaderMap } from '@apollo/server';
-import { GraphQLError, getOperationAST, parse } from 'graphql';
+import { expressMiddleware } from '@as-integrations/express5';
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { GraphQLError } from 'graphql';
+import { applyMiddleware } from 'graphql-middleware';
+import { allow, rule, shield } from 'graphql-shield';
 import { merge } from 'lodash';
 import models from '../models';
 import DataLoader from 'dataloader';
-import { resolver } from 'graphql-sequelize';
 import logger from '../util/logger';
-import { Op, Transaction } from 'sequelize';
-import { IncomingMessage } from 'http';
-import type { ServerResponse } from 'http';
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import express, { type NextFunction, type Request, type Response } from 'express';
+import session from 'express-session';
+import connectSessionSequelize from 'connect-session-sequelize';
 import http from 'http';
-import { parse as parseUrl } from 'url';
+import { randomBytes } from 'crypto';
+import {
+  CORS_ALLOW_ALL_ORIGINS,
+  CORS_FAIL_CLOSED,
+  CSRF_COOKIE_NAME,
+  CSRF_HEADER_NAME,
+  CSRF_PROTECTION_ENABLED,
+  GRAPHQL_BODY_LIMIT_BYTES,
+} from './server-config';
+import { type GraphQLRequestBody, parseRequestIp } from './server-request';
+import { isRequestCsrfValid, issueCsrfToken } from './csrf';
+import { resolveCookieSecurity, SESSION_COOKIE_NAME, sessionCookieSameSite } from './cookies';
 
 import { resolvers as PublisherResolvers } from '../modules/publisher/Publisher.resolver';
 import { resolvers as SeriesResolvers } from '../modules/series/Series.resolver';
@@ -38,7 +52,6 @@ import { IssueService } from '../services/IssueService';
 import { UserService } from '../services/UserService';
 import { FilterService } from '../services/FilterService';
 import { StoryService } from '../services/StoryService';
-import { appendSetCookie, buildCsrfCookie, buildSessionCookie } from '../modules/user/authCookies';
 
 import { Publisher } from '../modules/publisher/Publisher.model';
 import { Series } from '../modules/series/Series.model';
@@ -46,8 +59,6 @@ import { Issue } from '../modules/issue/Issue.model';
 import { Story } from '../modules/story/Story.model';
 import { Cover } from '../modules/cover/Cover.model';
 import { Feature } from '../modules/feature/Feature.model';
-
-// resolver.contextToOptions = { dataloader: EXPECTED_OPTIONS_KEY };
 
 const resolvers = merge(
   ScalarResolvers,
@@ -66,18 +77,13 @@ const resolvers = merge(
 );
 
 const mockModeEnabled = (process.env.MOCK_MODE || '').toLowerCase() === 'true';
-const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'sb_session';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-only-change-me';
+const SESSION_STORE_TABLE = process.env.SESSION_STORE_TABLE || 'Sessions';
 const parsedSessionTtlSeconds = parseInt(process.env.SESSION_TTL_SECONDS || '1209600', 10);
 const SESSION_TTL_SECONDS = Number.isFinite(parsedSessionTtlSeconds)
   ? parsedSessionTtlSeconds
   : 1209600;
-const parsedSessionRefreshThresholdSeconds = parseInt(
-  process.env.SESSION_REFRESH_THRESHOLD_SECONDS || '43200',
-  10,
-);
-const SESSION_REFRESH_THRESHOLD_SECONDS = Number.isFinite(parsedSessionRefreshThresholdSeconds)
-  ? parsedSessionRefreshThresholdSeconds
-  : 43200;
+
 const defaultCorsOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -87,35 +93,116 @@ const configuredCorsOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
-const CORS_ALLOW_ALL_ORIGINS = (process.env.CORS_ALLOW_ALL_ORIGINS || '').toLowerCase() === 'true';
-const CORS_FAIL_CLOSED = (process.env.CORS_FAIL_CLOSED || 'true').toLowerCase() !== 'false';
 const allowedCorsOrigins =
   configuredCorsOrigins.length > 0 ? configuredCorsOrigins : defaultCorsOrigins;
-const allowedCorsMethods = 'GET,POST,OPTIONS';
-const CSRF_PROTECTION_ENABLED = (process.env.CSRF_PROTECTION_ENABLED || 'true').toLowerCase() !== 'false';
-const CSRF_COOKIE_NAME = process.env.CSRF_COOKIE_NAME || 'sb_csrf';
-const CSRF_HEADER_NAME = (process.env.CSRF_HEADER_NAME || 'x-csrf-token').toLowerCase();
-const allowedCorsHeaders = [
-  'content-type',
-  ...(CSRF_PROTECTION_ENABLED ? [CSRF_HEADER_NAME] : []),
-].join(',');
-const parsedBodyLimitBytes = parseInt(process.env.GRAPHQL_BODY_LIMIT_BYTES || '1048576', 10);
-const GRAPHQL_BODY_LIMIT_BYTES = Number.isFinite(parsedBodyLimitBytes)
-  ? parsedBodyLimitBytes
-  : 1048576;
+
+const allowedSameSiteValues = ['lax', 'strict', 'none'] as const;
+const configuredSessionCookieSameSite = (process.env.SESSION_COOKIE_SAME_SITE || 'lax')
+  .trim()
+  .toLowerCase();
+
+const validateCorsOrigin = (origin: string): string | null => {
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return 'must use http:// or https://';
+    }
+    if (parsed.username || parsed.password) {
+      return 'must not include credentials';
+    }
+    if (parsed.pathname !== '/' || parsed.search || parsed.hash) {
+      return 'must not include path, query, or fragment';
+    }
+    return null;
+  } catch {
+    return 'must be a valid URL';
+  }
+};
+
+const validateStartupSecurityConfiguration = (
+  isProduction: boolean,
+  sessionCookieSecure: boolean,
+) => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (SESSION_SECRET === 'dev-only-change-me') {
+    const message = 'SESSION_SECRET uses fallback value';
+    if (isProduction) errors.push(message);
+    else warnings.push(`${message}. Configure SESSION_SECRET for shared environments.`);
+  }
+
+  if (SESSION_SECRET.length < 32) {
+    const message = 'SESSION_SECRET should be at least 32 characters';
+    if (isProduction) errors.push(message);
+    else warnings.push(`${message} to reduce brute-force risk.`);
+  }
+
+  if (
+    configuredSessionCookieSameSite.length > 0 &&
+    !allowedSameSiteValues.includes(
+      configuredSessionCookieSameSite as (typeof allowedSameSiteValues)[number],
+    )
+  ) {
+    errors.push('SESSION_COOKIE_SAME_SITE must be one of: lax, strict, none');
+  }
+
+  if (CSRF_PROTECTION_ENABLED && (!CSRF_COOKIE_NAME.trim() || !CSRF_HEADER_NAME.trim())) {
+    errors.push('CSRF cookie/header names must be non-empty when CSRF protection is enabled');
+  }
+
+  if (isProduction && !CSRF_PROTECTION_ENABLED) {
+    errors.push('CSRF_PROTECTION_ENABLED must stay true in production');
+  }
+
+  if (CORS_ALLOW_ALL_ORIGINS) {
+    const message = 'CORS_ALLOW_ALL_ORIGINS is enabled';
+    if (isProduction) errors.push(`${message}. Disable this in production.`);
+    else warnings.push(`${message}. Use only for local debugging.`);
+  }
+
+  if (
+    isProduction &&
+    !mockModeEnabled &&
+    CORS_FAIL_CLOSED &&
+    !CORS_ALLOW_ALL_ORIGINS &&
+    configuredCorsOrigins.length === 0
+  ) {
+    errors.push('CORS_ORIGIN must be configured in production when CORS_FAIL_CLOSED is enabled');
+  }
+
+  const invalidCorsOrigins = configuredCorsOrigins
+    .map((origin) => ({ origin, reason: validateCorsOrigin(origin) }))
+    .filter((item): item is { origin: string; reason: string } => Boolean(item.reason));
+  if (invalidCorsOrigins.length > 0) {
+    errors.push(
+      `Invalid CORS_ORIGIN entries: ${invalidCorsOrigins
+        .map((item) => `"${item.origin}" (${item.reason})`)
+        .join(', ')}`,
+    );
+  }
+
+  if (isProduction && !sessionCookieSecure) {
+    errors.push('Session cookie must be secure in production');
+  }
+
+  warnings.forEach((message) => logger.warn(message));
+
+  if (errors.length > 0) {
+    throw new Error(`Security configuration invalid:\n- ${errors.join('\n- ')}`);
+  }
+};
 
 export interface Context {
   loggedIn: boolean;
   authenticatedUserId?: number;
-  authenticatedSessionTokenHash?: string;
-  authenticatedCsrfTokenHash?: string;
   requestIp?: string;
   operationName: string;
   requestId: string;
   now: Date;
-  response?: ServerResponse;
+  request?: Request;
+  response?: Response;
   models: DbModels;
-  transaction?: Transaction;
   publisherService: PublisherService;
   seriesService: SeriesService;
   issueService: IssueService;
@@ -135,146 +222,47 @@ export interface Context {
   issueVariantsLoader: DataLoader<string, Issue[]>;
 }
 
-type RequestWithBody = IncomingMessage & {
-  body?: {
-    operationName?: string;
-    query?: string;
-  } | null;
-};
-
-const parseCookies = (cookieHeader: string | undefined): Record<string, string> => {
-  if (!cookieHeader) return {};
-  return cookieHeader.split(';').reduce<Record<string, string>>((acc, part) => {
-    const [rawName, ...rawValueParts] = part.trim().split('=');
-    if (!rawName) return acc;
-    const rawValue = rawValueParts.join('=');
-    try {
-      acc[rawName] = decodeURIComponent(rawValue || '');
-    } catch {
-      acc[rawName] = rawValue || '';
-    }
-    return acc;
-  }, {});
-};
-
-const parseSessionToken = (token: string | undefined): string | null => {
-  if (!token) return null;
-  const normalized = token.trim().replace(/^"|"$/g, '');
-  if (normalized.length < 32) return null;
-  return normalized;
-};
-
-const parseCsrfToken = (token: string | undefined): string | null => {
-  if (!token) return null;
-  const normalized = token.trim().replace(/^"|"$/g, '');
-  if (normalized.length < 16) return null;
-  return normalized;
-};
-
-const getRequestHeader = (
-  headers: IncomingMessage['headers'],
-  headerName: string,
-): string | undefined => {
-  const raw = headers[headerName.toLowerCase()];
-  return typeof raw === 'string' ? raw : raw?.[0];
-};
-
-const parseRequestIp = (request: IncomingMessage): string | undefined => {
-  const forwarded = request.headers['x-forwarded-for'];
-  const forwardedRaw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  if (typeof forwardedRaw === 'string') {
-    const forwardedIp = forwardedRaw.split(',')[0]?.trim();
-    if (forwardedIp) return forwardedIp;
-  }
-  return request.socket.remoteAddress || undefined;
-};
-
-const hashSessionToken = (token: string): string => {
-  return createHash('sha256').update(token).digest('hex');
-};
-
-const safeTokenEquals = (left: string | undefined, right: string | undefined): boolean => {
-  if (!left || !right) return false;
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  if (leftBuffer.length !== rightBuffer.length) return false;
-  return timingSafeEqual(leftBuffer, rightBuffer);
-};
-
-const resolveOperationAccess = (
-  query: string | undefined,
-  operationName: string | undefined,
-): { isMutation: boolean; isPublicMutation: boolean } => {
-  if (!query) return { isMutation: false, isPublicMutation: false };
-
-  try {
-    const documentNode = parse(query);
-    const operation = getOperationAST(documentNode, operationName);
-
-    if (!operation || operation.operation !== 'mutation') {
-      return { isMutation: false, isPublicMutation: false };
-    }
-    if (operation.selectionSet.selections.length === 0) {
-      return { isMutation: true, isPublicMutation: false };
-    }
-
-    const hasOnlyPublicMutationFields = operation.selectionSet.selections.every((selection) => {
-      if (selection.kind !== 'Field') return false;
-      return selection.name.value === 'login';
+const canRunProtectedMutation = rule({ cache: 'contextual' })(async (_, __, context: Context) => {
+  if (!context.loggedIn) {
+    return new GraphQLError('Du bist nicht eingeloggt', {
+      extensions: { code: 'UNAUTHENTICATED' },
     });
-
-    return {
-      isMutation: true,
-      isPublicMutation: hasOnlyPublicMutationFields,
-    };
-  } catch {
-    return { isMutation: false, isPublicMutation: false };
   }
-};
 
-const isOriginAllowed = (origin: string | undefined): boolean => {
-  if (CORS_ALLOW_ALL_ORIGINS) return true;
-  if (!origin) return true;
-  return allowedCorsOrigins.includes(origin);
-};
+  if (!CSRF_PROTECTION_ENABLED) return true;
 
-const applyCorsHeaders = (req: IncomingMessage, res: ServerResponse): boolean => {
-  const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
-  if (!isOriginAllowed(origin)) return false;
-
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
+  if (!context.request || !isRequestCsrfValid(context.request)) {
+    return new GraphQLError('Ungültiges CSRF-Token', {
+      extensions: { code: 'FORBIDDEN' },
+    });
   }
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', allowedCorsMethods);
-  res.setHeader('Access-Control-Allow-Headers', allowedCorsHeaders);
+
   return true;
-};
+});
 
-const parseJsonBody = async (req: IncomingMessage): Promise<RequestWithBody['body']> => {
-  if (req.method?.toUpperCase() === 'GET') return undefined;
+const permissions = shield(
+  {
+    Mutation: {
+      login: allow,
+      _empty: allow,
+      '*': canRunProtectedMutation,
+    },
+  },
+  {
+    allowExternalErrors: true,
+    fallbackRule: allow,
+  },
+);
 
-  const chunks: Buffer[] = [];
-  let totalSize = 0;
-  for await (const chunk of req) {
-    const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    totalSize += bufferChunk.byteLength;
-    if (totalSize > GRAPHQL_BODY_LIMIT_BYTES) {
-      throw new Error('PAYLOAD_TOO_LARGE');
-    }
-    chunks.push(bufferChunk);
-  }
-
-  if (chunks.length === 0) return undefined;
-  const rawBody = Buffer.concat(chunks).toString('utf8').trim();
-  if (!rawBody) return undefined;
-  return JSON.parse(rawBody) as RequestWithBody['body'];
-};
-
-const server = new ApolloServer<Context>({
+const executableSchema = makeExecutableSchema({
   typeDefs,
   resolvers: mockModeEnabled ? merge({}, ScalarResolvers, mockResolvers) : resolvers,
+});
+
+const schema = mockModeEnabled ? executableSchema : applyMiddleware(executableSchema, permissions);
+
+const server = new ApolloServer<Context>({
+  schema,
   formatError: (formattedError) => {
     // Return a safe error object to avoid Apollo Server internal crash
     return {
@@ -308,313 +296,251 @@ const server = new ApolloServer<Context>({
 
 export const startServer = async (port = parseInt(process.env.PORT || '4000', 10)) => {
   const isProduction = process.env.NODE_ENV === 'production';
-  if (
-    isProduction &&
-    !mockModeEnabled &&
-    CORS_FAIL_CLOSED &&
-    !CORS_ALLOW_ALL_ORIGINS &&
-    configuredCorsOrigins.length === 0
-  ) {
-    throw new Error(
-      'CORS_ORIGIN must be configured in production when CORS_FAIL_CLOSED is enabled',
-    );
+  const { secure, domain } = resolveCookieSecurity();
+  validateStartupSecurityConfiguration(isProduction, secure);
+
+  const app = express();
+  const httpServer = http.createServer(app);
+
+  if ((process.env.TRUST_PROXY || '').toLowerCase() === 'true') {
+    app.set('trust proxy', 1);
   }
 
-  if (CORS_ALLOW_ALL_ORIGINS) {
-    logger.warn('CORS allow-all mode is enabled. This should only be used temporarily.');
-  }
+  const isOriginAllowed = (origin: string | undefined): boolean => {
+    if (CORS_ALLOW_ALL_ORIGINS) return true;
+    if (!origin) return true;
+    return allowedCorsOrigins.includes(origin);
+  };
 
-  const httpServer = http.createServer(async (req, res) => {
-    const corsAllowed = applyCorsHeaders(req, res);
-    if (!corsAllowed) {
-      res.statusCode = 403;
-      res.end('CORS origin denied');
+  const allowedCorsHeaders = [
+    'content-type',
+    ...(CSRF_PROTECTION_ENABLED ? [CSRF_HEADER_NAME] : []),
+  ];
+  const corsMiddleware = cors({
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) =>
+      callback(null, isOriginAllowed(origin)),
+    credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: allowedCorsHeaders,
+    optionsSuccessStatus: 204,
+  });
+
+  const SequelizeStore = connectSessionSequelize(session.Store);
+  const sessionStore = new SequelizeStore({
+    db: models.sequelize,
+    tableName: SESSION_STORE_TABLE,
+    expiration: SESSION_TTL_SECONDS * 1000,
+    checkExpirationInterval: 15 * 60 * 1000,
+  });
+  await sessionStore.sync();
+
+  app.use(cookieParser());
+  app.use(
+    session({
+      name: SESSION_COOKIE_NAME,
+      secret: SESSION_SECRET,
+      store: sessionStore,
+      resave: false,
+      saveUninitialized: false,
+      rolling: true,
+      cookie: {
+        path: '/',
+        maxAge: SESSION_TTL_SECONDS * 1000,
+        httpOnly: true,
+        sameSite: sessionCookieSameSite,
+        secure,
+        domain,
+      },
+    }),
+  );
+
+  app.use('/', (req: Request, res: Response, next: NextFunction) => {
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+    if (isOriginAllowed(origin)) {
+      next();
       return;
     }
+    res.status(403).send('CORS origin denied');
+  });
 
-    if (req.method?.toUpperCase() === 'OPTIONS') {
-      res.statusCode = 204;
-      res.end();
+  app.use('/', corsMiddleware);
+
+  app.use('/', (req: Request, res: Response, next: NextFunction) => {
+    if (req.method.toUpperCase() === 'OPTIONS') {
+      next();
       return;
     }
-
-    if (req.method?.toUpperCase() !== 'POST') {
-      res.statusCode = 405;
-      res.setHeader('Allow', 'POST,OPTIONS');
-      res.end('Method not allowed');
+    if (req.method.toUpperCase() === 'POST') {
+      next();
       return;
     }
+    res.setHeader('Allow', 'POST,OPTIONS');
+    res.status(405).send('Method not allowed');
+  });
 
-    let parsedBody: RequestWithBody['body'];
-    try {
-      parsedBody = await parseJsonBody(req);
-    } catch (e) {
-      if (e instanceof Error && e.message === 'PAYLOAD_TOO_LARGE') {
-        res.statusCode = 413;
-        res.end('Payload too large');
-      } else {
-        res.statusCode = 400;
-        res.end('Invalid JSON payload');
-      }
-      return;
-    }
+  app.use('/', express.json({ limit: GRAPHQL_BODY_LIMIT_BYTES }));
 
-    const request = req as RequestWithBody;
-    request.body = parsedBody;
+  app.use(
+    '/',
+    expressMiddleware(server, {
+      context: async ({ req, res }): Promise<Context> => {
+        const requestBody = req.body as GraphQLRequestBody;
+        const rawOperationName = requestBody?.operationName;
+        const operationName = rawOperationName || 'UNKNOWN';
+        const requestId = randomBytes(8).toString('hex');
+        const now = new Date();
+        const requestIp = parseRequestIp(req);
+        logger.info(`[>>>] [${operationName.toUpperCase()}]`, { requestId });
 
-    const buildContext = async (): Promise<Context> => {
-      const rawOperationName = request.body?.operationName;
-      const operationName = rawOperationName || 'UNKNOWN';
-      const requestId = randomBytes(8).toString('hex');
-      const now = new Date();
-      const requestIp = parseRequestIp(request);
-      logger.info(`[>>>] [${operationName.toUpperCase()}]`, { requestId });
+        if (mockModeEnabled) {
+          return {
+            loggedIn: true,
+            authenticatedUserId: undefined,
+            requestIp,
+            operationName,
+            requestId,
+            now,
+            request: req,
+            response: res,
+            models,
+            publisherService: {} as PublisherService,
+            seriesService: {} as SeriesService,
+            issueService: {} as IssueService,
+            userService: {} as UserService,
+            filterService: {} as FilterService,
+            storyService: {} as StoryService,
+            publisherLoader: {} as DataLoader<number, Publisher | null>,
+            seriesLoader: {} as DataLoader<number, Series | null>,
+            issueLoader: {} as DataLoader<number, Issue | null>,
+            storyLoader: {} as DataLoader<number, Story | null>,
+            storyChildrenLoader: {} as DataLoader<number, Story[]>,
+            storyReprintsLoader: {} as DataLoader<number, Story[]>,
+            issueStoriesLoader: {} as DataLoader<number, Story[]>,
+            issueCoverLoader: {} as DataLoader<number, Cover | null>,
+            issueCoversLoader: {} as DataLoader<number, Cover[]>,
+            issueFeaturesLoader: {} as DataLoader<number, Feature[]>,
+            issueVariantsLoader: {} as DataLoader<string, Issue[]>,
+          };
+        }
 
-      if (mockModeEnabled) {
-        return {
-          loggedIn: true,
-          authenticatedUserId: undefined,
-          authenticatedSessionTokenHash: undefined,
-          authenticatedCsrfTokenHash: undefined,
+        const authorization =
+          typeof req.headers.authorization === 'string'
+            ? req.headers.authorization
+            : req.headers.authorization?.[0];
+
+        if (authorization) {
+          throw new GraphQLError('Authorization-Header Sessions werden nicht unterstützt', {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+
+        const authenticatedUserId =
+          typeof req.session?.userId === 'number' ? req.session.userId : undefined;
+        const loggedIn = Boolean(authenticatedUserId);
+
+        if (loggedIn && CSRF_PROTECTION_ENABLED) {
+          const csrfTokenInCookie = req.cookies?.[CSRF_COOKIE_NAME];
+          if (typeof csrfTokenInCookie !== 'string' || csrfTokenInCookie.length === 0) {
+            issueCsrfToken(req, res);
+          }
+        }
+
+        const publisherService = new PublisherService(models, requestId);
+        const seriesService = new SeriesService(models, requestId);
+        const issueService = new IssueService(models, requestId);
+        const userService = new UserService(models, requestId);
+        const filterService = new FilterService(models, requestId);
+        const storyService = new StoryService(models, requestId);
+
+        const publisherLoader = new DataLoader<number, Publisher | null>((ids) =>
+          publisherService.getPublishersByIds(ids),
+        );
+        const seriesLoader = new DataLoader<number, Series | null>((ids) =>
+          seriesService.getSeriesByIds(ids),
+        );
+        const issueLoader = new DataLoader<number, Issue | null>((ids) =>
+          issueService.getIssuesByIds(ids),
+        );
+        const storyLoader = new DataLoader<number, Story | null>((ids) =>
+          storyService.getStoriesByIds(ids),
+        );
+        const storyChildrenLoader = new DataLoader<number, Story[]>((ids) =>
+          storyService.getChildrenByParentIds(ids),
+        );
+        const storyReprintsLoader = new DataLoader<number, Story[]>((ids) =>
+          storyService.getReprintsByStoryIds(ids),
+        );
+        const issueStoriesLoader = new DataLoader<number, Story[]>((ids) =>
+          issueService.getStoriesByIssueIds(ids),
+        );
+        const issueCoverLoader = new DataLoader<number, Cover | null>((ids) =>
+          issueService.getPrimaryCoversByIssueIds(ids),
+        );
+        const issueCoversLoader = new DataLoader<number, Cover[]>((ids) =>
+          issueService.getCoversByIssueIds(ids),
+        );
+        const issueFeaturesLoader = new DataLoader<number, Feature[]>((ids) =>
+          issueService.getFeaturesByIssueIds(ids),
+        );
+        const issueVariantsLoader = new DataLoader<string, Issue[]>(
+          (keys) => issueService.getVariantsBySeriesAndNumberKeys(keys),
+          { cacheKeyFn: (key) => key },
+        );
+
+        const contextBase = {
+          loggedIn,
+          authenticatedUserId,
           requestIp,
           operationName,
           requestId,
           now,
+          request: req,
           response: res,
           models,
-          publisherService: {} as PublisherService,
-          seriesService: {} as SeriesService,
-          issueService: {} as IssueService,
-          userService: {} as UserService,
-          filterService: {} as FilterService,
-          storyService: {} as StoryService,
-          publisherLoader: {} as DataLoader<number, Publisher | null>,
-          seriesLoader: {} as DataLoader<number, Series | null>,
-          issueLoader: {} as DataLoader<number, Issue | null>,
-          storyLoader: {} as DataLoader<number, Story | null>,
-          storyChildrenLoader: {} as DataLoader<number, Story[]>,
-          storyReprintsLoader: {} as DataLoader<number, Story[]>,
-          issueStoriesLoader: {} as DataLoader<number, Story[]>,
-          issueCoverLoader: {} as DataLoader<number, Cover | null>,
-          issueCoversLoader: {} as DataLoader<number, Cover[]>,
-          issueFeaturesLoader: {} as DataLoader<number, Feature[]>,
-          issueVariantsLoader: {} as DataLoader<string, Issue[]>,
+          publisherService,
+          seriesService,
+          issueService,
+          userService,
+          filterService,
+          storyService,
+          publisherLoader,
+          seriesLoader,
+          issueLoader,
+          storyLoader,
+          storyChildrenLoader,
+          storyReprintsLoader,
+          issueStoriesLoader,
+          issueCoverLoader,
+          issueCoversLoader,
+          issueFeaturesLoader,
+          issueVariantsLoader,
         };
-      }
+        return contextBase;
+      },
+    }),
+  );
 
-      let loggedIn = false;
-      let authenticatedUserId: number | undefined;
-      let authenticatedSessionTokenHash: string | undefined;
-      let authenticatedCsrfTokenHash: string | undefined;
-      const authorization =
-        typeof request.headers.authorization === 'string'
-          ? request.headers.authorization
-          : request.headers.authorization?.[0];
-      const cookieHeader =
-        typeof request.headers.cookie === 'string' ? request.headers.cookie : request.headers.cookie?.[0];
-      const parsedCookies = parseCookies(cookieHeader);
-      let csrfCookieToken = parseCsrfToken(parsedCookies[CSRF_COOKIE_NAME]);
-
-      if (authorization) {
-        throw new GraphQLError('Authorization-Header Sessions werden nicht unterstützt', {
-          extensions: { code: 'BAD_USER_INPUT' },
-        });
-      }
-
-      const sessionToken = parseSessionToken(parsedCookies[SESSION_COOKIE_NAME]);
-
-      if (sessionToken) {
-        const tokenHash = hashSessionToken(sessionToken);
-        const session = await models.UserSession.findOne({
-          where: {
-            tokenhash: tokenHash,
-            revokedat: null,
-            expiresat: { [Op.gt]: now },
-          },
-        });
-        if (session) {
-          loggedIn = true;
-          authenticatedUserId = session.fk_user;
-          authenticatedSessionTokenHash = tokenHash;
-          let shouldPersistSession = false;
-          let shouldRefreshSessionCookie = false;
-          let shouldRefreshCsrfCookie = false;
-
-          if (!csrfCookieToken) {
-            csrfCookieToken = randomBytes(32).toString('base64url');
-            session.csrftokenhash = hashSessionToken(csrfCookieToken);
-            shouldPersistSession = true;
-            shouldRefreshCsrfCookie = true;
-          } else if (!session.csrftokenhash) {
-            session.csrftokenhash = hashSessionToken(csrfCookieToken);
-            shouldPersistSession = true;
-          }
-
-          authenticatedCsrfTokenHash = session.csrftokenhash || undefined;
-
-          const remainingMs = session.expiresat.getTime() - now.getTime();
-          if (remainingMs < SESSION_REFRESH_THRESHOLD_SECONDS * 1000) {
-            session.expiresat = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000);
-            shouldPersistSession = true;
-            shouldRefreshSessionCookie = true;
-            shouldRefreshCsrfCookie = true;
-          }
-
-          if (shouldPersistSession) {
-            await session.save();
-          }
-
-          if (shouldRefreshSessionCookie) {
-            appendSetCookie(res, buildSessionCookie(sessionToken));
-          }
-          if (shouldRefreshCsrfCookie && csrfCookieToken) {
-            appendSetCookie(res, buildCsrfCookie(csrfCookieToken));
-          }
-        }
-      }
-
-      const requestQuery = request.body?.query;
-      const { isMutation, isPublicMutation } = resolveOperationAccess(requestQuery, rawOperationName);
-
-      if (isMutation && !isPublicMutation && !loggedIn) {
-        throw new GraphQLError('Du bist nicht eingeloggt', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-      }
-
-      if (CSRF_PROTECTION_ENABLED && isMutation && !isPublicMutation) {
-        const csrfHeaderToken = parseCsrfToken(getRequestHeader(request.headers, CSRF_HEADER_NAME));
-        if (!csrfCookieToken || !csrfHeaderToken || csrfCookieToken !== csrfHeaderToken) {
-          throw new GraphQLError('Ungültiges CSRF-Token', {
-            extensions: { code: 'FORBIDDEN' },
-          });
-        }
-
-        const csrfHeaderTokenHash = hashSessionToken(csrfHeaderToken);
-        if (!safeTokenEquals(authenticatedCsrfTokenHash, csrfHeaderTokenHash)) {
-          throw new GraphQLError('Ungültiges CSRF-Token', {
-            extensions: { code: 'FORBIDDEN' },
-          });
-        }
-      }
-
-      const publisherService = new PublisherService(models, requestId);
-      const seriesService = new SeriesService(models, requestId);
-      const issueService = new IssueService(models, requestId);
-      const userService = new UserService(models, requestId);
-      const filterService = new FilterService(models, requestId);
-      const storyService = new StoryService(models, requestId);
-
-      const publisherLoader = new DataLoader<number, Publisher | null>((ids) =>
-        publisherService.getPublishersByIds(ids),
-      );
-      const seriesLoader = new DataLoader<number, Series | null>((ids) =>
-        seriesService.getSeriesByIds(ids),
-      );
-      const issueLoader = new DataLoader<number, Issue | null>((ids) =>
-        issueService.getIssuesByIds(ids),
-      );
-      const storyLoader = new DataLoader<number, Story | null>((ids) =>
-        storyService.getStoriesByIds(ids),
-      );
-      const storyChildrenLoader = new DataLoader<number, Story[]>((ids) =>
-        storyService.getChildrenByParentIds(ids),
-      );
-      const storyReprintsLoader = new DataLoader<number, Story[]>((ids) =>
-        storyService.getReprintsByStoryIds(ids),
-      );
-      const issueStoriesLoader = new DataLoader<number, Story[]>((ids) =>
-        issueService.getStoriesByIssueIds(ids),
-      );
-      const issueCoverLoader = new DataLoader<number, Cover | null>((ids) =>
-        issueService.getPrimaryCoversByIssueIds(ids),
-      );
-      const issueCoversLoader = new DataLoader<number, Cover[]>((ids) =>
-        issueService.getCoversByIssueIds(ids),
-      );
-      const issueFeaturesLoader = new DataLoader<number, Feature[]>((ids) =>
-        issueService.getFeaturesByIssueIds(ids),
-      );
-      const issueVariantsLoader = new DataLoader<string, Issue[]>(
-        (keys) => issueService.getVariantsBySeriesAndNumberKeys(keys),
-        { cacheKeyFn: (key) => key },
-      );
-
-      const contextBase = {
-        loggedIn,
-        authenticatedUserId,
-        authenticatedSessionTokenHash,
-        authenticatedCsrfTokenHash,
-        requestIp,
-        operationName,
-        requestId,
-        now,
-        response: res,
-        models,
-        publisherService,
-        seriesService,
-        issueService,
-        userService,
-        filterService,
-        storyService,
-        publisherLoader,
-        seriesLoader,
-        issueLoader,
-        storyLoader,
-        storyChildrenLoader,
-        storyReprintsLoader,
-        issueStoriesLoader,
-        issueCoverLoader,
-        issueCoversLoader,
-        issueFeaturesLoader,
-        issueVariantsLoader,
-      };
-
-      if (isMutation) {
-        const transaction = await models.sequelize.transaction();
-        return { ...contextBase, transaction };
-      }
-      return contextBase;
-    };
-
-    const headers = new HeaderMap();
-    for (const [key, value] of Object.entries(req.headers)) {
-      if (value !== undefined) {
-        headers.set(key, Array.isArray(value) ? value.join(', ') : value);
-      }
+  app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'type' in error &&
+      (error as { type?: string }).type === 'entity.too.large'
+    ) {
+      res.status(413).send('Payload too large');
+      return;
     }
 
-    try {
-      const httpGraphQLResponse = await server.executeHTTPGraphQLRequest({
-        httpGraphQLRequest: {
-          method: req.method.toUpperCase(),
-          headers,
-          search: parseUrl(req.url || '').search || '',
-          body: request.body || undefined,
-        },
-        context: buildContext,
-      });
+    if (error instanceof SyntaxError) {
+      res.status(400).send('Invalid JSON payload');
+      return;
+    }
 
-      for (const [key, value] of httpGraphQLResponse.headers) {
-        res.setHeader(key, value);
-      }
-      res.statusCode = httpGraphQLResponse.status || 200;
-
-      if (httpGraphQLResponse.body.kind === 'complete') {
-        res.end(httpGraphQLResponse.body.string);
-        return;
-      }
-
-      for await (const chunk of httpGraphQLResponse.body.asyncIterator) {
-        res.write(chunk);
-      }
-      res.end();
-    } catch (e) {
-      logger.error('Unhandled GraphQL transport error', {
-        error: e instanceof Error ? e.message : String(e),
-      });
-      res.statusCode = 500;
-      res.end('Internal server error');
+    logger.error('Unhandled GraphQL transport error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    if (!res.headersSent) {
+      res.status(500).send('Internal server error');
     }
   });
 

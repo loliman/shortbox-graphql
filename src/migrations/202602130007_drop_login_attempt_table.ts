@@ -34,6 +34,14 @@ const withTransaction = async (
 export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
   await withTransaction(queryInterface, async (transaction) => {
     const exists = await tableExists(queryInterface, TABLE_NAME);
+    if (!exists) return;
+    await queryInterface.dropTable(TABLE_NAME, { transaction });
+  });
+};
+
+export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
+  await withTransaction(queryInterface, async (transaction) => {
+    const exists = await tableExists(queryInterface, TABLE_NAME);
     if (exists) return;
 
     await queryInterface.createTable(
@@ -83,13 +91,5 @@ export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface 
       name: 'loginattempt_lockeduntilat_idx',
       transaction,
     });
-  });
-};
-
-export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
-  await withTransaction(queryInterface, async (transaction) => {
-    const exists = await tableExists(queryInterface, TABLE_NAME);
-    if (!exists) return;
-    await queryInterface.dropTable(TABLE_NAME, { transaction });
   });
 };

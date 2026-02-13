@@ -14,15 +14,18 @@ const devFormat = combine(
 );
 
 const prodFormat = combine(timestamp(), json());
+const LOG_TO_FILES = (process.env.LOG_TO_FILES || 'false').toLowerCase() === 'true';
+
+const transports: winston.transport[] = [new winston.transports.Console()];
+if (LOG_TO_FILES) {
+  transports.push(new winston.transports.File({ filename: 'error.log', level: 'error' }));
+  transports.push(new winston.transports.File({ filename: 'combined.log' }));
+}
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: process.env.NODE_ENV === 'production' ? prodFormat : devFormat,
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' }),
-  ],
+  transports,
 });
 
 export default logger;

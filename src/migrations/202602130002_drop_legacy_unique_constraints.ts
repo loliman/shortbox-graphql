@@ -1,10 +1,5 @@
-import { QueryInterface, Sequelize, Transaction } from 'sequelize';
-
-type MigrationContext = {
-  queryInterface: QueryInterface;
-  sequelize: Sequelize;
-  transaction: Transaction;
-};
+import { QueryInterface, Transaction } from 'sequelize';
+import type { MigrationFn } from 'umzug';
 
 type ConstraintDefinition = {
   tableName: string;
@@ -101,43 +96,61 @@ const constraintExists = async (
   return rows.length > 0;
 };
 
-export async function up({ queryInterface, transaction }: MigrationContext) {
-  for (const definition of LEGACY_UNIQUE_CONSTRAINTS) {
-    const exists = await tableExists(queryInterface, definition.tableName);
-    if (!exists) continue;
-
-    const hasConstraint = await constraintExists(
-      queryInterface,
-      definition.tableName,
-      definition.constraintName,
-      transaction,
-    );
-    if (!hasConstraint) continue;
-
-    await queryInterface.removeConstraint(definition.tableName, definition.constraintName, {
-      transaction,
-    });
+const withTransaction = async (
+  queryInterface: QueryInterface,
+  run: (transaction: Transaction) => Promise<void>,
+) => {
+  const transaction = await queryInterface.sequelize.transaction();
+  try {
+    await run(transaction);
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
   }
-}
+};
 
-export async function down({ queryInterface, transaction }: MigrationContext) {
-  for (const definition of LEGACY_UNIQUE_CONSTRAINTS) {
-    const exists = await tableExists(queryInterface, definition.tableName);
-    if (!exists) continue;
+export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
+  await withTransaction(queryInterface, async (transaction) => {
+    for (const definition of LEGACY_UNIQUE_CONSTRAINTS) {
+      const exists = await tableExists(queryInterface, definition.tableName);
+      if (!exists) continue;
 
-    const hasConstraint = await constraintExists(
-      queryInterface,
-      definition.tableName,
-      definition.constraintName,
-      transaction,
-    );
-    if (hasConstraint) continue;
+      const hasConstraint = await constraintExists(
+        queryInterface,
+        definition.tableName,
+        definition.constraintName,
+        transaction,
+      );
+      if (!hasConstraint) continue;
 
-    await queryInterface.addConstraint(definition.tableName, {
-      fields: definition.columns,
-      type: 'unique',
-      name: definition.constraintName,
-      transaction,
-    });
-  }
-}
+      await queryInterface.removeConstraint(definition.tableName, definition.constraintName, {
+        transaction,
+      });
+    }
+  });
+};
+
+export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
+  await withTransaction(queryInterface, async (transaction) => {
+    for (const definition of LEGACY_UNIQUE_CONSTRAINTS) {
+      const exists = await tableExists(queryInterface, definition.tableName);
+      if (!exists) continue;
+
+      const hasConstraint = await constraintExists(
+        queryInterface,
+        definition.tableName,
+        definition.constraintName,
+        transaction,
+      );
+      if (hasConstraint) continue;
+
+      await queryInterface.addConstraint(definition.tableName, {
+        fields: definition.columns,
+        type: 'unique',
+        name: definition.constraintName,
+        transaction,
+      });
+    }
+  });
+};

@@ -1,7 +1,8 @@
 import models from '../models';
 import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
 import logger from '../util/logger';
-import type { Filter, Publisher, PublisherInput } from '@shortbox/contract';
+import type { Filter, PublisherInput } from '@shortbox/contract';
+import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
 
 export class PublisherService {
   constructor(
@@ -44,10 +45,7 @@ export class PublisherService {
       original: boolean;
     };
     const limit = first || 50;
-    let decodedCursor: number | undefined;
-    if (after) {
-      decodedCursor = parseInt(Buffer.from(after, 'base64').toString('ascii'), 10);
-    }
+    const decodedCursor = decodeCursorId(after || undefined);
 
     if (!filter) {
       const where: WhereMap = { original: us };
@@ -78,23 +76,12 @@ export class PublisherService {
       }
 
       const results = await this.models.Publisher.findAll(options);
-      const hasNextPage = results.length > limit;
-      const nodes = results.slice(0, limit);
-
-      const edges = nodes.map((node) => ({
-        cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node: node as unknown as Publisher,
+      const nodes: PublisherNode[] = results.map((node) => ({
+        id: node.id,
+        name: node.name,
+        original: Boolean(node.original),
       }));
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage,
-          hasPreviousPage: !!after,
-          startCursor: edges.length > 0 ? edges[0].cursor : null,
-          endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        },
-      };
+      return buildConnectionFromNodes(nodes, limit, after || undefined);
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models, this.requestId);
@@ -116,8 +103,7 @@ export class PublisherService {
       }
 
       const res = await this.models.Issue.findAll(options);
-      const hasNextPage = res.length > limit;
-      const nodes: PublisherNode[] = res.slice(0, limit).map((issue) => {
+      const nodes: PublisherNode[] = res.map((issue) => {
         const issueNode = issue as unknown as IssueWithSeriesPublisher;
         return {
           id: issueNode.Series.Publisher.id,
@@ -125,21 +111,7 @@ export class PublisherService {
           original: us,
         };
       });
-
-      const edges = nodes.map((node) => ({
-        cursor: Buffer.from(node.id.toString()).toString('base64'),
-        node,
-      }));
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage,
-          hasPreviousPage: !!after,
-          startCursor: edges.length > 0 ? edges[0].cursor : null,
-          endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-        },
-      };
+      return buildConnectionFromNodes(nodes, limit, after || undefined);
     }
   }
 

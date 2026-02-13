@@ -64,6 +64,7 @@ Set the following as hard baseline for production:
 | Variable | Default | Prod requirement | Purpose / risk |
 |---|---|---|---|
 | `GRAPHQL_BODY_LIMIT_BYTES` | `1048576` | Review explicitly | Caps request body size; prevents oversized payload abuse. |
+| `LOG_TO_FILES` | `false` | Usually `false` | Enables local `error.log`/`combined.log` file transports. Prefer stdout/stderr in containerized production. |
 
 ## 3. Frontend coupling (shortbox-react)
 
@@ -90,3 +91,14 @@ Run this checklist before each production rollout:
 5. Confirm `CORS_ALLOW_ALL_ORIGINS=false`.
 6. Confirm `CSRF_PROTECTION_ENABLED=true`.
 7. Confirm login throttling values are non-default only if intentionally tuned.
+
+## 5. Startup validation (enforced)
+
+On backend startup, production now fails fast if one of these conditions is violated:
+
+- `SESSION_SECRET` is missing/fallback or shorter than 32 chars.
+- `CSRF_PROTECTION_ENABLED` is not `true`.
+- `CORS_ALLOW_ALL_ORIGINS` is enabled.
+- `CORS_FAIL_CLOSED=true` without explicit `CORS_ORIGIN`.
+- Any `CORS_ORIGIN` entry is not a clean origin URL (`http(s)://host[:port]`).
+- Session cookies are not secure in production.

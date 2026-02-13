@@ -1,7 +1,7 @@
 import { DataTypes, QueryInterface, Transaction } from 'sequelize';
 import type { MigrationFn } from 'umzug';
 
-const TABLE_NAME = 'LoginAttempt';
+const TABLE_NAME = 'UserSession';
 
 const normalizeTableName = (table: unknown): string => {
   if (typeof table === 'string') return table.toLowerCase();
@@ -34,6 +34,14 @@ const withTransaction = async (
 export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
   await withTransaction(queryInterface, async (transaction) => {
     const exists = await tableExists(queryInterface, TABLE_NAME);
+    if (!exists) return;
+    await queryInterface.dropTable(TABLE_NAME, { transaction });
+  });
+};
+
+export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
+  await withTransaction(queryInterface, async (transaction) => {
+    const exists = await tableExists(queryInterface, TABLE_NAME);
     if (exists) return;
 
     await queryInterface.createTable(
@@ -45,20 +53,29 @@ export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface 
           allowNull: false,
           autoIncrement: true,
         },
-        scope: {
-          type: DataTypes.STRING(512),
+        fk_user: {
+          type: DataTypes.INTEGER,
+          allowNull: false,
+          references: {
+            model: 'User',
+            key: 'id',
+          },
+          onDelete: 'CASCADE',
+        },
+        tokenhash: {
+          type: DataTypes.STRING(128),
           allowNull: false,
           unique: true,
         },
-        failures: {
-          type: DataTypes.INTEGER,
-          allowNull: false,
+        csrftokenhash: {
+          type: DataTypes.STRING(128),
+          allowNull: true,
         },
-        windowstartat: {
+        expiresat: {
           type: DataTypes.DATE,
           allowNull: false,
         },
-        lockeduntilat: {
+        revokedat: {
           type: DataTypes.DATE,
           allowNull: true,
         },
@@ -74,22 +91,26 @@ export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface 
       { transaction },
     );
 
-    await queryInterface.addIndex(TABLE_NAME, ['scope'], {
+    await queryInterface.addIndex(TABLE_NAME, ['tokenhash'], {
       unique: true,
-      name: 'loginattempt_scope_unique',
+      name: 'usersession_tokenhash_unique',
       transaction,
     });
-    await queryInterface.addIndex(TABLE_NAME, ['lockeduntilat'], {
-      name: 'loginattempt_lockeduntilat_idx',
+    await queryInterface.addIndex(TABLE_NAME, ['fk_user'], {
+      name: 'usersession_fk_user_idx',
       transaction,
     });
-  });
-};
-
-export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
-  await withTransaction(queryInterface, async (transaction) => {
-    const exists = await tableExists(queryInterface, TABLE_NAME);
-    if (!exists) return;
-    await queryInterface.dropTable(TABLE_NAME, { transaction });
+    await queryInterface.addIndex(TABLE_NAME, ['expiresat'], {
+      name: 'usersession_expiresat_idx',
+      transaction,
+    });
+    await queryInterface.addIndex(TABLE_NAME, ['revokedat'], {
+      name: 'usersession_revokedat_idx',
+      transaction,
+    });
+    await queryInterface.addIndex(TABLE_NAME, ['csrftokenhash'], {
+      name: 'usersession_csrftokenhash_idx',
+      transaction,
+    });
   });
 };

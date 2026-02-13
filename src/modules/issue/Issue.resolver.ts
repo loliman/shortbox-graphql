@@ -2,7 +2,6 @@ import { IssueService } from '../../services/IssueService';
 import { GraphQLError } from 'graphql';
 import { IssueResolvers } from '../../types/graphql';
 import { IssueInputSchema } from '../../types/schemas';
-import { Transaction } from 'sequelize';
 
 type IssueParent = {
   id: number;
@@ -11,15 +10,6 @@ type IssueParent = {
   Series?: unknown;
   getIndividuals?: () => Promise<unknown[]>;
   getArcs?: () => Promise<unknown[]>;
-};
-
-const requireTransaction = (transaction: Transaction | undefined): Transaction => {
-  if (!transaction) {
-    throw new GraphQLError('Transaktion konnte nicht erstellt werden', {
-      extensions: { code: 'INTERNAL_SERVER_ERROR' },
-    });
-  }
-  return transaction;
 };
 
 export const resolvers: IssueResolvers = {
@@ -67,20 +57,19 @@ export const resolvers: IssueResolvers = {
   },
   Mutation: {
     deleteIssue: async (_, { item }, context) => {
-      const { loggedIn, transaction, issueService } = context;
+      const { loggedIn, models, issueService } = context;
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
 
       try {
-        const tx = requireTransaction(transaction);
         IssueInputSchema.parse(item);
-        await issueService.deleteIssue(item, tx);
-        await tx.commit();
-        return true;
+        return await models.sequelize.transaction(async (tx) => {
+          await issueService.deleteIssue(item, tx);
+          return true;
+        });
       } catch (e) {
-        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -88,20 +77,18 @@ export const resolvers: IssueResolvers = {
       }
     },
     createIssue: async (_, { item }, context) => {
-      const { loggedIn, transaction, issueService } = context;
+      const { loggedIn, models, issueService } = context;
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
 
       try {
-        const tx = requireTransaction(transaction);
         IssueInputSchema.parse(item);
-        let res = await issueService.createIssue(item, tx);
-        await tx.commit();
-        return res;
+        return await models.sequelize.transaction(async (tx) => {
+          return await issueService.createIssue(item, tx);
+        });
       } catch (e) {
-        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
@@ -109,21 +96,19 @@ export const resolvers: IssueResolvers = {
       }
     },
     editIssue: async (_, { old, item }, context) => {
-      const { loggedIn, transaction, issueService } = context;
+      const { loggedIn, models, issueService } = context;
       if (!loggedIn)
         throw new GraphQLError('Du bist nicht eingeloggt', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
 
       try {
-        const tx = requireTransaction(transaction);
         IssueInputSchema.parse(old);
         IssueInputSchema.parse(item);
-        let res = await issueService.editIssue(old, item, tx);
-        await tx.commit();
-        return res;
+        return await models.sequelize.transaction(async (tx) => {
+          return await issueService.editIssue(old, item, tx);
+        });
       } catch (e) {
-        if (transaction) await transaction.rollback();
         if (e instanceof Error && e.name === 'ZodError') {
           throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }

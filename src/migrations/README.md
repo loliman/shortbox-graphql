@@ -8,10 +8,11 @@ Dieses Verzeichnis enthaelt versionierte DB-Migrationen mit `up`/`down`.
 - Jede Migration exportiert genau zwei Funktionen:
   - `up(ctx)` fuer das Anwenden
   - `down(ctx)` fuer das Rueckgaengigmachen
-- Migrationen werden in der Tabelle `SchemaMigration` protokolliert.
+- Migrationen werden von Umzug `SequelizeStorage` in der Tabelle `SchemaMigration` protokolliert.
 
 ## Kommandos
 
-- `npm run db:migrate`
-- `npm run db:migrate:status`
-- `npm run db:migrate:down`
+- `npm run db:migrate` (Umzug `up`)
+- `npm run db:migrate:down` (Umzug `down`)
+- `npm run db:migrate:status` (Umzug `executed` + `pending`)
+- direkt: `ts-node src/scripts/migrate.ts --help`
