@@ -9,6 +9,14 @@ const SESSION_RETENTION_DAYS =
   Number.isFinite(parsedSessionRetentionDays) && parsedSessionRetentionDays >= 0
     ? parsedSessionRetentionDays
     : 30;
+const parsedLoginAttemptRetentionDays = parseInt(
+  process.env.LOGIN_ATTEMPT_RETENTION_DAYS || String(SESSION_RETENTION_DAYS),
+  10,
+);
+const LOGIN_ATTEMPT_RETENTION_DAYS =
+  Number.isFinite(parsedLoginAttemptRetentionDays) && parsedLoginAttemptRetentionDays >= 0
+    ? parsedLoginAttemptRetentionDays
+    : SESSION_RETENTION_DAYS;
 
 //Job will on every full hour
 export const cleanup = new CronJob(
@@ -276,6 +284,17 @@ export async function run() {
       transaction,
     });
     logger.info(`Deleted ${deletedSessions} sessions.`);
+
+    const loginAttemptRetentionCutoff = new Date(
+      now.getTime() - LOGIN_ATTEMPT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const deletedLoginAttempts = await models.LoginAttempt.destroy({
+      where: {
+        updatedAt: { [Op.lte]: loginAttemptRetentionCutoff },
+      },
+      transaction,
+    });
+    logger.info(`Deleted ${deletedLoginAttempts} login attempts.`);
 
     await transaction.commit();
     logger.info('Cleanup done.');

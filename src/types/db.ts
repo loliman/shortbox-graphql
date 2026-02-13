@@ -9,6 +9,7 @@ import { Individual } from '../modules/individual/Individual.model';
 import { Appearance } from '../modules/appearance/Appearance.model';
 import { User } from '../modules/user/User.model';
 import { UserSession } from '../modules/user/UserSession.model';
+import { LoginAttempt } from '../modules/user/LoginAttempt.model';
 import { Feature } from '../modules/feature/Feature.model';
 
 export interface DbModels {
@@ -22,6 +23,7 @@ export interface DbModels {
   Appearance: ModelStatic<Appearance>;
   User: ModelStatic<User>;
   UserSession: ModelStatic<UserSession>;
+  LoginAttempt: ModelStatic<LoginAttempt>;
   Feature: ModelStatic<Feature>;
   Issue_Individual: ModelStatic<Model>;
   Issue_Arc: ModelStatic<Model>;

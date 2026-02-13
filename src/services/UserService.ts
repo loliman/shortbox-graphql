@@ -3,12 +3,6 @@ import logger from '../util/logger';
 import type { LoginInput } from '@shortbox/contract';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
-type LoginRateLimitState = {
-  failures: number;
-  firstFailureAtMs: number;
-  lockedUntilMs: number | null;
-};
-
 type PasswordVerificationResult = {
   valid: boolean;
   upgradePassword?: string;
@@ -47,7 +41,6 @@ export class UserService {
     process.env.LOGIN_LOCK_SECONDS,
     900,
   );
-  private static readonly loginRateLimitStateByKey = new Map<string, LoginRateLimitState>();
 
   constructor(
     private models: typeof import('../models').default,
@@ -137,53 +130,88 @@ export class UserService {
     return `${normalizedName}|${normalizedIp}`;
   }
 
-  private clearLoginRateLimit(key: string) {
-    UserService.loginRateLimitStateByKey.delete(key);
+  private async clearLoginRateLimit(key: string, transaction: Transaction) {
+    await this.models.LoginAttempt.destroy({
+      where: { scope: key },
+      transaction,
+    });
   }
 
-  private ensureLoginRateLimitNotExceeded(key: string, nowMs: number) {
-    const state = UserService.loginRateLimitStateByKey.get(key);
+  private async ensureLoginRateLimitNotExceeded(
+    key: string,
+    now: Date,
+    transaction: Transaction,
+  ) {
+    const state = await this.models.LoginAttempt.findOne({
+      where: { scope: key },
+      transaction,
+    });
     if (!state) return;
 
-    if (state.lockedUntilMs && state.lockedUntilMs > nowMs) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((state.lockedUntilMs - nowMs) / 1000));
+    if (state.lockeduntilat && state.lockeduntilat > now) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((state.lockeduntilat.getTime() - now.getTime()) / 1000),
+      );
       throw new LoginRateLimitError(retryAfterSeconds);
     }
 
     const windowMs = UserService.LOGIN_RATE_LIMIT_WINDOW_SECONDS * 1000;
-    if (nowMs - state.firstFailureAtMs > windowMs || (state.lockedUntilMs && state.lockedUntilMs <= nowMs)) {
-      UserService.loginRateLimitStateByKey.delete(key);
+    const isWindowExpired = now.getTime() - state.windowstartat.getTime() > windowMs;
+    const wasLockExpired = Boolean(state.lockeduntilat && state.lockeduntilat <= now);
+    if (isWindowExpired || wasLockExpired) {
+      await state.destroy({ transaction });
     }
   }
 
-  private registerLoginFailure(key: string, nowMs: number) {
+  private async registerLoginFailure(key: string, now: Date, transaction: Transaction) {
     const windowMs = UserService.LOGIN_RATE_LIMIT_WINDOW_SECONDS * 1000;
     const lockMs = UserService.LOGIN_RATE_LIMIT_LOCK_SECONDS * 1000;
-    const current = UserService.loginRateLimitStateByKey.get(key);
 
-    const state =
-      !current || nowMs - current.firstFailureAtMs > windowMs
-        ? { failures: 0, firstFailureAtMs: nowMs, lockedUntilMs: null }
-        : current;
+    const state = await this.models.LoginAttempt.findOne({
+      where: { scope: key },
+      transaction,
+    });
+
+    if (!state) {
+      await this.models.LoginAttempt.create(
+        {
+          scope: key,
+          failures: 1,
+          windowstartat: now,
+          lockeduntilat: null,
+        },
+        { transaction },
+      );
+      return;
+    }
+
+    const isWindowExpired = now.getTime() - state.windowstartat.getTime() > windowMs;
+    const wasLockExpired = Boolean(state.lockeduntilat && state.lockeduntilat <= now);
+    if (isWindowExpired || wasLockExpired) {
+      state.failures = 0;
+      state.windowstartat = now;
+      state.lockeduntilat = null;
+    }
 
     state.failures += 1;
     if (state.failures >= UserService.LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
       state.failures = 0;
-      state.firstFailureAtMs = nowMs;
-      state.lockedUntilMs = nowMs + lockMs;
+      state.windowstartat = now;
+      state.lockeduntilat = new Date(now.getTime() + lockMs);
     }
 
-    UserService.loginRateLimitStateByKey.set(key, state);
+    await state.save({ transaction });
   }
 
   async login(user: LoginInput, transaction: Transaction, requestIp?: string) {
     const name = (user.name || '').trim();
     this.log(`Login attempt for user: ${name || 'unknown'}`);
-    const nowMs = Date.now();
+    const now = new Date();
     const loginRateLimitKey = this.buildLoginRateLimitKey(name, requestIp);
 
     try {
-      this.ensureLoginRateLimitNotExceeded(loginRateLimitKey, nowMs);
+      await this.ensureLoginRateLimitNotExceeded(loginRateLimitKey, now, transaction);
     } catch (error) {
       if (error instanceof LoginRateLimitError) {
         this.log(
@@ -204,21 +232,21 @@ export class UserService {
     });
 
     if (!userRecord) {
-      this.registerLoginFailure(loginRateLimitKey, nowMs);
+      await this.registerLoginFailure(loginRateLimitKey, now, transaction);
       return null;
     }
     if (!user.password) {
-      this.registerLoginFailure(loginRateLimitKey, nowMs);
+      await this.registerLoginFailure(loginRateLimitKey, now, transaction);
       return null;
     }
 
     const passwordVerification = this.verifyPassword(user.password, userRecord.password);
     if (!passwordVerification.valid) {
-      this.registerLoginFailure(loginRateLimitKey, nowMs);
+      await this.registerLoginFailure(loginRateLimitKey, now, transaction);
       return null;
     }
 
-    this.clearLoginRateLimit(loginRateLimitKey);
+    await this.clearLoginRateLimit(loginRateLimitKey, transaction);
 
     if (
       !userRecord.password.startsWith(`${UserService.PASSWORD_PREFIX}$`) &&
