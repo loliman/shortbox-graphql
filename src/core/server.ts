@@ -91,7 +91,11 @@ const configuredCorsOrigins = (process.env.CORS_ORIGIN || '')
 const allowedCorsOrigins =
   configuredCorsOrigins.length > 0 ? configuredCorsOrigins : defaultCorsOrigins;
 const allowedCorsMethods = 'GET,POST,OPTIONS';
-const allowedCorsHeaders = 'content-type,authorization';
+const AUTH_HEADER_SESSION_ENABLED =
+  (process.env.ALLOW_AUTH_HEADER_SESSION || '').toLowerCase() === 'true';
+const allowedCorsHeaders = AUTH_HEADER_SESSION_ENABLED
+  ? 'content-type,authorization'
+  : 'content-type';
 const parsedBodyLimitBytes = parseInt(process.env.GRAPHQL_BODY_LIMIT_BYTES || '1048576', 10);
 const GRAPHQL_BODY_LIMIT_BYTES = Number.isFinite(parsedBodyLimitBytes)
   ? parsedBodyLimitBytes
@@ -363,11 +367,18 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         typeof request.headers.cookie === 'string' ? request.headers.cookie : request.headers.cookie?.[0];
       const parsedCookies = parseCookies(cookieHeader);
 
-      const headerToken = authorization
-        ? authorization.startsWith('Bearer ')
-          ? authorization.substring(7)
-          : authorization
-        : undefined;
+      if (authorization && !AUTH_HEADER_SESSION_ENABLED) {
+        throw new GraphQLError('Authorization-Header Sessions sind deaktiviert', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
+      const headerToken =
+        AUTH_HEADER_SESSION_ENABLED && authorization
+          ? authorization.startsWith('Bearer ')
+            ? authorization.substring(7)
+            : authorization
+          : undefined;
       const sessionToken =
         parseSessionToken(parsedCookies[SESSION_COOKIE_NAME]) || parseSessionToken(headerToken);
 
@@ -393,7 +404,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         }
       }
 
-      if (authorization && !loggedIn) {
+      if (AUTH_HEADER_SESSION_ENABLED && authorization && !loggedIn) {
         throw new GraphQLError('Ungültige Session', {
           extensions: { code: 'UNAUTHENTICATED' },
         });
