@@ -8,6 +8,12 @@ import type { ServerResponse } from 'http';
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'sb_session';
 const parsedMaxAge = parseInt(process.env.SESSION_COOKIE_MAX_AGE_SECONDS || '1209600', 10);
 const SESSION_COOKIE_MAX_AGE_SECONDS = Number.isFinite(parsedMaxAge) ? parsedMaxAge : 1209600;
+const SESSION_COOKIE_SAME_SITE = (() => {
+  const configured = (process.env.SESSION_COOKIE_SAME_SITE || 'lax').trim().toLowerCase();
+  if (configured === 'strict') return 'Strict';
+  if (configured === 'none') return 'None';
+  return 'Lax';
+})();
 
 const appendSetCookie = (response: ServerResponse | undefined, cookieValue: string) => {
   if (!response) return;
@@ -22,14 +28,15 @@ const appendSetCookie = (response: ServerResponse | undefined, cookieValue: stri
 };
 
 const buildSessionCookie = (token: string) => {
-  const secure = process.env.NODE_ENV === 'production' || process.env.SESSION_COOKIE_SECURE === 'true';
+  const secureByEnv = process.env.NODE_ENV === 'production' || process.env.SESSION_COOKIE_SECURE === 'true';
+  const secure = SESSION_COOKIE_SAME_SITE === 'None' ? true : secureByEnv;
   const domain = process.env.SESSION_COOKIE_DOMAIN?.trim();
   const parts = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
     'Path=/',
     `Max-Age=${SESSION_COOKIE_MAX_AGE_SECONDS}`,
     'HttpOnly',
-    'SameSite=Lax',
+    `SameSite=${SESSION_COOKIE_SAME_SITE}`,
   ];
   if (secure) parts.push('Secure');
   if (domain) parts.push(`Domain=${domain}`);
@@ -37,14 +44,15 @@ const buildSessionCookie = (token: string) => {
 };
 
 const buildExpiredSessionCookie = () => {
-  const secure = process.env.NODE_ENV === 'production' || process.env.SESSION_COOKIE_SECURE === 'true';
+  const secureByEnv = process.env.NODE_ENV === 'production' || process.env.SESSION_COOKIE_SECURE === 'true';
+  const secure = SESSION_COOKIE_SAME_SITE === 'None' ? true : secureByEnv;
   const domain = process.env.SESSION_COOKIE_DOMAIN?.trim();
   const parts = [
     `${SESSION_COOKIE_NAME}=`,
     'Path=/',
     'Max-Age=0',
     'HttpOnly',
-    'SameSite=Lax',
+    `SameSite=${SESSION_COOKIE_SAME_SITE}`,
   ];
   if (secure) parts.push('Secure');
   if (domain) parts.push(`Domain=${domain}`);
