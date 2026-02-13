@@ -92,6 +92,10 @@ const allowedCorsOrigins =
   configuredCorsOrigins.length > 0 ? configuredCorsOrigins : defaultCorsOrigins;
 const allowedCorsMethods = 'GET,POST,OPTIONS';
 const allowedCorsHeaders = 'content-type,authorization';
+const parsedBodyLimitBytes = parseInt(process.env.GRAPHQL_BODY_LIMIT_BYTES || '1048576', 10);
+const GRAPHQL_BODY_LIMIT_BYTES = Number.isFinite(parsedBodyLimitBytes)
+  ? parsedBodyLimitBytes
+  : 1048576;
 
 export interface Context {
   loggedIn: boolean;
@@ -155,6 +159,12 @@ const hashSessionToken = (token: string): string => {
   return createHash('sha256').update(token).digest('hex');
 };
 
+const extractMutationRootField = (query: string | undefined): string | null => {
+  if (!query) return null;
+  const match = query.match(/mutation(?:\s+\w+)?(?:\s*\([^)]+\))?\s*\{\s*(\w+)/s);
+  return match?.[1] || null;
+};
+
 const isOriginAllowed = (origin: string | undefined): boolean => {
   if (!origin) return true;
   return allowedCorsOrigins.includes(origin);
@@ -178,8 +188,14 @@ const parseJsonBody = async (req: IncomingMessage): Promise<RequestWithBody['bod
   if (req.method?.toUpperCase() === 'GET') return undefined;
 
   const chunks: Buffer[] = [];
+  let totalSize = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalSize += bufferChunk.byteLength;
+    if (totalSize > GRAPHQL_BODY_LIMIT_BYTES) {
+      throw new Error('PAYLOAD_TOO_LARGE');
+    }
+    chunks.push(bufferChunk);
   }
 
   if (chunks.length === 0) return undefined;
@@ -247,9 +263,14 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
     let parsedBody: RequestWithBody['body'];
     try {
       parsedBody = await parseJsonBody(req);
-    } catch {
-      res.statusCode = 400;
-      res.end('Invalid JSON payload');
+    } catch (e) {
+      if (e instanceof Error && e.message === 'PAYLOAD_TOO_LARGE') {
+        res.statusCode = 413;
+        res.end('Payload too large');
+      } else {
+        res.statusCode = 400;
+        res.end('Invalid JSON payload');
+      }
       return;
     }
 
@@ -339,7 +360,16 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         });
       }
 
-      const isMutation = !!request.body?.query && request.body.query.trim().startsWith('mutation');
+      const requestQuery = request.body?.query || '';
+      const isMutation = requestQuery.trim().startsWith('mutation');
+      const mutationRootField = isMutation ? extractMutationRootField(requestQuery) : null;
+      const mutationIsPublic = mutationRootField === 'login';
+
+      if (isMutation && !mutationIsPublic && !loggedIn) {
+        throw new GraphQLError('Du bist nicht eingeloggt', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
 
       const publisherService = new PublisherService(models, requestId);
       const seriesService = new SeriesService(models, requestId);
