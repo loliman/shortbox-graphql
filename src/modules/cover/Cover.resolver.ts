@@ -11,8 +11,9 @@ type CoverParent = {
 export const resolvers: CoverResolvers = {
   Cover: {
     id: (parent, _, { loggedIn }) => {
+      const coverParent = parent as CoverParent;
       if (!loggedIn) return String(new Date().getTime());
-      return String(parent.id);
+      return String(coverParent.id);
     },
     parent: async (parent, _, { models }) => {
       const fkParent = (parent as CoverParent).fk_parent;

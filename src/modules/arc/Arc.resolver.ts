@@ -59,10 +59,11 @@ export const resolvers: ArcResolvers = {
   },
   Arc: {
     id: (parent, _, { loggedIn }) => {
+      const arcParent = parent as ArcParent;
       if (!loggedIn) return String(new Date().getTime());
-      return String(parent.id);
+      return String(arcParent.id);
     },
-    title: (parent) => parent.title.trim(),
+    title: (parent) => (parent as ArcParent).title.trim(),
     issues: async (parent, _, { models }) =>
       await models.Issue.findAll({
         include: [

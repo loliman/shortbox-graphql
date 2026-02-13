@@ -107,6 +107,6 @@ export const resolvers: UserResolvers = {
     },
   },
   User: {
-    id: (parent) => String(parent.id),
+    id: (parent) => String((parent as { id: number | string }).id),
   },
 };

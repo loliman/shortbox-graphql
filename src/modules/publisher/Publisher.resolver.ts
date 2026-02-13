@@ -25,7 +25,7 @@ export const resolvers: PublisherResolvers = {
       const { loggedIn, publisherService } = context;
       return await publisherService.findPublishers(
         pattern || undefined,
-        us !== null && us !== undefined ? us : undefined,
+        us,
         first || undefined,
         after || undefined,
         loggedIn,
@@ -109,15 +109,16 @@ export const resolvers: PublisherResolvers = {
   },
   Publisher: {
     id: (parent, _, { loggedIn }) => {
+      const publisherParent = parent as PublisherParent;
       if (!loggedIn) return String(new Date().getTime());
-      return String(parent.id);
+      return String(publisherParent.id);
     },
     us: (parent) => !!(parent as PublisherParent).original,
     seriesCount: async (parent, _, { models }) =>
-      await models.Series.count({ where: { fk_publisher: parent.id } }),
+      await models.Series.count({ where: { fk_publisher: (parent as PublisherParent).id } }),
     issueCount: async (parent, _, { models }) => {
       let res = await models.Issue.findAll({
-        where: { '$Series.fk_publisher$': parent.id },
+        where: { '$Series.fk_publisher$': (parent as PublisherParent).id },
         group: ['fk_series', 'number'],
         include: [{ model: models.Series }],
       });
@@ -128,7 +129,7 @@ export const resolvers: PublisherResolvers = {
         include: [
           {
             model: models.Series,
-            where: { fk_publisher: parent.id },
+            where: { fk_publisher: (parent as PublisherParent).id },
           },
         ],
         order: [['updatedAt', 'DESC']],
@@ -139,7 +140,7 @@ export const resolvers: PublisherResolvers = {
         include: [
           {
             model: models.Series,
-            where: { fk_publisher: parent.id },
+            where: { fk_publisher: (parent as PublisherParent).id },
           },
         ],
         order: [
@@ -152,7 +153,7 @@ export const resolvers: PublisherResolvers = {
         include: [
           {
             model: models.Series,
-            where: { fk_publisher: parent.id },
+            where: { fk_publisher: (parent as PublisherParent).id },
           },
         ],
         order: [

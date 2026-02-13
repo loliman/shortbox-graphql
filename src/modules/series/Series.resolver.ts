@@ -116,22 +116,22 @@ export const resolvers: SeriesResolvers = {
       (parent as SeriesParent).Publisher ||
       (await publisherLoader.load((parent as SeriesParent).fk_publisher)),
     issueCount: async (parent, _, { models }) =>
-      await models.Issue.count({ where: { fk_series: parent.id }, group: ['number'] }).then(
+      await models.Issue.count({ where: { fk_series: (parent as SeriesParent).id }, group: ['number'] }).then(
         (res) => (Array.isArray(res) ? res.length : Number(res)),
       ),
     firstIssue: async (parent, _, { models }) =>
       await models.Issue.findOne({
-        where: { fk_series: parent.id },
+        where: { fk_series: (parent as SeriesParent).id },
         order: [['number', 'ASC']],
       }),
     lastIssue: async (parent, _, { models }) =>
       await models.Issue.findOne({
-        where: { fk_series: parent.id },
+        where: { fk_series: (parent as SeriesParent).id },
         order: [['number', 'DESC']],
       }),
     lastEdited: async (parent, { limit }, { models }) =>
       await models.Issue.findAll({
-        where: { fk_series: parent.id },
+        where: { fk_series: (parent as SeriesParent).id },
         order: [['updatedAt', 'DESC']],
         limit: limit || 25,
       }),

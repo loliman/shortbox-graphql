@@ -230,8 +230,8 @@ export const resolvers: { Query: QueryResolvers; Node: Resolvers['Node'] } = {
     },
   },
   Node: {
-    type: (parent) => parent.type || null,
-    label: (parent) => parent.label || null,
-    url: (parent) => parent.url || null,
+    type: (parent) => (parent as { type?: string }).type || null,
+    label: (parent) => (parent as { label?: string }).label || null,
+    url: (parent) => (parent as { url?: string }).url || null,
   },
 };

@@ -65,10 +65,11 @@ export const resolvers: IndividualResolvers = {
   },
   Individual: {
     id: (parent, _, { loggedIn }) => {
+      const individualParent = parent as IndividualParent;
       if (!loggedIn) return String(new Date().getTime());
-      return String(parent.id);
+      return String(individualParent.id);
     },
-    name: (parent) => parent.name,
+    name: (parent) => (parent as IndividualParent).name,
     type: async (parent, _, { models }) => {
       const where: Record<string, number> = {};
       let table:

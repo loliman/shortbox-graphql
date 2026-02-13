@@ -18,6 +18,17 @@ import type {
   IssueConnection,
   IssueInput,
   LoginInput,
+  Mutation,
+  MutationCreateIssueArgs,
+  MutationCreatePublisherArgs,
+  MutationCreateSeriesArgs,
+  MutationDeleteIssueArgs,
+  MutationDeletePublisherArgs,
+  MutationDeleteSeriesArgs,
+  MutationEditIssueArgs,
+  MutationEditPublisherArgs,
+  MutationEditSeriesArgs,
+  MutationLoginArgs,
   Node,
   NumberFilter,
   PageInfo,
@@ -25,6 +36,18 @@ import type {
   PublisherConnection,
   PublisherInput,
   Query,
+  QueryAppsArgs,
+  QueryArcsArgs,
+  QueryExportArgs,
+  QueryIndividualsArgs,
+  QueryIssueArgs,
+  QueryIssuesArgs,
+  QueryLastEditedArgs,
+  QueryNodesArgs,
+  QueryPublisherArgs,
+  QueryPublishersArgs,
+  QuerySeriesArgs,
+  QuerySeriesdArgs,
   Series,
   SeriesConnection,
   SeriesInput,
@@ -69,90 +92,123 @@ export type {
   User,
 };
 
-export type ResolverFn<Parent = unknown, Args = unknown, Result = unknown> = (
-  parent: Parent,
-  args: Args,
-  context: Context,
-  info?: unknown,
-) => Promise<Result> | Result;
+type EmptyArgs = Record<string, never>;
 
-export type ResolverMap = Record<string, ResolverFn<any, any, any>>;
+type BivariantResolver<Parent, Args, Result> = {
+  bivarianceHack(
+    parent: Parent,
+    args: Args,
+    context: Context,
+    info?: unknown,
+  ): Promise<Result> | Result;
+}['bivarianceHack'];
 
-export type QueryResolvers = ResolverMap;
-export type MutationResolvers = ResolverMap;
+export type ResolverFn<Parent = unknown, Args = EmptyArgs, Result = unknown> = BivariantResolver<
+  Parent,
+  Args,
+  Result
+>;
+
+export type ObjectResolvers = Record<string, ResolverFn>;
+
+export type QueryResolverFields = {
+  _empty: ResolverFn<unknown, EmptyArgs, unknown>;
+  apps: ResolverFn<unknown, QueryAppsArgs, unknown>;
+  arcs: ResolverFn<unknown, QueryArcsArgs, unknown>;
+  export: ResolverFn<unknown, QueryExportArgs, unknown>;
+  individuals: ResolverFn<unknown, QueryIndividualsArgs, unknown>;
+  issue: ResolverFn<unknown, QueryIssueArgs, unknown>;
+  issues: ResolverFn<unknown, QueryIssuesArgs, unknown>;
+  lastEdited: ResolverFn<unknown, QueryLastEditedArgs, unknown>;
+  me: ResolverFn<unknown, EmptyArgs, unknown>;
+  nodes: ResolverFn<unknown, QueryNodesArgs, unknown>;
+  publisher: ResolverFn<unknown, QueryPublisherArgs, unknown>;
+  publishers: ResolverFn<unknown, QueryPublishersArgs, unknown>;
+  series: ResolverFn<unknown, QuerySeriesArgs, unknown>;
+  seriesd: ResolverFn<unknown, QuerySeriesdArgs, unknown>;
+};
+
+export type MutationResolverFields = {
+  _empty: ResolverFn<unknown, EmptyArgs, unknown>;
+  createIssue: ResolverFn<unknown, MutationCreateIssueArgs, unknown>;
+  createPublisher: ResolverFn<unknown, MutationCreatePublisherArgs, unknown>;
+  createSeries: ResolverFn<unknown, MutationCreateSeriesArgs, unknown>;
+  deleteIssue: ResolverFn<unknown, MutationDeleteIssueArgs, unknown>;
+  deletePublisher: ResolverFn<unknown, MutationDeletePublisherArgs, unknown>;
+  deleteSeries: ResolverFn<unknown, MutationDeleteSeriesArgs, unknown>;
+  editIssue: ResolverFn<unknown, MutationEditIssueArgs, unknown>;
+  editPublisher: ResolverFn<unknown, MutationEditPublisherArgs, unknown>;
+  editSeries: ResolverFn<unknown, MutationEditSeriesArgs, unknown>;
+  login: ResolverFn<unknown, MutationLoginArgs, unknown>;
+  logout: ResolverFn<unknown, EmptyArgs, unknown>;
+};
+
+export type QueryResolvers = Partial<QueryResolverFields>;
+export type MutationResolvers = Partial<MutationResolverFields>;
 
 export interface CoverResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Cover?: ResolverMap;
+  Cover?: ObjectResolvers;
 }
 
 export interface AppearanceResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Appearance?: ResolverMap;
+  Query?: Pick<QueryResolvers, 'apps'>;
+  Appearance?: ObjectResolvers;
 }
 
 export interface FeatureResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Feature?: ResolverMap;
+  Feature?: ObjectResolvers;
 }
 
 export interface ArcResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Arc?: ResolverMap;
+  Query?: Pick<QueryResolvers, 'arcs'>;
+  Arc?: ObjectResolvers;
 }
 
 export interface IndividualResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Individual?: ResolverMap;
+  Query?: Pick<QueryResolvers, 'individuals'>;
+  Individual?: ObjectResolvers;
 }
 
 export interface PublisherResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Publisher?: ResolverMap;
+  Query?: Pick<QueryResolvers, 'publishers' | 'publisher'>;
+  Mutation?: Pick<MutationResolvers, 'deletePublisher' | 'createPublisher' | 'editPublisher'>;
+  Publisher?: ObjectResolvers;
 }
 
 export interface IssueResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Issue?: ResolverMap;
+  Query?: Pick<QueryResolvers, 'issues' | 'issue' | 'lastEdited'>;
+  Mutation?: Pick<MutationResolvers, 'deleteIssue' | 'createIssue' | 'editIssue'>;
+  Issue?: ObjectResolvers;
 }
 
 export interface UserResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  User?: ResolverMap;
+  Query?: Pick<QueryResolvers, 'me'>;
+  Mutation?: Pick<MutationResolvers, 'login' | 'logout'>;
+  User?: ObjectResolvers;
 }
 
 export interface SeriesResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Series?: ResolverMap;
+  Query?: Pick<QueryResolvers, 'series' | 'seriesd'>;
+  Mutation?: Pick<MutationResolvers, 'deleteSeries' | 'createSeries' | 'editSeries'>;
+  Series?: ObjectResolvers;
 }
 
 export interface StoryResolvers {
-  Query?: QueryResolvers;
-  Mutation?: MutationResolvers;
-  Story?: ResolverMap;
+  Story?: ObjectResolvers;
 }
 
 export interface Resolvers {
   Query?: QueryResolvers;
   Mutation?: MutationResolvers;
-  Node?: ResolverMap;
-  Publisher?: ResolverMap;
-  Series?: ResolverMap;
-  Issue?: ResolverMap;
-  Story?: ResolverMap;
-  Cover?: ResolverMap;
-  Arc?: ResolverMap;
-  Individual?: ResolverMap;
-  Appearance?: ResolverMap;
-  Feature?: ResolverMap;
-  User?: ResolverMap;
+  Node?: ObjectResolvers;
+  Publisher?: ObjectResolvers;
+  Series?: ObjectResolvers;
+  Issue?: ObjectResolvers;
+  Story?: ObjectResolvers;
+  Cover?: ObjectResolvers;
+  Arc?: ObjectResolvers;
+  Individual?: ObjectResolvers;
+  Appearance?: ObjectResolvers;
+  Feature?: ObjectResolvers;
+  User?: ObjectResolvers;
 }

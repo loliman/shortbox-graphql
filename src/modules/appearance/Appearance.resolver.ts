@@ -64,11 +64,15 @@ export const resolvers: AppearanceResolvers = {
   },
   Appearance: {
     id: (parent, _, { loggedIn }) => {
+      const appearanceParent = parent as AppearanceParent;
       if (!loggedIn) return String(new Date().getTime());
-      return String(parent.id);
+      return String(appearanceParent.id);
     },
-    name: (parent) => parent.name.trim(),
-    type: (parent) => (parent.type.trim() === '' ? 'CHARACTER' : parent.type),
+    name: (parent) => (parent as AppearanceParent).name.trim(),
+    type: (parent) => {
+      const appearanceParent = parent as AppearanceParent;
+      return appearanceParent.type.trim() === '' ? 'CHARACTER' : appearanceParent.type;
+    },
     role: async (parent, _, { models }) => {
       const appearanceParent = parent as unknown as AppearanceParent;
       if (!appearanceParent.Stories || appearanceParent.Stories.length === 0) return '';
