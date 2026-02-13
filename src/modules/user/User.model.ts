@@ -5,7 +5,6 @@ export class User extends Model {
   public id!: number;
   public name!: string;
   public password!: string;
-  public sessionid!: string | null;
 
   public static associate(models: DbModels) {
     User.hasMany(models.UserSession, {
@@ -31,10 +30,6 @@ export default (sequelize: Sequelize) => {
       password: {
         type: DataTypes.STRING,
         allowNull: false,
-      },
-      sessionid: {
-        type: DataTypes.STRING,
-        allowNull: true,
       },
     },
     {

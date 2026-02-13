@@ -96,7 +96,6 @@ export class UserService {
       },
       { transaction },
     );
-    userRecord.sessionid = null;
     await userRecord.save({ transaction });
     return { userRecord, sessionToken };
   }
