@@ -413,7 +413,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
       const cookieHeader =
         typeof request.headers.cookie === 'string' ? request.headers.cookie : request.headers.cookie?.[0];
       const parsedCookies = parseCookies(cookieHeader);
-      const csrfCookieToken = parseCsrfToken(parsedCookies[CSRF_COOKIE_NAME]);
+      let csrfCookieToken = parseCsrfToken(parsedCookies[CSRF_COOKIE_NAME]);
 
       if (authorization) {
         throw new GraphQLError('Authorization-Header Sessions werden nicht unterstützt', {
@@ -436,16 +436,39 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           loggedIn = true;
           authenticatedUserId = session.fk_user;
           authenticatedSessionTokenHash = tokenHash;
+          let shouldPersistSession = false;
+          let shouldRefreshSessionCookie = false;
+          let shouldRefreshCsrfCookie = false;
+
+          if (!csrfCookieToken) {
+            csrfCookieToken = randomBytes(32).toString('base64url');
+            session.csrftokenhash = hashSessionToken(csrfCookieToken);
+            shouldPersistSession = true;
+            shouldRefreshCsrfCookie = true;
+          } else if (!session.csrftokenhash) {
+            session.csrftokenhash = hashSessionToken(csrfCookieToken);
+            shouldPersistSession = true;
+          }
+
           authenticatedCsrfTokenHash = session.csrftokenhash || undefined;
 
           const remainingMs = session.expiresat.getTime() - now.getTime();
           if (remainingMs < SESSION_REFRESH_THRESHOLD_SECONDS * 1000) {
             session.expiresat = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000);
+            shouldPersistSession = true;
+            shouldRefreshSessionCookie = true;
+            shouldRefreshCsrfCookie = true;
+          }
+
+          if (shouldPersistSession) {
             await session.save();
+          }
+
+          if (shouldRefreshSessionCookie) {
             appendSetCookie(res, buildSessionCookie(sessionToken));
-            if (csrfCookieToken) {
-              appendSetCookie(res, buildCsrfCookie(csrfCookieToken));
-            }
+          }
+          if (shouldRefreshCsrfCookie && csrfCookieToken) {
+            appendSetCookie(res, buildCsrfCookie(csrfCookieToken));
           }
         }
       }
