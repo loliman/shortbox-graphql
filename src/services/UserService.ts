@@ -9,6 +9,11 @@ type LoginRateLimitState = {
   lockedUntilMs: number | null;
 };
 
+type PasswordVerificationResult = {
+  valid: boolean;
+  upgradePassword?: string;
+};
+
 const parsePositiveInt = (value: string | undefined, fallback: number): number => {
   const parsed = parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -69,6 +74,21 @@ export class UserService {
     return createHash('sha256').update(token).digest('hex');
   }
 
+  private sha256Hex(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
+  }
+
+  private isSha256Hex(value: string): boolean {
+    return /^[a-f0-9]{64}$/i.test(value);
+  }
+
+  private safeEqual(left: string, right: string): boolean {
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+    if (leftBuffer.length !== rightBuffer.length) return false;
+    return timingSafeEqual(leftBuffer, rightBuffer);
+  }
+
   private buildSessionExpiry(reference = new Date()): Date {
     return new Date(reference.getTime() + UserService.SESSION_TTL_SECONDS * 1000);
   }
@@ -79,23 +99,36 @@ export class UserService {
     return `${UserService.PASSWORD_PREFIX}$${salt}$${hash}`;
   }
 
-  private verifyPassword(inputPassword: string, storedPassword: string): boolean {
+  private verifyPassword(inputPassword: string, storedPassword: string): PasswordVerificationResult {
     if (storedPassword.startsWith(`${UserService.PASSWORD_PREFIX}$`)) {
       const [, salt, expectedHash] = storedPassword.split('$');
-      if (!salt || !expectedHash) return false;
+      if (!salt || !expectedHash) return { valid: false };
 
       const calculatedHash = scryptSync(inputPassword, salt, 64).toString('base64url');
-      const expectedBuffer = Buffer.from(expectedHash);
-      const actualBuffer = Buffer.from(calculatedHash);
-
-      if (expectedBuffer.length !== actualBuffer.length) return false;
-      return timingSafeEqual(expectedBuffer, actualBuffer);
+      return {
+        valid: this.safeEqual(expectedHash, calculatedHash),
+      };
     }
 
-    const expectedBuffer = Buffer.from(storedPassword);
-    const actualBuffer = Buffer.from(inputPassword);
-    if (expectedBuffer.length !== actualBuffer.length) return false;
-    return timingSafeEqual(expectedBuffer, actualBuffer);
+    if (this.safeEqual(storedPassword, inputPassword)) {
+      const legacyClientSentHash = this.isSha256Hex(storedPassword) && this.isSha256Hex(inputPassword);
+      return {
+        valid: true,
+        upgradePassword: legacyClientSentHash ? undefined : inputPassword,
+      };
+    }
+
+    if (this.isSha256Hex(storedPassword)) {
+      const hashedInput = this.sha256Hex(inputPassword);
+      if (this.safeEqual(storedPassword, hashedInput)) {
+        return {
+          valid: true,
+          upgradePassword: inputPassword,
+        };
+      }
+    }
+
+    return { valid: false };
   }
 
   private buildLoginRateLimitKey(name: string, requestIp?: string): string {
@@ -174,15 +207,24 @@ export class UserService {
       this.registerLoginFailure(loginRateLimitKey, nowMs);
       return null;
     }
-    if (!user.password || !this.verifyPassword(user.password, userRecord.password)) {
+    if (!user.password) {
+      this.registerLoginFailure(loginRateLimitKey, nowMs);
+      return null;
+    }
+
+    const passwordVerification = this.verifyPassword(user.password, userRecord.password);
+    if (!passwordVerification.valid) {
       this.registerLoginFailure(loginRateLimitKey, nowMs);
       return null;
     }
 
     this.clearLoginRateLimit(loginRateLimitKey);
 
-    if (!userRecord.password.startsWith(`${UserService.PASSWORD_PREFIX}$`)) {
-      userRecord.password = this.hashPassword(user.password);
+    if (
+      !userRecord.password.startsWith(`${UserService.PASSWORD_PREFIX}$`) &&
+      passwordVerification.upgradePassword
+    ) {
+      userRecord.password = this.hashPassword(passwordVerification.upgradePassword);
     }
 
     // One active session per user is enough for this single-admin setup.
