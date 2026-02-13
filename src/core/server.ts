@@ -38,6 +38,7 @@ import { IssueService } from '../services/IssueService';
 import { UserService } from '../services/UserService';
 import { FilterService } from '../services/FilterService';
 import { StoryService } from '../services/StoryService';
+import { appendSetCookie, buildCsrfCookie, buildSessionCookie } from '../modules/user/authCookies';
 
 import { Publisher } from '../modules/publisher/Publisher.model';
 import { Series } from '../modules/series/Series.model';
@@ -441,6 +442,10 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           if (remainingMs < SESSION_REFRESH_THRESHOLD_SECONDS * 1000) {
             session.expiresat = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000);
             await session.save();
+            appendSetCookie(res, buildSessionCookie(sessionToken));
+            if (csrfCookieToken) {
+              appendSetCookie(res, buildCsrfCookie(csrfCookieToken));
+            }
           }
         }
       }
