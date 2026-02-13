@@ -1,7 +1,7 @@
 import gql from 'graphql-tag';
 import models from '../models';
 import { naturalCompare, generateLabel, romanize } from '../util/util';
-import { QueryResolvers, Resolvers } from '../types/graphql';
+import { NodeResolvers } from '../types/graphql';
 import { Op } from 'sequelize';
 
 export const typeDef = gql`
@@ -91,7 +91,7 @@ const createIssueLabel = (
   return label;
 };
 
-export const resolvers: { Query: QueryResolvers; Node: Resolvers['Node'] } = {
+export const resolvers: NodeResolvers = {
   Query: {
     nodes: async (_, { pattern, us, offset }) => {
       if (!pattern || pattern.trim() === '') return [];

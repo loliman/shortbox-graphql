@@ -1,7 +1,7 @@
 import gql from 'graphql-tag';
 import { FilterService } from '../services/FilterService';
 import { FilterSchema } from '../types/schemas';
-import { Filter, QueryResolvers } from '../types/graphql';
+import { Filter, FilterResolvers } from '../types/graphql';
 
 export const typeDef = gql`
   input DateFilter {
@@ -47,7 +47,7 @@ export const typeDef = gql`
   }
 `;
 
-export const resolvers: { Query: QueryResolvers } = {
+export const resolvers: FilterResolvers = {
   Query: {
     export: async (_, { filter, type }, context) => {
       const { loggedIn, filterService } = context;
