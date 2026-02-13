@@ -53,8 +53,11 @@ db.Feature_Individual = Feature_IndividualFactory(sequelize);
 
 // Associate models
 Object.keys(db).forEach((modelName) => {
-  if (db[modelName].associate) {
-    db[modelName].associate(db);
+  const model = db[modelName as keyof DbModels] as unknown as {
+    associate?: (models: DbModels) => void;
+  };
+  if (model.associate) {
+    model.associate(db);
   }
 });
 

@@ -996,7 +996,7 @@ const alphabet = [
   'Z',
 ];
 
-function getFromAlphabet(idx) {
+function getFromAlphabet(idx: number): string {
   let a = '';
 
   if (idx > 25) {
