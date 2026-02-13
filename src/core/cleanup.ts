@@ -1,7 +1,14 @@
 import models from '../models';
 import { asyncForEach } from '../util/util';
 import { CronJob } from 'cron';
+import { Op } from 'sequelize';
 import logger from '../util/logger';
+
+const parsedSessionRetentionDays = parseInt(process.env.SESSION_RETENTION_DAYS || '30', 10);
+const SESSION_RETENTION_DAYS =
+  Number.isFinite(parsedSessionRetentionDays) && parsedSessionRetentionDays >= 0
+    ? parsedSessionRetentionDays
+    : 30;
 
 //Job will on every full hour
 export const cleanup = new CronJob(
@@ -255,6 +262,20 @@ export async function run() {
       }
     });
     logger.info(`Deleted ${arcCount} arcs.`);
+
+    // Keep session table small and remove stale rows.
+    const now = new Date();
+    const revokedRetentionCutoff = new Date(now.getTime() - SESSION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const deletedSessions = await models.UserSession.destroy({
+      where: {
+        [Op.or]: [
+          { expiresat: { [Op.lte]: now } },
+          { revokedat: { [Op.lte]: revokedRetentionCutoff } },
+        ],
+      },
+      transaction,
+    });
+    logger.info(`Deleted ${deletedSessions} sessions.`);
 
     await transaction.commit();
     logger.info('Cleanup done.');
