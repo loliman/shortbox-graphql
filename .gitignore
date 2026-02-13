@@ -30,6 +30,7 @@ yarn-error.log*
 # runtime logs
 *.log
 /output.txt
+/.output.txt
 combined.log
 error.log
 
