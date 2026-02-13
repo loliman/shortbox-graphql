@@ -78,8 +78,6 @@ const SESSION_REFRESH_THRESHOLD_SECONDS = Number.isFinite(parsedSessionRefreshTh
   ? parsedSessionRefreshThresholdSeconds
   : 43200;
 const defaultCorsOrigins = [
-  'https://shortbox.de',
-  'https://www.shortbox.de',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -88,6 +86,8 @@ const configuredCorsOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+const CORS_ALLOW_ALL_ORIGINS = (process.env.CORS_ALLOW_ALL_ORIGINS || '').toLowerCase() === 'true';
+const CORS_FAIL_CLOSED = (process.env.CORS_FAIL_CLOSED || 'true').toLowerCase() !== 'false';
 const allowedCorsOrigins =
   configuredCorsOrigins.length > 0 ? configuredCorsOrigins : defaultCorsOrigins;
 const allowedCorsMethods = 'GET,POST,OPTIONS';
@@ -226,6 +226,7 @@ const resolveOperationAccess = (
 };
 
 const isOriginAllowed = (origin: string | undefined): boolean => {
+  if (CORS_ALLOW_ALL_ORIGINS) return true;
   if (!origin) return true;
   return allowedCorsOrigins.includes(origin);
 };
@@ -299,6 +300,23 @@ const server = new ApolloServer<Context>({
 });
 
 export const startServer = async (port = parseInt(process.env.PORT || '4000', 10)) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (
+    isProduction &&
+    !mockModeEnabled &&
+    CORS_FAIL_CLOSED &&
+    !CORS_ALLOW_ALL_ORIGINS &&
+    configuredCorsOrigins.length === 0
+  ) {
+    throw new Error(
+      'CORS_ORIGIN must be configured in production when CORS_FAIL_CLOSED is enabled',
+    );
+  }
+
+  if (CORS_ALLOW_ALL_ORIGINS) {
+    logger.warn('CORS allow-all mode is enabled. This should only be used temporarily.');
+  }
+
   const httpServer = http.createServer(async (req, res) => {
     const corsAllowed = applyCorsHeaders(req, res);
     if (!corsAllowed) {
