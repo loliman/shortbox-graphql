@@ -83,7 +83,21 @@ export class SeriesService {
         // Ordering remains title/volume/id for cursor stability
       }
 
-      const results = await this.models.Series.findAll(options);
+      const loadSeries = async (currentOptions: FindOptions) =>
+        await this.models.Series.findAll(currentOptions);
+      let results = await loadSeries(options);
+
+      if (
+        results.length === 0 &&
+        shouldFilterPublisherUs &&
+        !shouldFilterPublisherName &&
+        (!pattern || pattern.trim() === '')
+      ) {
+        const fallbackWhere = { ...(options.where as WhereMap) };
+        delete fallbackWhere['$Publisher.original$'];
+        results = await loadSeries({ ...options, where: fallbackWhere });
+      }
+
       return buildConnectionFromNodes(results, limit, after || undefined);
     } else {
       const { FilterService } = require('./FilterService');

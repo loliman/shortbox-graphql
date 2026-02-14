@@ -87,6 +87,26 @@ describe('SeriesService additional coverage', () => {
     expect(options.where['$Publisher.original$']).toBe(1);
   });
 
+  it('retries wildcard search without us filter when first query is empty', async () => {
+    mockModels.Series.findAll
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 2, title: 'Beta', volume: 1 }]);
+
+    const result = await service.findSeries(
+      '',
+      { name: '*', us: true } as any,
+      5,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges).toHaveLength(1);
+    expect(mockModels.Series.findAll).toHaveBeenCalledTimes(2);
+    expect(mockModels.Series.findAll.mock.calls[0][0].where['$Publisher.original$']).toBe(1);
+    expect(mockModels.Series.findAll.mock.calls[1][0].where['$Publisher.original$']).toBeUndefined();
+  });
+
   it('uses filter-based lookup path and maps issue series nodes', async () => {
     mockModels.Issue.findAll.mockResolvedValue([
       { Series: { id: 5, title: 'X-Men', volume: 2, startyear: 1991, endyear: 2001, fk_publisher: 9 } },
