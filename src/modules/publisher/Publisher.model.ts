@@ -61,9 +61,6 @@ export default (sequelize: Sequelize) => {
         {
           fields: ['id'],
         },
-        {
-          fields: ['name'],
-        },
       ],
       sequelize,
       tableName: 'Publisher',
