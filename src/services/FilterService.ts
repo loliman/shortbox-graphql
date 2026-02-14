@@ -10,7 +10,7 @@ import {
 import models from '../models';
 import { naturalCompare, generateLabel, asyncForEach } from '../util/util';
 import { GraphQLError } from 'graphql';
-import type { Filter } from '@shortbox/contract';
+import type { Filter } from '@loliman/shortbox-contract';
 import logger from '../util/logger';
 const dateFormat = require('dateformat');
 

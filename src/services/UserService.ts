@@ -1,6 +1,6 @@
 import { Transaction } from 'sequelize';
 import logger from '../util/logger';
-import type { LoginInput } from '@shortbox/contract';
+import type { LoginInput } from '@loliman/shortbox-contract';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { RateLimiterMemory, type RateLimiterRes } from 'rate-limiter-flexible';
 

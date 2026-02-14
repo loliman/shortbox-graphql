@@ -26,7 +26,12 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
           registry-url: https://npm.pkg.github.com
-          scope: "@shortbox"
+          scope: "@loliman"
+
+      - name: Configure git for HTTPS dependencies
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          git config --global url."https://github.com/".insteadOf git@github.com:
 
       - name: Install dependencies
         env:
@@ -129,7 +134,12 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
           registry-url: https://npm.pkg.github.com
-          scope: "@shortbox"
+          scope: "@loliman"
+
+      - name: Configure git for HTTPS dependencies
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          git config --global url."https://github.com/".insteadOf git@github.com:
 
       - name: Install dependencies
         env:

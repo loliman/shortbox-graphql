@@ -56,7 +56,7 @@ import type {
   Story,
   StoryInput,
   User,
-} from '@shortbox/contract';
+} from '@loliman/shortbox-contract';
 import type { Context } from '../core/server';
 
 export type {

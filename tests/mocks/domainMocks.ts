@@ -1,4 +1,4 @@
-import type {Filter, IndividualInput, IssueInput, PublisherInput, SeriesInput} from "@shortbox/contract";
+import type {Filter, IndividualInput, IssueInput, PublisherInput, SeriesInput} from "@loliman/shortbox-contract";
 
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends Array<infer U>

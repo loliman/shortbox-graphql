@@ -31,7 +31,7 @@
   "dependencies": {
     "@apollo/server": "5.4.0",
     "@as-integrations/express5": "^1.1.2",
-    "@shortbox/contract": "git+https://github.com/loliman/shortbox-contract.git#semver:^0.1.0",
+    "@loliman/shortbox-contract": "git+https://github.com/loliman/shortbox-contract.git#semver:^0.1.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "axios": "^1.13.5",

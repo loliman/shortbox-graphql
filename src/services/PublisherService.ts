@@ -1,7 +1,7 @@
 import models from '../models';
 import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
 import logger from '../util/logger';
-import type { Filter, PublisherInput } from '@shortbox/contract';
+import type { Filter, PublisherInput } from '@loliman/shortbox-contract';
 import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
 
 export class PublisherService {

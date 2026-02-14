@@ -10,7 +10,7 @@ function loadContractDependencyPath() {
     const packageJson = JSON.parse(
       fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")
     );
-    const dependency = packageJson.dependencies?.["@shortbox/contract"];
+    const dependency = packageJson.dependencies?.["@loliman/shortbox-contract"];
     if (typeof dependency === "string" && dependency.startsWith("file:")) {
       return dependency.slice("file:".length);
     }
