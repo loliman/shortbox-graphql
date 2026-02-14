@@ -382,7 +382,7 @@ async function crawlInfobox(issue: CrawlerIssue) {
   }
 }
 
-function parseInt(string: string) {
+function parseIssueNumber(string: string) {
   return Number.parseInt(string.replace(/\D/g, ''));
 }
 
@@ -478,7 +478,8 @@ function extractAppearances(count: number, issue: CrawlerIssue, indexOfLine: num
 
       currentType = currentType.trim().toUpperCase();
     } else if (currentLine.startsWith('*')) {
-      let apps: string[] | null = currentLine.match(/(?<=\[.)(.*?)(?=])/g);
+      const appsFromLinks = Array.from(currentLine.matchAll(/\[([^\]]+)\]/g), (match) => match[1]);
+      let apps: string[] | null = appsFromLinks.length > 0 ? appsFromLinks : null;
 
       if (!apps) {
         //currentLine = currentLine.replace(/\*/g, "");
@@ -691,14 +692,14 @@ function extractVariant(type: string, content: string, count: number, issue: Cra
 }
 
 function extractNumberOfInfoboxLine(type: string) {
-  if (type.indexOf('_') > -1) return parseInt(type.substring(0, type.indexOf('_')));
-  else if (type.indexOf(' ') > -1) return parseInt(type.substring(0, type.indexOf(' ')));
+  if (type.indexOf('_') > -1) return parseIssueNumber(type.substring(0, type.indexOf('_')));
+  else if (type.indexOf(' ') > -1) return parseIssueNumber(type.substring(0, type.indexOf(' ')));
   else if (type !== 'Image' && type.indexOf('Image') > -1)
-    return parseInt(type.replace('Image', ''));
+    return parseIssueNumber(type.replace('Image', ''));
   else {
     let temp = type.replace(/\D/g, '');
     if (temp.trim() === '') return 1;
-    else return parseInt(temp);
+    else return parseIssueNumber(temp);
   }
 }
 

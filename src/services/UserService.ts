@@ -25,7 +25,7 @@ export class LoginRateLimitError extends Error {
 }
 
 export class UserService {
-  private static readonly PASSWORD_PREFIX = 'scrypt';
+  private static readonly HASH_PREFIX = 'scrypt';
   private static readonly LOGIN_RATE_LIMIT_MAX_ATTEMPTS = parsePositiveInt(
     process.env.LOGIN_MAX_ATTEMPTS,
     8,
@@ -80,14 +80,14 @@ export class UserService {
   private hashPassword(password: string): string {
     const salt = randomBytes(16).toString('base64url');
     const hash = scryptSync(password, salt, 64).toString('base64url');
-    return `${UserService.PASSWORD_PREFIX}$${salt}$${hash}`;
+    return `${UserService.HASH_PREFIX}$${salt}$${hash}`;
   }
 
   private verifyPassword(
     inputPassword: string,
     storedPassword: string,
   ): PasswordVerificationResult {
-    if (storedPassword.startsWith(`${UserService.PASSWORD_PREFIX}$`)) {
+    if (storedPassword.startsWith(`${UserService.HASH_PREFIX}$`)) {
       const [, salt, expectedHash] = storedPassword.split('$');
       if (!salt || !expectedHash) return { valid: false };
 
@@ -201,7 +201,7 @@ export class UserService {
     await this.clearLoginRateLimit(loginRateLimitKey);
 
     if (
-      !userRecord.password.startsWith(`${UserService.PASSWORD_PREFIX}$`) &&
+      !userRecord.password.startsWith(`${UserService.HASH_PREFIX}$`) &&
       passwordVerification.upgradePassword
     ) {
       userRecord.password = this.hashPassword(passwordVerification.upgradePassword);

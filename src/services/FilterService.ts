@@ -13,6 +13,7 @@ import { GraphQLError } from 'graphql';
 import type { Filter } from '@loliman/shortbox-contract';
 import logger from '../util/logger';
 const dateFormat = require('dateformat');
+const alphaCompare = (a: string, b: string): number => a.localeCompare(b);
 
 type ExportPublisher = { name: string };
 type ExportSeries = {
@@ -128,10 +129,10 @@ export class FilterService {
                 ExportIssueData[],
               ];
             })
-            .sort(),
+            .sort((left, right) => alphaCompare(left[0], right[0])),
         ] as [string, Array<[string, ExportIssueData[]]>];
       })
-      .sort();
+      .sort((left, right) => alphaCompare(left[0], right[0]));
 
     if (type === 'txt') {
       return JSON.stringify(

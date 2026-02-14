@@ -14,6 +14,17 @@ const FUNCTION_DEPLOY_ORDER = [
   'sortabletitle',
 ];
 
+const DROP_FUNCTION_SQL_BY_NAME: Record<string, string> = {
+  toroman: 'DROP FUNCTION IF EXISTS `toroman`',
+  fromroman: 'DROP FUNCTION IF EXISTS `fromroman`',
+  urlencode: 'DROP FUNCTION IF EXISTS `urlencode`',
+  createserieslabel: 'DROP FUNCTION IF EXISTS `createserieslabel`',
+  createissuelabel: 'DROP FUNCTION IF EXISTS `createissuelabel`',
+  createlabel: 'DROP FUNCTION IF EXISTS `createlabel`',
+  createurl: 'DROP FUNCTION IF EXISTS `createurl`',
+  sortabletitle: 'DROP FUNCTION IF EXISTS `sortabletitle`',
+};
+
 type ParsedFunction = {
   name: string;
   statement: string;
@@ -67,7 +78,11 @@ const dropFunctionIfExists = async (
   functionName: string,
   transaction: Transaction,
 ) => {
-  await queryInterface.sequelize.query(`DROP FUNCTION IF EXISTS \`${functionName}\``, {
+  const dropStatement = DROP_FUNCTION_SQL_BY_NAME[functionName.toLowerCase()];
+  if (!dropStatement) {
+    throw new Error(`Unsupported SQL function name: ${functionName}`);
+  }
+  await queryInterface.sequelize.query(dropStatement, {
     transaction,
   });
 };
