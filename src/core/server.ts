@@ -378,6 +378,9 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
     res.status(405).send('Method not allowed');
   });
 
+  server.addPlugin(ApolloServerPluginDrainHttpServer({ httpServer }));
+  await server.start();
+
   app.use('/', express.json({ limit: GRAPHQL_BODY_LIMIT_BYTES }));
 
   app.use(
@@ -544,8 +547,6 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
     }
   });
 
-  server.addPlugin(ApolloServerPluginDrainHttpServer({ httpServer }));
-  await server.start();
   await new Promise<void>((resolve) => {
     httpServer.listen({ port }, resolve);
   });
