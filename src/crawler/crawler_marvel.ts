@@ -674,7 +674,7 @@ function extractVariant(type: string, content: string, count: number, issue: Cra
 
 function extractNumberOfInfoboxLine(type: string) {
   if (type.indexOf('_') > -1) return parseIssueNumber(type.substring(0, type.indexOf('_')));
-  else if (type.indexOf(' ') > -1) return parseIssueNumber(type.substring(0, type.indexOf(' ')));
+  else if (type.includes(' ')) return parseIssueNumber(type.substring(0, type.indexOf(' ')));
   else if (type !== 'Image' && type.indexOf('Image') > -1)
     return parseIssueNumber(type.replace('Image', ''));
   else {

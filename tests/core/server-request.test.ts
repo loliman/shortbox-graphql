@@ -27,4 +27,13 @@ describe('server-request core', () => {
 
     expect(parseRequestIp(request)).toBe('127.0.0.1');
   });
+
+  it('falls back to remote address when forwarded header is blank', () => {
+    const request = {
+      headers: { 'x-forwarded-for': '   ,   ' },
+      socket: { remoteAddress: '127.0.0.9' },
+    } as any;
+
+    expect(parseRequestIp(request)).toBe('127.0.0.9');
+  });
 });
