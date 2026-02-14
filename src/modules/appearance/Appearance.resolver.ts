@@ -55,7 +55,7 @@ export const resolvers: AppearanceResolvers = {
       return appearanceParent.type.trim() === '' ? 'CHARACTER' : appearanceParent.type;
     },
     role: async (parent, _, { models }) => {
-      const appearanceParent = parent as unknown as AppearanceParent;
+      const appearanceParent = parent as AppearanceParent;
       if (!appearanceParent.Stories || appearanceParent.Stories.length === 0) return '';
       let relation = await models.Story_Appearance.findOne({
         where: {
