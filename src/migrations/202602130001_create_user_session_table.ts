@@ -33,6 +33,9 @@ const withTransaction = async (
 
 export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
   await withTransaction(queryInterface, async (transaction) => {
+    const userTableExists = await tableExists(queryInterface, 'User');
+    if (!userTableExists) return;
+
     const exists = await tableExists(queryInterface, TABLE_NAME);
     if (exists) return;
 

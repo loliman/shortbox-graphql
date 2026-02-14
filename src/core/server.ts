@@ -437,8 +437,13 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           });
         }
 
+        const sessionWithUserId = req.session as
+          | (typeof req.session & { userId?: number })
+          | undefined;
         const authenticatedUserId =
-          typeof req.session?.userId === 'number' ? req.session.userId : undefined;
+          typeof sessionWithUserId?.userId === 'number'
+            ? sessionWithUserId.userId
+            : undefined;
         const loggedIn = Boolean(authenticatedUserId);
 
         if (loggedIn && CSRF_PROTECTION_ENABLED) {

@@ -98,7 +98,10 @@ export const resolvers: UserResolvers = {
         }
 
         await regenerateSession(requestObject);
-        requestObject.session.userId = loginResult.id;
+        const sessionWithUserId = requestObject.session as typeof requestObject.session & {
+          userId?: number;
+        };
+        sessionWithUserId.userId = loginResult.id;
         await saveSession(requestObject);
         issueCsrfToken(requestObject, responseObject, true);
         return loginResult;

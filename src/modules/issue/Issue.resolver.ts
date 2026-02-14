@@ -7,9 +7,81 @@ type IssueParent = {
   id: number;
   fk_series: number;
   number: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  series?: unknown;
   Series?: unknown;
+  story?: unknown;
+  Stories?: unknown[];
+  stories?: unknown[];
+  Cover?: unknown;
+  cover?: unknown;
+  Covers?: unknown[];
+  covers?: unknown[];
+  Feature?: unknown;
+  Features?: unknown[];
+  features?: unknown[];
+  variants?: unknown[];
+  Individuals?: unknown[];
+  individuals?: unknown[];
+  Arcs?: unknown[];
+  arcs?: unknown[];
   getIndividuals?: () => Promise<unknown[]>;
   getArcs?: () => Promise<unknown[]>;
+};
+
+type LoaderLike<K, V> = {
+  load: (key: K) => Promise<V>;
+};
+
+const hasLoad = <K, V>(loader: unknown): loader is LoaderLike<K, V> =>
+  Boolean(loader) && typeof (loader as { load?: unknown }).load === 'function';
+
+const LEGACY_DATE_TIME_PATTERN =
+  /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+
+const normalizeDateTime = (value: unknown): string | null => {
+  const toIso = (date: Date): string | null =>
+    Number.isNaN(date.getTime()) ? null : date.toISOString();
+
+  if (value instanceof Date) {
+    return toIso(value);
+  }
+
+  if (typeof value === 'number') {
+    return toIso(new Date(value));
+  }
+
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+
+  const directTimestamp = Date.parse(trimmed);
+  if (!Number.isNaN(directTimestamp)) {
+    return toIso(new Date(directTimestamp));
+  }
+
+  const match = trimmed.match(LEGACY_DATE_TIME_PATTERN);
+  if (!match) return null;
+
+  const [, dayRaw, monthRaw, yearRaw, hourRaw = '00', minuteRaw = '00', secondRaw = '00'] = match;
+  const day = Number(dayRaw);
+  const month = Number(monthRaw);
+  const year = Number(yearRaw);
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  const second = Number(secondRaw);
+
+  const parsed = new Date(year, month - 1, day, hour, minute, second);
+  const isValid =
+    parsed.getFullYear() === year &&
+    parsed.getMonth() === month - 1 &&
+    parsed.getDate() === day &&
+    parsed.getHours() === hour &&
+    parsed.getMinutes() === minute &&
+    parsed.getSeconds() === second;
+
+  return isValid ? toIso(parsed) : null;
 };
 
 export const resolvers: IssueResolvers = {
@@ -117,26 +189,61 @@ export const resolvers: IssueResolvers = {
     },
   },
   Issue: {
-    series: async (parent, _, { seriesLoader }) =>
-      (parent as IssueParent).Series ||
-      (await seriesLoader.load((parent as IssueParent).fk_series)),
-    stories: async (parent, _, { issueStoriesLoader }) =>
-      await issueStoriesLoader.load((parent as IssueParent).id),
-    cover: async (parent, _, { issueCoverLoader }) =>
-      await issueCoverLoader.load((parent as IssueParent).id),
-    covers: async (parent, _, { issueCoversLoader }) =>
-      await issueCoversLoader.load((parent as IssueParent).id),
+    createdAt: (parent) => normalizeDateTime((parent as IssueParent).createdAt),
+    updatedAt: (parent) => normalizeDateTime((parent as IssueParent).updatedAt),
+    series: async (parent, _, { seriesLoader }) => {
+      const issueParent = parent as IssueParent;
+      if (issueParent.Series) return issueParent.Series;
+      if (issueParent.series) return issueParent.series;
+
+      if (!seriesLoader || typeof seriesLoader.load !== 'function') return null;
+      return await seriesLoader.load(issueParent.fk_series);
+    },
+    stories: async (parent, _, { issueStoriesLoader }) => {
+      const issueParent = parent as IssueParent;
+      if (Array.isArray(issueParent.Stories)) return issueParent.Stories;
+      if (Array.isArray(issueParent.stories)) return issueParent.stories;
+      if (!hasLoad<number, unknown[]>(issueStoriesLoader)) return [];
+      return await issueStoriesLoader.load(issueParent.id);
+    },
+    cover: async (parent, _, { issueCoverLoader }) => {
+      const issueParent = parent as IssueParent;
+      if (issueParent.Cover) return issueParent.Cover;
+      if (issueParent.cover) return issueParent.cover;
+      if (Array.isArray(issueParent.Covers) && issueParent.Covers.length > 0) {
+        return issueParent.Covers[0] || null;
+      }
+      if (Array.isArray(issueParent.covers) && issueParent.covers.length > 0) {
+        return issueParent.covers[0] || null;
+      }
+      if (!hasLoad<number, unknown | null>(issueCoverLoader)) return null;
+      return await issueCoverLoader.load(issueParent.id);
+    },
+    covers: async (parent, _, { issueCoversLoader }) => {
+      const issueParent = parent as IssueParent;
+      if (Array.isArray(issueParent.Covers)) return issueParent.Covers;
+      if (Array.isArray(issueParent.covers)) return issueParent.covers;
+      if (!hasLoad<number, unknown[]>(issueCoversLoader)) return [];
+      return await issueCoversLoader.load(issueParent.id);
+    },
     individuals: async (parent) =>
       (parent as IssueParent).getIndividuals
         ? await (parent as IssueParent).getIndividuals?.()
         : [],
     arcs: async (parent) =>
       (parent as IssueParent).getArcs ? await (parent as IssueParent).getArcs?.() : [],
-    features: async (parent, _, { issueFeaturesLoader }) =>
-      await issueFeaturesLoader.load((parent as IssueParent).id),
-    variants: async (parent, _, { issueVariantsLoader }) =>
-      await issueVariantsLoader.load(
-        `${(parent as IssueParent).fk_series}::${(parent as IssueParent).number}`,
-      ),
+    features: async (parent, _, { issueFeaturesLoader }) => {
+      const issueParent = parent as IssueParent;
+      if (Array.isArray(issueParent.Features)) return issueParent.Features;
+      if (Array.isArray(issueParent.features)) return issueParent.features;
+      if (!hasLoad<number, unknown[]>(issueFeaturesLoader)) return [];
+      return await issueFeaturesLoader.load(issueParent.id);
+    },
+    variants: async (parent, _, { issueVariantsLoader }) => {
+      const issueParent = parent as IssueParent;
+      if (Array.isArray(issueParent.variants)) return issueParent.variants;
+      if (!hasLoad<string, unknown[]>(issueVariantsLoader)) return [];
+      return await issueVariantsLoader.load(`${issueParent.fk_series}::${issueParent.number}`);
+    },
   },
 };

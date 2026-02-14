@@ -46,6 +46,10 @@ export class SeriesService {
 
     if (!filter) {
       const where: WhereMap = {};
+      const publisherName =
+        typeof publisher?.name === 'string' ? publisher.name.trim() : '';
+      const shouldFilterPublisherName = publisherName !== '' && publisherName !== '*';
+      const shouldFilterPublisherUs = typeof publisher?.us === 'boolean';
       let options: FindOptions = {
         order: [
           ['title', 'ASC'],
@@ -65,10 +69,10 @@ export class SeriesService {
         ];
       }
 
-      if (publisher.name !== '*')
-        options.where = { ...options.where, '$Publisher.name$': publisher.name };
+      if (shouldFilterPublisherName)
+        options.where = { ...options.where, '$Publisher.name$': publisherName };
 
-      if (publisher.us !== undefined && publisher.us !== null)
+      if (shouldFilterPublisherUs)
         options.where = { ...options.where, '$Publisher.original$': publisher.us ? 1 : 0 };
 
       if (pattern && pattern !== '') {

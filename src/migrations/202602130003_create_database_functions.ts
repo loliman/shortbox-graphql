@@ -30,6 +30,18 @@ type ParsedFunction = {
   statement: string;
 };
 
+const isNonProduction = (process.env.NODE_ENV || 'development').toLowerCase() !== 'production';
+
+const extractMysqlErrorCode = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  const candidate = error as {
+    code?: string;
+    parent?: { code?: string };
+    original?: { code?: string };
+  };
+  return candidate.code || candidate.parent?.code || candidate.original?.code;
+};
+
 const parseFunctionsFile = (): ParsedFunction[] => {
   const sqlPath = path.resolve(process.cwd(), 'functions.sql');
   const rawSql = fs.readFileSync(sqlPath, 'utf8');
@@ -102,18 +114,29 @@ const withTransaction = async (
 };
 
 export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
-  await withTransaction(queryInterface, async (transaction) => {
-    const parsedFunctions = parseFunctionsFile();
-    const orderedFunctions = sortFunctionsByDependency(parsedFunctions);
+  try {
+    await withTransaction(queryInterface, async (transaction) => {
+      const parsedFunctions = parseFunctionsFile();
+      const orderedFunctions = sortFunctionsByDependency(parsedFunctions);
 
-    for (const fn of orderedFunctions) {
-      await dropFunctionIfExists(queryInterface, fn.name, transaction);
-    }
+      for (const fn of orderedFunctions) {
+        await dropFunctionIfExists(queryInterface, fn.name, transaction);
+      }
 
-    for (const fn of orderedFunctions) {
-      await queryInterface.sequelize.query(fn.statement, { transaction });
+      for (const fn of orderedFunctions) {
+        await queryInterface.sequelize.query(fn.statement, { transaction });
+      }
+    });
+  } catch (error) {
+    const mysqlErrorCode = extractMysqlErrorCode(error);
+    if (isNonProduction && mysqlErrorCode === 'ER_BINLOG_CREATE_ROUTINE_NEED_SUPER') {
+      console.warn(
+        'Skipping SQL function deployment in non-production: missing privilege for CREATE FUNCTION.',
+      );
+      return;
     }
-  });
+    throw error;
+  }
 };
 
 export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {

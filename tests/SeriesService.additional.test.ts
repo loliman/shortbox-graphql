@@ -70,6 +70,23 @@ describe('SeriesService additional coverage', () => {
     expect(andSymbol).toBeDefined();
   });
 
+  it('treats missing or blank publisher name like wildcard for series search', async () => {
+    mockModels.Series.findAll.mockResolvedValue([{ id: 1, title: 'Alpha', volume: 1 }]);
+
+    await service.findSeries(
+      '',
+      { name: '   ', us: true } as any,
+      5,
+      undefined,
+      false,
+      undefined,
+    );
+
+    const options = mockModels.Series.findAll.mock.calls[0][0];
+    expect(options.where['$Publisher.name$']).toBeUndefined();
+    expect(options.where['$Publisher.original$']).toBe(1);
+  });
+
   it('uses filter-based lookup path and maps issue series nodes', async () => {
     mockModels.Issue.findAll.mockResolvedValue([
       { Series: { id: 5, title: 'X-Men', volume: 2, startyear: 1991, endyear: 2001, fk_publisher: 9 } },

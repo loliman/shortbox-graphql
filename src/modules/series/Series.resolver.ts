@@ -7,8 +7,16 @@ type SeriesParent = {
   id: number;
   fk_publisher: number;
   endyear?: number | null;
+  publisher?: unknown;
   Publisher?: unknown;
 };
+
+type LoaderLike<K, V> = {
+  load: (key: K) => Promise<V>;
+};
+
+const hasLoad = <K, V>(loader: unknown): loader is LoaderLike<K, V> =>
+  Boolean(loader) && typeof (loader as { load?: unknown }).load === 'function';
 
 export const resolvers: SeriesResolvers = {
   Query: {
@@ -97,9 +105,13 @@ export const resolvers: SeriesResolvers = {
     },
   },
   Series: {
-    publisher: async (parent, _, { publisherLoader }) =>
-      (parent as SeriesParent).Publisher ||
-      (await publisherLoader.load((parent as SeriesParent).fk_publisher)),
+    publisher: async (parent, _, { publisherLoader }) => {
+      const seriesParent = parent as SeriesParent;
+      if (seriesParent.Publisher) return seriesParent.Publisher;
+      if (seriesParent.publisher) return seriesParent.publisher;
+      if (!hasLoad<number, unknown | null>(publisherLoader)) return null;
+      return await publisherLoader.load(seriesParent.fk_publisher);
+    },
     issueCount: async (parent, _, { models }) =>
       await models.Issue.count({
         where: { fk_series: (parent as SeriesParent).id },
