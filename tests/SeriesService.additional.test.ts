@@ -142,6 +142,25 @@ describe('SeriesService additional coverage', () => {
     expect(mockModels.Series.findAll).toHaveBeenCalledTimes(1);
   });
 
+  it('uses non-filter defaults when first/name are missing and us is false', async () => {
+    mockModels.Series.findAll.mockResolvedValue([{ id: 11, title: 'Omega', volume: 1 }]);
+
+    const result = await service.findSeries(
+      undefined,
+      { us: false } as any,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges).toHaveLength(1);
+    const options = mockModels.Series.findAll.mock.calls[0][0];
+    expect(options.limit).toBe(51);
+    expect(options.where['$Publisher.name$']).toBeUndefined();
+    expect(options.where['$Publisher.original$']).toBe(0);
+  });
+
   it('uses filter-based lookup path and maps issue series nodes', async () => {
     mockModels.Issue.findAll.mockResolvedValue([
       { Series: { id: 5, title: 'X-Men', volume: 2, startyear: 1991, endyear: 2001, fk_publisher: 9 } },
@@ -195,12 +214,50 @@ describe('SeriesService additional coverage', () => {
     expect(result).toBe('deleted-series');
   });
 
+  it('deletes series with empty title fallback', async () => {
+    const deleteInstance = jest.fn().mockResolvedValue('deleted-empty');
+    mockModels.Publisher.findOne.mockResolvedValue({ id: 10 });
+    mockModels.Series.findOne.mockResolvedValue({ deleteInstance });
+
+    const result = await service.deleteSeries(
+      { volume: 1, publisher: { name: '' } } as any,
+      {} as any,
+    );
+
+    expect(result).toBe('deleted-empty');
+    expect(mockModels.Series.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ title: '', volume: 1, fk_publisher: 10 }),
+      }),
+    );
+  });
+
   it('throws on create when publisher is missing', async () => {
     mockModels.Publisher.findOne.mockResolvedValue(null);
 
     await expect(
       service.createSeries({ title: 'Y', volume: 1, publisher: { name: 'Unknown' } } as any, {} as any),
     ).rejects.toThrow('Publisher not found');
+  });
+
+  it('creates series with fallback values when title/publisher name are missing', async () => {
+    mockModels.Publisher.findOne.mockResolvedValue({ id: 6 });
+    mockModels.Series.create.mockResolvedValue({ id: 44 });
+
+    await service.createSeries({ publisher: {} as any, volume: 1 } as any, {} as any);
+
+    expect(mockModels.Publisher.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { name: '' },
+      }),
+    );
+    expect(mockModels.Series.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '',
+        fk_publisher: 6,
+      }),
+      expect.anything(),
+    );
   });
 
   it('throws on edit when publisher or series is missing', async () => {
@@ -250,5 +307,44 @@ describe('SeriesService additional coverage', () => {
     expect(existing.endyear).toBe(2005);
     expect(existing.addinfo).toBe('note');
     expect(mapped).toEqual([{ id: 6, title: 'A' }, null, { id: 7, title: 'B' }]);
+  });
+
+  it('applies edit fallbacks when old/item fields are missing', async () => {
+    const save = jest.fn().mockResolvedValue('saved-fallbacks');
+    const existing = {
+      id: 8,
+      title: 'Initial',
+      volume: 9,
+      startyear: 1999,
+      endyear: 2000,
+      addinfo: 'x',
+      save,
+    };
+
+    mockModels.Publisher.findOne.mockResolvedValue({ id: 7 });
+    mockModels.Series.findOne.mockResolvedValue(existing);
+
+    const result = await service.editSeries(
+      { volume: 1 } as any,
+      {} as any,
+      {} as any,
+    );
+
+    expect(result).toBe('saved-fallbacks');
+    expect(mockModels.Publisher.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { name: '' },
+      }),
+    );
+    expect(mockModels.Series.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ title: '', volume: 1, fk_publisher: 7 }),
+      }),
+    );
+    expect(existing.title).toBe('');
+    expect(existing.volume).toBe(0);
+    expect(existing.startyear).toBe(0);
+    expect(existing.endyear).toBe(0);
+    expect(existing.addinfo).toBe('');
   });
 });
