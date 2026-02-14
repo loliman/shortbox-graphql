@@ -11,7 +11,7 @@ module.exports = {
     'src/core/server-config.ts',
     'src/core/server-request.ts',
   ],
-  coverageDirectory: '<rootDir>/coverage/unit',
+  coverageDirectory: '<rootDir>/coverage',
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {

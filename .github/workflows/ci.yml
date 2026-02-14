@@ -35,7 +35,7 @@ jobs:
         run: npm run typecheck
 
       - name: Unit Tests with Coverage Gate (>=80%)
-        run: npm run test:unit
+        run: npm run test:coverage
 
       - name: Build Project
         run: npm run build
@@ -60,10 +60,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shortbox-graphql-coverage
-          path: coverage/unit/
+          path: coverage/
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
