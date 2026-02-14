@@ -37,8 +37,7 @@ type LoaderLike<K, V> = {
 const hasLoad = <K, V>(loader: unknown): loader is LoaderLike<K, V> =>
   Boolean(loader) && typeof (loader as { load?: unknown }).load === 'function';
 
-const LEGACY_DATE_TIME_PATTERN =
-  /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+const LEGACY_DATE_TIME_PATTERN = /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/;
 
 const normalizeDateTime = (value: unknown): string | null => {
   const toIso = (date: Date): string | null =>
