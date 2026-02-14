@@ -98,14 +98,16 @@ export type {
 type EmptyArgs = Record<string, never>;
 type MaybePromise<T> = T | Promise<T>;
 
-export type ResolverResult<T> = T extends Array<infer Item>
-  ? Array<ResolverResult<Item>>
-  : T extends object
-    ? unknown
-    : T;
+export type ResolverResult<T> =
+  T extends Array<infer Item> ? Array<ResolverResult<Item>> : T extends object ? unknown : T;
 
 type BivariantResolver<Parent, Args, Result> = {
-  bivarianceHack(parent: Parent, args: Args, context: Context, info?: unknown): MaybePromise<Result>;
+  bivarianceHack(
+    parent: Parent,
+    args: Args,
+    context: Context,
+    info?: unknown,
+  ): MaybePromise<Result>;
 }['bivarianceHack'];
 
 export type ResolverFn<Parent = unknown, Args = EmptyArgs, Result = unknown> = BivariantResolver<
@@ -137,22 +139,42 @@ export type QueryResolverFields = {
 
 export type MutationResolverFields = {
   _empty: ResolverFn<unknown, EmptyArgs, ResolverResult<Mutation['_empty']>>;
-  createIssue: ResolverFn<unknown, MutationCreateIssueArgs, ResolverResult<Mutation['createIssue']>>;
+  createIssue: ResolverFn<
+    unknown,
+    MutationCreateIssueArgs,
+    ResolverResult<Mutation['createIssue']>
+  >;
   createPublisher: ResolverFn<
     unknown,
     MutationCreatePublisherArgs,
     ResolverResult<Mutation['createPublisher']>
   >;
-  createSeries: ResolverFn<unknown, MutationCreateSeriesArgs, ResolverResult<Mutation['createSeries']>>;
-  deleteIssue: ResolverFn<unknown, MutationDeleteIssueArgs, ResolverResult<Mutation['deleteIssue']>>;
+  createSeries: ResolverFn<
+    unknown,
+    MutationCreateSeriesArgs,
+    ResolverResult<Mutation['createSeries']>
+  >;
+  deleteIssue: ResolverFn<
+    unknown,
+    MutationDeleteIssueArgs,
+    ResolverResult<Mutation['deleteIssue']>
+  >;
   deletePublisher: ResolverFn<
     unknown,
     MutationDeletePublisherArgs,
     ResolverResult<Mutation['deletePublisher']>
   >;
-  deleteSeries: ResolverFn<unknown, MutationDeleteSeriesArgs, ResolverResult<Mutation['deleteSeries']>>;
+  deleteSeries: ResolverFn<
+    unknown,
+    MutationDeleteSeriesArgs,
+    ResolverResult<Mutation['deleteSeries']>
+  >;
   editIssue: ResolverFn<unknown, MutationEditIssueArgs, ResolverResult<Mutation['editIssue']>>;
-  editPublisher: ResolverFn<unknown, MutationEditPublisherArgs, ResolverResult<Mutation['editPublisher']>>;
+  editPublisher: ResolverFn<
+    unknown,
+    MutationEditPublisherArgs,
+    ResolverResult<Mutation['editPublisher']>
+  >;
   editSeries: ResolverFn<unknown, MutationEditSeriesArgs, ResolverResult<Mutation['editSeries']>>;
   login: ResolverFn<unknown, MutationLoginArgs, ResolverResult<Mutation['login']>>;
   logout: ResolverFn<unknown, EmptyArgs, ResolverResult<Mutation['logout']>>;
@@ -161,8 +183,15 @@ export type MutationResolverFields = {
 export type QueryResolvers = Partial<QueryResolverFields>;
 export type MutationResolvers = Partial<MutationResolverFields>;
 
-type PublisherObjectResolverFields = Omit<ObjectResolverFields<unknown, Publisher>, 'lastEdited'> & {
-  lastEdited?: ResolverFn<unknown, PublisherLastEditedArgs, ResolverResult<Publisher['lastEdited']>>;
+type PublisherObjectResolverFields = Omit<
+  ObjectResolverFields<unknown, Publisher>,
+  'lastEdited'
+> & {
+  lastEdited?: ResolverFn<
+    unknown,
+    PublisherLastEditedArgs,
+    ResolverResult<Publisher['lastEdited']>
+  >;
 };
 
 type SeriesObjectResolverFields = Omit<ObjectResolverFields<unknown, Series>, 'lastEdited'> & {
