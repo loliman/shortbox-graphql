@@ -46,8 +46,7 @@ export class SeriesService {
 
     if (!filter) {
       const where: WhereMap = {};
-      const publisherName =
-        typeof publisher?.name === 'string' ? publisher.name.trim() : '';
+      const publisherName = typeof publisher?.name === 'string' ? publisher.name.trim() : '';
       const shouldFilterPublisherName = publisherName !== '' && publisherName !== '*';
       const shouldFilterPublisherUs = typeof publisher?.us === 'boolean';
       let options: FindOptions = {
