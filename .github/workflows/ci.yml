@@ -43,7 +43,14 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A
             git commit -m "style: auto-format"
-            git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
+
+            BRANCH="${{ github.head_ref || github.ref_name }}"
+            git fetch origin "$BRANCH"
+            git pull --rebase origin "$BRANCH" || true
+            git push origin "HEAD:$BRANCH" || {
+              echo "Auto-format push skipped due to concurrent branch updates."
+              exit 0
+            }
           else
             echo "No formatting changes detected."
           fi
