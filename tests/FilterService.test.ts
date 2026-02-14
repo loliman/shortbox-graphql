@@ -221,10 +221,14 @@ describe('FilterService', () => {
     const include = exportOptions.include as any[];
     expect(include.some((item) => item.as === 'Arcs' && item.required)).toBe(true);
     expect(include.some((item) => item.as === 'Covers' && item.required === false)).toBe(true);
+    const seriesModel = (include.find((item) => item.model?.modelName === 'Series') || {}).model;
+    const publisherModel = (include[0]?.include || []).find(
+      (item: any) => item.model?.modelName === 'Publisher',
+    )?.model;
     expect(exportOptions.order).toEqual([
-      ['$Series.Publisher.name$', 'ASC'],
-      ['$Series.title$', 'ASC'],
-      ['$Series.volume$', 'ASC'],
+      [{ model: seriesModel, as: 'Series' }, { model: publisherModel, as: 'Publisher' }, 'name', 'ASC'],
+      [{ model: seriesModel, as: 'Series' }, 'title', 'ASC'],
+      [{ model: seriesModel, as: 'Series' }, 'volume', 'ASC'],
       ['number', 'ASC'],
     ]);
 

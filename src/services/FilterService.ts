@@ -73,6 +73,12 @@ export class FilterService {
   }
 
   public async export(filter: Filter, type: string, loggedIn: boolean) {
+    if (type !== 'txt' && type !== 'csv') {
+      throw new GraphQLError('Gültige Export Typen: txt, csv', {
+        extensions: { code: 'BAD_USER_INPUT' },
+      });
+    }
+
     const options = this.getFilterOptions(loggedIn, filter, true);
     options.limit = 1000; // Export limit
     const issues = await this.models.Issue.findAll(options);
@@ -141,10 +147,6 @@ export class FilterService {
       );
     } else if (type === 'csv') {
       return JSON.stringify(await this.resultsToCsv(sortedResponse, loggedIn));
-    } else {
-      throw new GraphQLError('Gültige Export Typen: txt, csv', {
-        extensions: { code: 'BAD_USER_INPUT' },
-      });
     }
   }
 
@@ -417,9 +419,14 @@ export class FilterService {
       order = [[String(orderField), String(sortDirection || 'ASC')]];
     } else if (isExport) {
       order = [
-        ['$Series.Publisher.name$', 'ASC'],
-        ['$Series.title$', 'ASC'],
-        ['$Series.volume$', 'ASC'],
+        [
+          { model: this.models.Series, as: 'Series' },
+          { model: this.models.Publisher, as: 'Publisher' },
+          'name',
+          'ASC',
+        ],
+        [{ model: this.models.Series, as: 'Series' }, 'title', 'ASC'],
+        [{ model: this.models.Series, as: 'Series' }, 'volume', 'ASC'],
         ['number', 'ASC'],
       ];
     }

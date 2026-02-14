@@ -31,6 +31,7 @@ describe('Filter Integration Tests', () => {
     const response = await request(url).post('/').send(query);
 
     expect(response.status).toBe(200);
+    expect(response.body.errors).toBeUndefined();
     expect(typeof response.body.data.export).toBe('string');
     expect(response.body.data.export).toContain('Spider-Man');
   });
@@ -47,6 +48,7 @@ describe('Filter Integration Tests', () => {
     const response = await request(url).post('/').send(query);
 
     expect(response.status).toBe(200);
+    expect(response.body.errors).toBeUndefined();
     expect(typeof response.body.data.export).toBe('string');
     expect(response.body.data.export).toContain('Verlag;Series;Volume');
     expect(response.body.data.export).toContain('Marvel Comics');

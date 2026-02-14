@@ -37,6 +37,7 @@ describe('GraphQL Integration Tests', () => {
     const response = await request(url).post('/').send(query);
 
     expect(response.status).toBe(200);
+    expect(response.body.errors).toBeUndefined();
     expect(response.body.data.publishers.edges.length).toBeGreaterThan(0);
     expect(response.body.data.publishers.edges[0].node.name).toBe('Marvel Comics');
   });
@@ -60,6 +61,7 @@ describe('GraphQL Integration Tests', () => {
     const response = await request(url).post('/').send(query);
 
     expect(response.status).toBe(200);
+    expect(response.body.errors).toBeUndefined();
     expect(response.body.data.series.edges.length).toBeGreaterThan(0);
     expect(response.body.data.series.edges[0].node.title).toBe('Spider-Man');
   });
@@ -88,6 +90,7 @@ describe('GraphQL Integration Tests', () => {
     const response = await request(url).post('/').send(query);
 
     expect(response.status).toBe(200);
+    expect(response.body.errors).toBeUndefined();
     expect(response.body.data.issue.number).toBe('1');
     expect(response.body.data.issue.series.title).toBe('Spider-Man');
   });
@@ -111,35 +114,17 @@ describe('GraphQL Integration Tests', () => {
     const query = {
       query: `
         query {
-          lastEdited(filter: { us: true }, limit: 2, order: "createdAt", direction: "ASC") {
-            number
-            variant
-            createdAt
-            updatedAt
-            series { title }
-            stories { number }
-            cover { id }
-          }
-        }
-      `,
-    };
-
-    const response = await request(url).post('/').send(query);
-
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.body.data.lastEdited)).toBe(true);
-    expect(response.body.data.lastEdited.length).toBeGreaterThan(0);
-    expect(response.body.data.lastEdited[0].series.title).toBe('Spider-Man');
-  });
-
-  it('returns variants for an issue', async () => {
-    const query = {
-      query: `
-        query {
-          lastEdited(limit: 1) {
-            number
-            variants {
-              variant
+          lastEdited(filter: { us: true }, first: 2, order: "createdAt", direction: "ASC") {
+            edges {
+              node {
+                number
+                variant
+                createdAt
+                updatedAt
+                series { title }
+                stories { number }
+                cover { id }
+              }
             }
           }
         }
@@ -149,7 +134,35 @@ describe('GraphQL Integration Tests', () => {
     const response = await request(url).post('/').send(query);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.lastEdited.length).toBe(1);
-    expect(Array.isArray(response.body.data.lastEdited[0].variants)).toBe(true);
+    expect(response.body.errors).toBeUndefined();
+    expect(Array.isArray(response.body.data.lastEdited.edges)).toBe(true);
+    expect(response.body.data.lastEdited.edges.length).toBeGreaterThan(0);
+    expect(response.body.data.lastEdited.edges[0].node.series.title).toBe('Spider-Man');
+  });
+
+  it('returns variants for an issue', async () => {
+    const query = {
+      query: `
+        query {
+          lastEdited(first: 1) {
+            edges {
+              node {
+                number
+                variants {
+                  variant
+                }
+              }
+            }
+          }
+        }
+      `,
+    };
+
+    const response = await request(url).post('/').send(query);
+
+    expect(response.status).toBe(200);
+    expect(response.body.errors).toBeUndefined();
+    expect(response.body.data.lastEdited.edges.length).toBe(1);
+    expect(Array.isArray(response.body.data.lastEdited.edges[0].node.variants)).toBe(true);
   });
 });

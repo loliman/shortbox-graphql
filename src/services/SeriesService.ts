@@ -48,7 +48,7 @@ export class SeriesService {
       const where: WhereMap = {};
       let options: FindOptions = {
         order: [
-          [Sequelize.fn('sortabletitle', Sequelize.col('title')), 'ASC'],
+          ['title', 'ASC'],
           ['volume', 'ASC'],
           ['id', 'ASC'],
         ],
@@ -60,7 +60,7 @@ export class SeriesService {
       if (decodedCursor) {
         where[Op.and] = [
           Sequelize.literal(
-            `(sortabletitle(title), volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`,
+            `(title, volume, Series.id) > (SELECT title, volume, id FROM Series WHERE id = ${decodedCursor})`,
           ),
         ];
       }
@@ -96,7 +96,7 @@ export class SeriesService {
         whereWithSymbols[Op.and] = [
           ...currentAnd,
           Sequelize.literal(
-            `(sortabletitle(Series.title), Series.volume, Series.id) > (SELECT sortabletitle(title), volume, id FROM Series WHERE id = ${decodedCursor})`,
+            `(Series.title, Series.volume, Series.id) > (SELECT title, volume, id FROM Series WHERE id = ${decodedCursor})`,
           ),
         ];
       }
