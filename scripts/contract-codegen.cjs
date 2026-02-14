@@ -45,10 +45,11 @@ function resolveContractDirectory() {
 
 const contractDirectory = resolveContractDirectory();
 if (!contractDirectory) {
-  console.error(
-    "Konnte shortbox-contract nicht finden. Setze SHORTBOX_CONTRACT_DIR auf den Pfad zum Contract-Repo."
+  console.warn(
+    `Konnte shortbox-contract nicht finden. Überspringe npm run ${command}. ` +
+      "Setze SHORTBOX_CONTRACT_DIR auf den Pfad zum Contract-Repo, um Codegen auszuführen."
   );
-  process.exit(1);
+  process.exit(0);
 }
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";

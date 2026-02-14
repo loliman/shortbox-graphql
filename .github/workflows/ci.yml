@@ -22,6 +22,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
+      - name: Configure git for HTTPS dependencies
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          git config --global url."https://github.com/".insteadOf git@github.com:
+
       - name: Install dependencies
         run: npm ci
 
@@ -62,8 +67,17 @@ jobs:
           name: shortbox-graphql-coverage
           path: coverage/
 
+      - name: Validate Sonar token
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "SONAR_TOKEN secret is not configured."
+            exit 1
+          fi
+
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@v5
         with:
           args: >
             -Dsonar.qualitygate.wait=true
@@ -111,6 +125,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: package-lock.json
+
+      - name: Configure git for HTTPS dependencies
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          git config --global url."https://github.com/".insteadOf git@github.com:
 
       - name: Install dependencies
         run: npm ci
