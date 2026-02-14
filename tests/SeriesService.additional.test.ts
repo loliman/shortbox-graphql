@@ -107,6 +107,41 @@ describe('SeriesService additional coverage', () => {
     expect(mockModels.Series.findAll.mock.calls[1][0].where['$Publisher.original$']).toBeUndefined();
   });
 
+  it('does not apply publisher filters when wildcard has no us constraint', async () => {
+    mockModels.Series.findAll.mockResolvedValue([{ id: 3, title: 'Gamma', volume: 2 }]);
+
+    const result = await service.findSeries(
+      undefined,
+      { name: '*' } as any,
+      5,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges).toHaveLength(1);
+    const options = mockModels.Series.findAll.mock.calls[0][0];
+    expect(options.where['$Publisher.name$']).toBeUndefined();
+    expect(options.where['$Publisher.original$']).toBeUndefined();
+    expect(mockModels.Series.findAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry fallback when pattern is present', async () => {
+    mockModels.Series.findAll.mockResolvedValue([]);
+
+    const result = await service.findSeries(
+      'spider',
+      { name: '*', us: true } as any,
+      5,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges).toHaveLength(0);
+    expect(mockModels.Series.findAll).toHaveBeenCalledTimes(1);
+  });
+
   it('uses filter-based lookup path and maps issue series nodes', async () => {
     mockModels.Issue.findAll.mockResolvedValue([
       { Series: { id: 5, title: 'X-Men', volume: 2, startyear: 1991, endyear: 2001, fk_publisher: 9 } },
