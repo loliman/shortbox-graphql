@@ -1,8 +1,8 @@
 import models from '../models';
-import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
+import { FindOptions, Op, Transaction } from 'sequelize';
 import logger from '../util/logger';
 import type { Filter, PublisherInput, SeriesInput } from '@loliman/shortbox-contract';
-import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
+import { buildConnectionFromNodes } from '../core/cursor';
 
 export class SeriesService {
   constructor(
@@ -41,8 +41,8 @@ export class SeriesService {
         fk_publisher: number;
       };
     };
-    const limit = first || 50;
-    const decodedCursor = decodeCursorId(after || undefined);
+    void first;
+    void after;
 
     if (!filter) {
       const where: WhereMap = {};
@@ -57,16 +57,7 @@ export class SeriesService {
         ],
         include: [{ model: this.models.Publisher }],
         where,
-        limit: limit + 1,
       };
-
-      if (decodedCursor) {
-        where[Op.and] = [
-          Sequelize.literal(
-            `(title, volume, Series.id) > (SELECT title, volume, id FROM Series WHERE id = ${decodedCursor})`,
-          ),
-        ];
-      }
 
       if (shouldFilterPublisherName)
         options.where = { ...options.where, '$Publisher.name$': publisherName };
@@ -97,26 +88,12 @@ export class SeriesService {
         results = await loadSeries({ ...options, where: fallbackWhere });
       }
 
-      return buildConnectionFromNodes(results, limit, after || undefined);
+      return buildConnectionFromNodes(results, results.length, undefined);
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models);
       const options = filterService.getFilterOptions(loggedIn, filter);
-      const whereWithSymbols = options.where as WhereMap;
       options.group = ['fk_series'];
-      options.limit = limit + 1;
-
-      if (decodedCursor) {
-        const currentAnd = Array.isArray(whereWithSymbols[Op.and])
-          ? (whereWithSymbols[Op.and] as unknown[])
-          : [];
-        whereWithSymbols[Op.and] = [
-          ...currentAnd,
-          Sequelize.literal(
-            `(Series.title, Series.volume, Series.id) > (SELECT title, volume, id FROM Series WHERE id = ${decodedCursor})`,
-          ),
-        ];
-      }
 
       const res = await this.models.Issue.findAll(options);
       const nodes = res.map((issue) => {
@@ -130,7 +107,7 @@ export class SeriesService {
           fk_publisher: issueNode.Series.fk_publisher,
         };
       });
-      return buildConnectionFromNodes(nodes, limit, after || undefined);
+      return buildConnectionFromNodes(nodes, nodes.length, undefined);
     }
   }
 

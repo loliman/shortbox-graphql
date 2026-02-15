@@ -47,7 +47,7 @@ describe('SeriesService additional coverage', () => {
     expect((logger.error as jest.Mock).mock.calls[0][0]).toBe('error');
   });
 
-  it('adds cursor, publisher and pattern constraints on non-filter search', async () => {
+  it('adds publisher and pattern constraints on non-filter search', async () => {
     mockModels.Series.findAll.mockResolvedValue([{ id: 1, title: 'Alpha', volume: 1 }]);
 
     const result = await service.findSeries(
@@ -61,13 +61,9 @@ describe('SeriesService additional coverage', () => {
 
     expect(result.edges).toHaveLength(1);
     const options = mockModels.Series.findAll.mock.calls[0][0];
-    expect(options.limit).toBe(6);
     expect(options.where['$Publisher.name$']).toBe('Marvel');
     expect(options.where['$Publisher.original$']).toBe(1);
     expect(options.where.title[Symbol.for('like') as any] || options.where.title).toBeTruthy();
-
-    const andSymbol = Object.getOwnPropertySymbols(options.where).find((s) => String(s).includes('and'));
-    expect(andSymbol).toBeDefined();
   });
 
   it('treats missing or blank publisher name like wildcard for series search', async () => {
@@ -156,7 +152,6 @@ describe('SeriesService additional coverage', () => {
 
     expect(result.edges).toHaveLength(1);
     const options = mockModels.Series.findAll.mock.calls[0][0];
-    expect(options.limit).toBe(51);
     expect(options.where['$Publisher.name$']).toBeUndefined();
     expect(options.where['$Publisher.original$']).toBe(0);
   });
@@ -180,7 +175,6 @@ describe('SeriesService additional coverage', () => {
 
     const options = mockModels.Issue.findAll.mock.calls[0][0];
     expect(options.group).toEqual(['fk_series']);
-    expect(options.limit).toBe(4);
   });
 
   it('throws on delete when publisher is missing', async () => {

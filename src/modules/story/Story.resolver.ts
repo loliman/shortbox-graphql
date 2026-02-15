@@ -87,6 +87,14 @@ export const resolvers: StoryResolvers = {
       (parent as StoryParent).getAppearances
         ? await (parent as StoryParent).getAppearances?.()
         : [],
-    exclusive: (parent) => !!((parent as StoryParent).onlyapp && (parent as StoryParent).firstapp),
+    exclusive: (parent) => {
+      const storyParent = parent as StoryParent;
+      const hasOriginalStoryReference =
+        Boolean(storyParent.Parent) ||
+        Boolean(storyParent.parent) ||
+        typeof storyParent.fk_parent === 'number';
+
+      return !hasOriginalStoryReference;
+    },
   },
 };

@@ -105,7 +105,7 @@ export default (sequelize: Sequelize) => {
       comicguideid: {
         type: DataTypes.STRING(255),
         allowNull: false,
-        defaultValue: '',
+        defaultValue: '0',
       },
       isbn: {
         type: DataTypes.STRING(255),

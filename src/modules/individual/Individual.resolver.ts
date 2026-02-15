@@ -9,6 +9,20 @@ type IndividualParent = {
   Covers?: Array<{ id: number }>;
   Issues?: Array<{ id: number }>;
   Features?: Array<{ id: number }>;
+  Story_Individual?: { type?: unknown } | null;
+  story_individual?: { type?: unknown } | null;
+  Cover_Individual?: { type?: unknown } | null;
+  cover_individual?: { type?: unknown } | null;
+  Issue_Individual?: { type?: unknown } | null;
+  issue_individual?: { type?: unknown } | null;
+  Feature_Individual?: { type?: unknown } | null;
+  feature_individual?: { type?: unknown } | null;
+};
+
+const toTypeArray = (value: unknown): string[] => {
+  if (typeof value !== 'string') return [];
+  const normalized = value.trim();
+  return normalized ? [normalized] : [];
 };
 
 export const resolvers: IndividualResolvers = {
@@ -52,6 +66,21 @@ export const resolvers: IndividualResolvers = {
     },
     name: (parent) => (parent as IndividualParent).name,
     type: async (parent, _, { models }) => {
+      const individualParent = parent as IndividualParent;
+      const directTypes = [
+        ...toTypeArray(individualParent.Story_Individual?.type),
+        ...toTypeArray(individualParent.story_individual?.type),
+        ...toTypeArray(individualParent.Cover_Individual?.type),
+        ...toTypeArray(individualParent.cover_individual?.type),
+        ...toTypeArray(individualParent.Issue_Individual?.type),
+        ...toTypeArray(individualParent.issue_individual?.type),
+        ...toTypeArray(individualParent.Feature_Individual?.type),
+        ...toTypeArray(individualParent.feature_individual?.type),
+      ];
+      if (directTypes.length > 0) {
+        return [...new Set(directTypes)];
+      }
+
       const where: Record<string, number> = {};
       let table:
         | 'Story_Individual'
@@ -59,7 +88,6 @@ export const resolvers: IndividualResolvers = {
         | 'Issue_Individual'
         | 'Feature_Individual'
         | '' = '';
-      const individualParent = parent as IndividualParent;
 
       if (individualParent.Stories && individualParent.Stories.length > 0) {
         where.fk_story = individualParent.Stories[0].id;

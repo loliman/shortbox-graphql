@@ -34,7 +34,7 @@ describe('IssueService', () => {
     issueService = new IssueService(mockModels);
   });
 
-  it('should find issues for a series with cursor pagination', async () => {
+  it('should find all issues for a series', async () => {
     const seriesInput = { title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } };
     const mockIssues = [
       { id: 10, number: '1', variant: '', fk_series: 1 },
@@ -48,21 +48,57 @@ describe('IssueService', () => {
     expect(result.edges[0].node.number).toBe('1');
     expect(result.pageInfo.hasNextPage).toBe(false);
     expect(mockModels.Issue.findAll).toHaveBeenCalledWith(expect.objectContaining({
-      limit: 3,
       order: [['number', 'ASC'], ['variant', 'ASC'], ['id', 'ASC']]
     }));
   });
 
-  it('should support after cursor', async () => {
+  it('should sort issue numbers with roman numerals first and natural numeric ordering', async () => {
+    const seriesInput = { title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } };
+    mockModels.Issue.findAll.mockResolvedValue([
+      { id: 4, number: '10', variant: '', fk_series: 1 },
+      { id: 1, number: 'II', variant: '', fk_series: 1 },
+      { id: 5, number: '2', variant: '', fk_series: 1 },
+      { id: 2, number: 'I', variant: '', fk_series: 1 },
+      { id: 3, number: '1', variant: '', fk_series: 1 },
+      { id: 6, number: '11', variant: '', fk_series: 1 },
+    ]);
+
+    const result = await issueService.findIssues(undefined, seriesInput, undefined, undefined, false, undefined);
+    const numbers = result.edges.map((edge: any) => edge.node.number);
+
+    expect(numbers).toEqual(['I', 'II', '1', '2', '10', '11']);
+  });
+
+  it('should return only one API entry per issue number when variants exist', async () => {
+    const seriesInput = { title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } };
+    mockModels.Issue.findAll.mockResolvedValue([
+      { id: 101, fk_series: 1, number: '7', variant: 'B' },
+      { id: 100, fk_series: 1, number: '7', variant: '' },
+      { id: 102, fk_series: 1, number: '8', variant: 'A' },
+    ]);
+
+    const result = await issueService.findIssues(undefined, seriesInput, undefined, undefined, false, undefined);
+
+    expect(result.edges.map((edge: any) => `${edge.node.number}::${edge.node.variant}`)).toEqual([
+      '7::',
+      '8::A',
+    ]);
+    expect(result.edges).toHaveLength(2);
+  });
+
+  it('should ignore after cursor in findIssues', async () => {
     const seriesInput = { title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } };
     const cursor = Buffer.from('10').toString('base64');
     mockModels.Issue.findAll.mockResolvedValue([]);
 
     await issueService.findIssues(undefined, seriesInput, 10, cursor, false, undefined);
 
-    expect(mockModels.Issue.findAll).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.anything()
-    }));
+    const options = mockModels.Issue.findAll.mock.calls[0][0];
+    expect(options.limit).toBeUndefined();
+    const andKey = Object.getOwnPropertySymbols(options.where).find((key) =>
+      String(key).includes('and')
+    );
+    expect(andKey).toBeUndefined();
   });
 
   it('should handle lastEdited with cursor', async () => {
@@ -98,6 +134,42 @@ describe('IssueService', () => {
     );
   });
 
+  it('should support releasedate sorting for lastEdited', async () => {
+    mockModels.Issue.findAll.mockResolvedValue([]);
+    mockModels.Issue.findByPk.mockResolvedValue(null);
+
+    await issueService.getLastEdited(undefined, 10, undefined, 'releasedate', 'ASC', false);
+
+    expect(mockModels.Issue.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order: [['releasedate', 'ASC'], ['id', 'ASC']],
+      }),
+    );
+  });
+
+  it('should support series and publisher sorting for lastEdited', async () => {
+    mockModels.Issue.findAll.mockResolvedValue([]);
+    mockModels.Issue.findByPk.mockResolvedValue(null);
+
+    await issueService.getLastEdited(undefined, 10, undefined, 'series', 'ASC', false);
+    await issueService.getLastEdited(undefined, 10, undefined, 'publisher', 'DESC', false);
+
+    const firstCall = mockModels.Issue.findAll.mock.calls[0][0];
+    expect(firstCall.order).toEqual([
+      [{ model: mockModels.Series }, 'title', 'ASC'],
+      [{ model: mockModels.Series }, 'volume', 'ASC'],
+      ['id', 'ASC'],
+    ]);
+
+    const secondCall = mockModels.Issue.findAll.mock.calls[1][0];
+    expect(secondCall.order).toEqual([
+      [{ model: mockModels.Series }, { model: mockModels.Publisher }, 'name', 'DESC'],
+      [{ model: mockModels.Series }, 'title', 'DESC'],
+      [{ model: mockModels.Series }, 'volume', 'DESC'],
+      ['id', 'DESC'],
+    ]);
+  });
+
   it('should build tuple-safe cursor filter for lastEdited', async () => {
     const cursor = Buffer.from('42').toString('base64');
     const cursorDate = new Date('2026-02-12T10:00:00.000Z');
@@ -117,6 +189,25 @@ describe('IssueService', () => {
     );
     expect(andKey).toBeDefined();
     expect(Array.isArray(callArgs.where[andKey!])).toBe(true);
+  });
+
+  it('should always exclude orphan issues without series in lastEdited', async () => {
+    mockModels.Issue.findAll.mockResolvedValue([]);
+    mockModels.Issue.findByPk.mockResolvedValue(null);
+
+    await issueService.getLastEdited(undefined, 10, undefined, 'updatedAt', 'DESC', false);
+
+    const callArgs = mockModels.Issue.findAll.mock.calls[0][0];
+    expect(callArgs.where).toEqual(
+      expect.objectContaining({
+        fk_series: { [Op.ne]: null },
+      }),
+    );
+    expect(callArgs.include[0]).toEqual(
+      expect.objectContaining({
+        required: true,
+      }),
+    );
   });
 
   it('should batch stories/covers/features by issue ids', async () => {

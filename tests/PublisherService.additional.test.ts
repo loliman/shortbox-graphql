@@ -47,7 +47,7 @@ describe('PublisherService additional coverage', () => {
     expect((logger.error as jest.Mock).mock.calls[0][0]).toBe('error');
   });
 
-  it('adds tuple cursor condition for non-filter publisher search', async () => {
+  it('ignores cursor pagination for non-filter publisher search', async () => {
     mockModels.Publisher.findAll.mockResolvedValue([]);
 
     await service.findPublishers(
@@ -61,8 +61,7 @@ describe('PublisherService additional coverage', () => {
 
     const options = mockModels.Publisher.findAll.mock.calls[0][0];
     const andSymbol = Object.getOwnPropertySymbols(options.where).find((s) => String(s).includes('and'));
-    expect(andSymbol).toBeDefined();
-    expect(Array.isArray(options.where[andSymbol!])).toBe(true);
+    expect(andSymbol).toBeUndefined();
   });
 
   it('uses filter-based lookup path and maps issue publishers', async () => {
@@ -85,7 +84,6 @@ describe('PublisherService additional coverage', () => {
 
     const options = mockModels.Issue.findAll.mock.calls[0][0];
     expect(options.group).toEqual(['Series.fk_publisher']);
-    expect(options.limit).toBe(3);
   });
 
   it('throws when deleting unknown publisher', async () => {

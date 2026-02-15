@@ -5,7 +5,7 @@ const sequelize = new Sequelize(db, dbUser, dbPassword, {
   logging: false,
   host: process.env.DB_HOST || 'localhost',
   dialect: 'mysql',
-  port: parseInt(process.env.DB_PORT || '3336', 10),
+  port: parseInt(process.env.DB_PORT || '3306', 10),
   define: {
     charset: 'utf8',
     collate: 'utf8_general_ci',

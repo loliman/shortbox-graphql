@@ -101,14 +101,18 @@ export const resolvers: PublisherResolvers = {
     us: (parent) => !!(parent as PublisherParent).original,
     seriesCount: async (parent, _, { models }) =>
       await models.Series.count({ where: { fk_publisher: (parent as PublisherParent).id } }),
-    issueCount: async (parent, _, { models }) => {
-      let res = await models.Issue.findAll({
-        where: { '$Series.fk_publisher$': (parent as PublisherParent).id },
-        group: ['fk_series', 'number'],
-        include: [{ model: models.Series }],
-      });
-      return res.length;
-    },
+    issueCount: async (parent, _, { models }) =>
+      await models.Issue.count({
+        distinct: true,
+        col: 'id',
+        include: [
+          {
+            model: models.Series,
+            required: true,
+            where: { fk_publisher: (parent as PublisherParent).id },
+          },
+        ],
+      }),
     lastEdited: async (parent, { limit }, { models }) =>
       await models.Issue.findAll({
         include: [

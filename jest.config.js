@@ -15,7 +15,6 @@ module.exports = {
     'src/core/csrf.ts',
     'src/core/cursor.ts',
     'src/core/database.ts',
-    'src/core/migrations.ts',
     'src/core/server-config.ts',
     'src/core/server-request.ts',
     'src/services/FilterService.ts',

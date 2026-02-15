@@ -202,6 +202,7 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       Publisher: { findOne: jest.fn().mockResolvedValue({ id: 1 }) },
       Series: { count: jest.fn().mockResolvedValue(3) },
       Issue: {
+        count: jest.fn().mockResolvedValue(2),
         findAll: jest.fn().mockResolvedValue([{}, {}]),
         findOne: jest.fn().mockResolvedValue({ id: 1 }),
       },
@@ -972,11 +973,14 @@ describe('Smaller resolvers additional coverage', () => {
     await expect(
       storyResolvers.Story.appearances({ getAppearances: async () => ['x'] } as any, {} as any, {} as any),
     ).resolves.toEqual(['x']);
-    expect(storyResolvers.Story.exclusive({ onlyapp: true, firstapp: true } as any, {} as any, {} as any, {} as any)).toBe(
-      true,
-    );
     expect(
-      storyResolvers.Story.exclusive({ onlyapp: true, firstapp: false } as any, {} as any, {} as any, {} as any),
+      storyResolvers.Story.exclusive({ fk_parent: null } as any, {} as any, {} as any, {} as any),
+    ).toBe(true);
+    expect(
+      storyResolvers.Story.exclusive({ fk_parent: 7 } as any, {} as any, {} as any, {} as any),
+    ).toBe(false);
+    expect(
+      storyResolvers.Story.exclusive({ parent: { id: 7 } } as any, {} as any, {} as any, {} as any),
     ).toBe(false);
 
     expect(coverResolvers.Cover.id({ id: 1 } as any, {} as any, { loggedIn: false } as any)).toMatch(

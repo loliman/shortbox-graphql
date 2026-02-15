@@ -39,7 +39,6 @@
 - Neue Tests für:
   - `src/core/csrf.ts`
   - `src/core/database.ts`
-  - `src/core/migrations.ts`
   - `src/api/generic.ts`
   - `src/util/util.ts` (insb. `generateLabel`, `asyncForEach`)
 - `collectCoverageFrom` um diese Dateien erweitern.
@@ -61,13 +60,11 @@
     - `tests/util.generateLabel.test.ts`
     - `tests/core/csrf.test.ts`
     - `tests/core/database.test.ts`
-    - `tests/core/migrations.test.ts`
     - `tests/core/generic.test.ts`
   - Coverage-Scope erweitert in `jest.config.js` um:
     - `src/api/generic.ts`
     - `src/core/csrf.ts`
     - `src/core/database.ts`
-    - `src/core/migrations.ts`
     - `src/util/util.ts`
 - Messstand nach Welle 1 (14. Februar 2026):
   - `npm run test:coverage`: Statements `96.51%`, Branches `86.75%`, Functions `100%`, Lines `97.97%`.
@@ -87,4 +84,4 @@
   - SonarCloud Branch `upgrade` (`loliman_shortbox-graphql`):
     - `new_coverage`: `3.9` -> `10.6` -> `23.7` -> `27.6` -> `30.4`.
   - Sonar-Konfiguration erweitert:
-    - `sonar.coverage.exclusions=src/mock/**,src/migrations/**`
+    - `sonar.coverage.exclusions=src/mock/**,src/crawler/**`

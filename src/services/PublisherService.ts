@@ -1,8 +1,8 @@
 import models from '../models';
-import { FindOptions, Op, Sequelize, Transaction } from 'sequelize';
+import { FindOptions, Op, Transaction } from 'sequelize';
 import logger from '../util/logger';
 import type { Filter, PublisherInput } from '@loliman/shortbox-contract';
-import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
+import { buildConnectionFromNodes } from '../core/cursor';
 
 export class PublisherService {
   constructor(
@@ -44,8 +44,8 @@ export class PublisherService {
       name: string;
       original: boolean;
     };
-    const limit = first || 50;
-    const decodedCursor = decodeCursorId(after || undefined);
+    void first;
+    void after;
 
     if (!filter) {
       const where: WhereMap = { original: us };
@@ -55,16 +55,7 @@ export class PublisherService {
           ['id', 'ASC'],
         ],
         where,
-        limit: limit + 1,
       };
-
-      if (decodedCursor) {
-        where[Op.and] = [
-          Sequelize.literal(
-            `(name, id) > (SELECT name, id FROM Publisher WHERE id = ${decodedCursor})`,
-          ),
-        ];
-      }
 
       if (pattern && pattern !== '') {
         options.where = {
@@ -81,26 +72,12 @@ export class PublisherService {
         name: node.name,
         original: Boolean(node.original),
       }));
-      return buildConnectionFromNodes(nodes, limit, after || undefined);
+      return buildConnectionFromNodes(nodes, nodes.length, undefined);
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models, this.requestId);
       const options = filterService.getFilterOptions(loggedIn, filter);
-      const whereWithSymbols = options.where as WhereMap;
       options.group = ['Series.fk_publisher'];
-      options.limit = limit + 1;
-
-      if (decodedCursor) {
-        const currentAnd = Array.isArray(whereWithSymbols[Op.and])
-          ? (whereWithSymbols[Op.and] as unknown[])
-          : [];
-        whereWithSymbols[Op.and] = [
-          ...currentAnd,
-          Sequelize.literal(
-            `(Series->Publisher.name, Series->Publisher.id) > (SELECT name, id FROM Publisher WHERE id = ${decodedCursor})`,
-          ),
-        ];
-      }
 
       const res = await this.models.Issue.findAll(options);
       const nodes: PublisherNode[] = res.map((issue) => {
@@ -111,7 +88,7 @@ export class PublisherService {
           original: us,
         };
       });
-      return buildConnectionFromNodes(nodes, limit, after || undefined);
+      return buildConnectionFromNodes(nodes, nodes.length, undefined);
     }
   }
 

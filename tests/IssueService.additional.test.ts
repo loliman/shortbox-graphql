@@ -47,7 +47,7 @@ describe('IssueService additional coverage', () => {
     issueService = new IssueService(mockModels, 'req-1');
   });
 
-  it('uses FilterService options and appends cursor constraint in filtered findIssues', async () => {
+  it('uses FilterService options in filtered findIssues without cursor pagination', async () => {
     const cursor = Buffer.from('55').toString('base64');
     mockGetFilterOptions.mockReturnValue({ where: {}, order: [['id', 'ASC']] });
     mockModels.Issue.findAll.mockResolvedValue([]);
@@ -55,12 +55,54 @@ describe('IssueService additional coverage', () => {
     await issueService.findIssues(undefined, baseItem.series, 5, cursor, true, { us: true } as any);
 
     const options = mockModels.Issue.findAll.mock.calls[0][0];
-    expect(options.limit).toBe(6);
     const andKey = Object.getOwnPropertySymbols(options.where).find((k) =>
       String(k).includes('and'),
     );
-    expect(andKey).toBeDefined();
-    expect(Array.isArray(options.where[andKey!])).toBe(true);
+    expect(andKey).toBeUndefined();
+  });
+
+  it('applies pattern filter in non-filtered findIssues query options', async () => {
+    mockModels.Issue.findAll.mockResolvedValue([]);
+
+    await issueService.findIssues('12', baseItem.series, undefined, undefined, false, undefined);
+
+    const options = mockModels.Issue.findAll.mock.calls[0][0];
+    const orKey = Object.getOwnPropertySymbols(options.where).find((k) =>
+      String(k).includes('or'),
+    );
+    expect(orKey).toBeDefined();
+    expect(Array.isArray(options.where[orKey!])).toBe(true);
+  });
+
+  it('sorts filtered findIssues by number, then variant, then id', async () => {
+    mockGetFilterOptions.mockReturnValue({ where: {}, order: [['id', 'ASC']] });
+    mockModels.Issue.findAll.mockResolvedValue([
+      { id: 2, number: '1', variant: 'B' },
+      { id: 3, number: '1', variant: 'A' },
+      { id: 1, number: '1', variant: 'A' },
+    ]);
+
+    const result = await issueService.findIssues(undefined, baseItem.series, undefined, undefined, true, {
+      us: true,
+    } as any);
+    const ids = result.edges.map((edge: any) => edge.node.id);
+
+    expect(ids).toEqual([1, 3, 2]);
+  });
+
+  it('deduplicates filtered findIssues results by series and number', async () => {
+    mockGetFilterOptions.mockReturnValue({ where: {}, order: [['id', 'ASC']] });
+    mockModels.Issue.findAll.mockResolvedValue([
+      { id: 11, fk_series: 9, number: '1', variant: 'B' },
+      { id: 10, fk_series: 9, number: '1', variant: '' },
+      { id: 12, fk_series: 9, number: '2', variant: '' },
+    ]);
+
+    const result = await issueService.findIssues(undefined, baseItem.series, undefined, undefined, true, {
+      us: true,
+    } as any);
+
+    expect(result.edges.map((edge: any) => edge.node.id)).toEqual([10, 12]);
   });
 
   it('handles CRUD error paths and success paths', async () => {
@@ -171,4 +213,3 @@ describe('IssueService additional coverage', () => {
     expect(errorSpy).toHaveBeenCalled();
   });
 });
-

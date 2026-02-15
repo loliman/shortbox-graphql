@@ -51,7 +51,7 @@ describe('database core', () => {
         logging: false,
         host: 'localhost',
         dialect: 'mysql',
-        port: 3336,
+        port: 3306,
       }),
     );
 
