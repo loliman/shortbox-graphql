@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"      # oder pnpm, yarn
+    directory: "/"                 # Root oder /frontend, /backend
+    schedule:
+      interval: "weekly"           # daily/weekly/monthly
+    open-pull-requests-limit: 5    # Max 5 PRs offen
+    rebase-strategy: "auto"        # Auto-rebase
+    labels: ["dependencies"]       # Auto-Label
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"    # Für Dockerfiles
+    directory: "/"
+    schedule:
+      interval: "monthly"
