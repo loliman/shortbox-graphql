@@ -807,6 +807,143 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       ),
     ).toBeNull();
   });
+
+  it('covers additional issue resolver fallback and parsing branches', async () => {
+    const parent = { id: 4, fk_series: 8, number: '1' } as any;
+
+    const issueStoriesLoader = {
+      load: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 910 }]),
+    };
+    const issueVariantsLoader = {
+      load: jest.fn().mockResolvedValue([
+        { id: 10, variant: 'A' },
+        { id: 11, variant: '' },
+      ]),
+    };
+
+    await expect(
+      issueResolvers.Issue.stories(parent, {} as any, {
+        issueStoriesLoader,
+        issueVariantsLoader,
+      } as any),
+    ).resolves.toEqual([{ id: 910 }]);
+    expect(issueVariantsLoader.load).toHaveBeenCalledWith('8::1');
+    expect(issueStoriesLoader.load).toHaveBeenNthCalledWith(1, 4);
+    expect(issueStoriesLoader.load).toHaveBeenNthCalledWith(2, 11);
+
+    const issueStoriesLoaderWithModelFallback = {
+      load: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 920 }]),
+    };
+    const models = {
+      Issue: {
+        findAll: jest.fn().mockResolvedValue([
+          { id: 5, variant: 'B' },
+          { id: 6, variant: '' },
+        ]),
+      },
+    } as any;
+    await expect(
+      issueResolvers.Issue.stories(parent, {} as any, {
+        issueStoriesLoader: issueStoriesLoaderWithModelFallback,
+        issueVariantsLoader: { load: jest.fn().mockResolvedValue([]) },
+        models,
+      } as any),
+    ).resolves.toEqual([{ id: 920 }]);
+    expect(models.Issue.findAll).toHaveBeenCalled();
+
+    await expect(
+      issueResolvers.Issue.stories(
+        { id: 1, fk_series: null, number: '' } as any,
+        {} as any,
+        { issueStoriesLoader: { load: jest.fn().mockResolvedValue([]) } } as any,
+      ),
+    ).resolves.toEqual([]);
+
+    await expect(
+      issueResolvers.Issue.cover(
+        { id: 4, Covers: [{ id: 701 }] } as any,
+        {} as any,
+        { issueCoverLoader: { load: jest.fn() } } as any,
+      ),
+    ).resolves.toEqual({ id: 701 });
+    await expect(
+      issueResolvers.Issue.cover(
+        { id: 4, covers: [{ id: 702 }] } as any,
+        {} as any,
+        { issueCoverLoader: { load: jest.fn() } } as any,
+      ),
+    ).resolves.toEqual({ id: 702 });
+    await expect(
+      issueResolvers.Issue.cover(
+        { id: 4, comicguideid: 91529 } as any,
+        {} as any,
+        { issueCoverLoader: { load: jest.fn().mockResolvedValue(null) } } as any,
+      ),
+    ).resolves.toEqual({
+      fk_issue: 4,
+      issue: { id: 4, comicguideid: 91529 },
+      url: 'https://www.comicguide.de/pics/large/91529.jpg',
+    });
+    await expect(
+      issueResolvers.Issue.cover(
+        { id: 4, comicguideid: ' 00042 ' } as any,
+        {} as any,
+        { issueCoverLoader: { load: jest.fn().mockResolvedValue(null) } } as any,
+      ),
+    ).resolves.toEqual({
+      fk_issue: 4,
+      issue: { id: 4, comicguideid: ' 00042 ' },
+      url: 'https://www.comicguide.de/pics/large/42.jpg',
+    });
+    await expect(
+      issueResolvers.Issue.cover(
+        { id: 4, comicguideid: '0' } as any,
+        {} as any,
+        { issueCoverLoader: { load: jest.fn().mockResolvedValue(null) } } as any,
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      issueResolvers.Issue.cover(
+        { id: 4, comicguideid: 'not-a-number' } as any,
+        {} as any,
+        { issueCoverLoader: { load: jest.fn().mockResolvedValue(null) } } as any,
+      ),
+    ).resolves.toBeNull();
+
+    expect(
+      issueResolvers.Issue.createdAt(
+        { createdAt: new Date('2026-02-10T11:14:00.000Z') } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
+    ).toBe('2026-02-10T11:14:00.000Z');
+    const updatedAtFromTimestamp = issueResolvers.Issue.updatedAt(
+      { updatedAt: Date.parse('2026-02-10T11:14:00.000Z') } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    ) as string | null;
+    expect(updatedAtFromTimestamp).toBe('2026-02-10T11:14:00.000Z');
+    expect(
+      issueResolvers.Issue.createdAt({ createdAt: {} } as any, {} as any, {} as any, {} as any),
+    ).toBeNull();
+    expect(
+      issueResolvers.Issue.updatedAt(
+        { updatedAt: '31.13.2026 10:10' } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
+    ).toBeNull();
+  });
 });
 
 describe('Smaller resolvers additional coverage', () => {
@@ -1051,5 +1188,58 @@ describe('Smaller resolvers additional coverage', () => {
     await expect(
       featureResolvers.Feature.individuals({ getIndividuals: async () => ['p'] } as any, {} as any, {} as any),
     ).resolves.toEqual(['p']);
+  });
+
+  it('covers additional cover resolver id/url branches', async () => {
+    const issueLoader = { load: jest.fn().mockResolvedValue({ comicguideid: '0012' }) };
+
+    const loggedInCoverId = coverResolvers.Cover.id(
+      { id: 123 } as any,
+      {} as any,
+      { loggedIn: true } as any,
+      {} as any,
+    );
+    expect(loggedInCoverId).toBe('123');
+
+    const fallbackCoverId = coverResolvers.Cover.id(
+      { id: Number.NaN } as any,
+      {} as any,
+      { loggedIn: true } as any,
+      {} as any,
+    );
+    expect(fallbackCoverId).toMatch(/^\d+$/);
+
+    await expect(
+      coverResolvers.Cover.url(
+        { fk_issue: 1, url: ' https://example.com/cover.jpg ' } as any,
+        {} as any,
+        { issueLoader } as any,
+      ),
+    ).resolves.toBe('https://example.com/cover.jpg');
+
+    await expect(
+      coverResolvers.Cover.url(
+        { fk_issue: 1, Issue: { comicguideid: 4711 } } as any,
+        {} as any,
+        { issueLoader } as any,
+      ),
+    ).resolves.toBe('https://www.comicguide.de/pics/large/4711.jpg');
+
+    await expect(
+      coverResolvers.Cover.url(
+        { fk_issue: 1, issue: { comicguideid: '0' } } as any,
+        {} as any,
+        { issueLoader } as any,
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      coverResolvers.Cover.url({ fk_issue: 1 } as any, {} as any, { issueLoader } as any),
+    ).resolves.toBe('https://www.comicguide.de/pics/large/12.jpg');
+    expect(issueLoader.load).toHaveBeenCalledWith(1);
+
+    await expect(
+      coverResolvers.Cover.url({ fk_issue: 1 } as any, {} as any, {} as any),
+    ).resolves.toBeNull();
   });
 });
