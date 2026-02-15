@@ -1,6 +1,6 @@
-import {Model, ModelObject} from 'objection';
-import {Story} from './Story';
-import {Base} from './Base';
+import { Model, ModelObject } from 'objection';
+import { Story } from './Story';
+import { Base } from './Base';
 
 export class Appearance extends Base {
   static tableName = 'appearance';
@@ -17,9 +17,9 @@ export class Appearance extends Base {
     required: ['name', 'type'],
 
     properties: {
-      id: {type: 'integer'},
-      name: {type: 'string', minLength: 1, maxLength: 255},
-      type: {type: 'string', minLength: 1, maxLength: 255},
+      id: { type: 'integer' },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      type: { type: 'string', minLength: 1, maxLength: 255 },
     },
   };
 

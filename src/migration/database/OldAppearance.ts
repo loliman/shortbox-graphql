@@ -1,6 +1,6 @@
-import {Model} from 'objection';
-import {Base} from './Base';
-import {Story} from '../../database/Story';
+import { Model } from 'objection';
+import { Base } from './Base';
+import { Story } from '../../database/Story';
 
 const unique = require('objection-unique')({
   fields: [['name', 'type']],
@@ -22,9 +22,9 @@ export class OldAppearance extends unique(Base) {
     required: ['id', 'name', 'type'],
 
     properties: {
-      id: {type: 'integer'},
-      name: {type: 'string', minLength: 1, maxLength: 255},
-      type: {type: 'string', minLength: 1, maxLength: 255},
+      id: { type: 'integer' },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      type: { type: 'string', minLength: 1, maxLength: 255 },
     },
   };
 

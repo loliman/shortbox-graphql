@@ -1,7 +1,7 @@
-import {Cover} from '../database/Cover';
-import {Issue} from '../database/Issue';
-import {Individual} from '../database/Individual';
-import {gql} from 'apollo-server';
+import { Cover } from '../database/Cover';
+import { Issue } from '../database/Issue';
+import { Individual } from '../database/Individual';
+import { gql } from 'apollo-server';
 
 export const typeDef = gql`
   input CoverInput {

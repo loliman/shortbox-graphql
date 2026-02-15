@@ -1,8 +1,8 @@
-import {Appearance} from '../database/Appearance';
-import {gql} from 'apollo-server';
-import {StringUtils} from '../util/StringUtils';
-import {Story} from '../database/Story';
-import {AppearanceService} from '../service/AppearanceService';
+import { Appearance } from '../database/Appearance';
+import { gql } from 'apollo-server';
+import { StringUtils } from '../util/StringUtils';
+import { Story } from '../database/Story';
+import { AppearanceService } from '../service/AppearanceService';
 
 const service = new AppearanceService();
 
@@ -42,7 +42,7 @@ export const resolvers = {
   Query: {
     apps: async (
       _: any,
-      {pattern, type, offset}: {pattern: string; type: string; offset: number}
+      { pattern, type, offset }: { pattern: string; type: string; offset: number },
     ) => await service.getAppearances(pattern, type, offset),
   },
 };

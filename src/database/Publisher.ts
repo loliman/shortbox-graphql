@@ -1,7 +1,7 @@
-import {Model, ModelObject} from 'objection';
-import {Base} from './Base';
-import {Series} from './Series';
-import {Issue} from './Issue';
+import { Model, ModelObject } from 'objection';
+import { Base } from './Base';
+import { Series } from './Series';
+import { Issue } from './Issue';
 
 export class Publisher extends Base {
   static tableName = 'publisher';
@@ -27,24 +27,22 @@ export class Publisher extends Base {
   }
 
   async firstIssue(): Promise<Issue> {
-    return this.publisherToIssueRelation()
-      .orderBy(['releasedate', 'number', 'format'])
-      .first();
+    return this.publisherToIssueRelation().orderBy(['releasedate', 'number', 'format']).first();
   }
 
   async lastIssue(): Promise<Issue> {
     return this.publisherToIssueRelation()
       .orderBy([
-        {column: 'releasedate', order: 'desc'},
-        {column: 'number', order: 'desc'},
-        {column: 'format', order: 'desc'},
+        { column: 'releasedate', order: 'desc' },
+        { column: 'number', order: 'desc' },
+        { column: 'format', order: 'desc' },
       ])
       .first();
   }
 
   async lastEditedIssue(): Promise<Issue[]> {
     return this.publisherToIssueRelation()
-      .orderBy([{column: 'series:issues.updatedAt', order: 'desc'}])
+      .orderBy([{ column: 'series:issues.updatedAt', order: 'desc' }])
       .limit(25);
   }
 
@@ -69,12 +67,12 @@ export class Publisher extends Base {
     required: ['name', 'us'],
 
     properties: {
-      id: {type: 'integer'},
-      name: {type: 'string', minLength: 1, maxLength: 255},
-      us: {type: 'integer'},
-      addinfo: {type: 'string', minLength: 0, maxLength: 1000},
-      startyear: {type: 'integer'},
-      endyear: {type: 'integer'},
+      id: { type: 'integer' },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      us: { type: 'integer' },
+      addinfo: { type: 'string', minLength: 0, maxLength: 1000 },
+      startyear: { type: 'integer' },
+      endyear: { type: 'integer' },
     },
   };
 

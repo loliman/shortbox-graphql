@@ -1,9 +1,9 @@
-import {Model} from 'objection';
-import {Base} from './Base';
-import {OldFeature} from './OldFeature';
-import {OldStory} from './OldStory';
-import {OldCover} from './OldCover';
-import {OldIssue} from './OldIssue';
+import { Model } from 'objection';
+import { Base } from './Base';
+import { OldFeature } from './OldFeature';
+import { OldStory } from './OldStory';
+import { OldCover } from './OldCover';
+import { OldIssue } from './OldIssue';
 
 const unique = require('objection-unique')({
   fields: [['name']],
@@ -26,8 +26,8 @@ export class OldIndividual extends unique(Base) {
     required: ['name'],
 
     properties: {
-      id: {type: 'integer'},
-      name: {type: 'string', minLength: 1, maxLength: 255},
+      id: { type: 'integer' },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
     },
   };
 

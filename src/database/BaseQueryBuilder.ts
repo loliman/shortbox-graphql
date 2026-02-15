@@ -1,4 +1,4 @@
-import {Model, QueryBuilder} from 'objection';
+import { Model, QueryBuilder } from 'objection';
 
 export class BaseQueryBuilder extends QueryBuilder<any> {
   async findOrInsert(model: Model) {

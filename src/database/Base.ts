@@ -1,5 +1,5 @@
-import {Model} from 'objection';
-import {BaseQueryBuilder} from './BaseQueryBuilder';
+import { Model } from 'objection';
+import { BaseQueryBuilder } from './BaseQueryBuilder';
 
 // @ts-ignore
 export class Base extends Model {
@@ -15,17 +15,11 @@ export class Base extends Model {
   }
 
   $beforeInsert() {
-    this.createdAt = new Date()
-      .toISOString()
-      .replace('T', ' ')
-      .replace('Z', '');
+    this.createdAt = new Date().toISOString().replace('T', ' ').replace('Z', '');
     this.updatedAt = this.createdAt;
   }
 
   $beforeUpdate() {
-    this.updatedAt = new Date()
-      .toISOString()
-      .replace('T', ' ')
-      .replace('Z', '');
+    this.updatedAt = new Date().toISOString().replace('T', ' ').replace('Z', '');
   }
 }

@@ -1,7 +1,7 @@
-import {Model, ModelObject} from 'objection';
-import {Base} from './Base';
-import {Issue} from './Issue';
-import {Individual} from './Individual';
+import { Model, ModelObject } from 'objection';
+import { Base } from './Base';
+import { Issue } from './Issue';
+import { Individual } from './Individual';
 
 export class Feature extends Base {
   static tableName = 'feature';
@@ -19,10 +19,10 @@ export class Feature extends Base {
     required: ['id', 'title', 'number', 'addinfo'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 1, maxLength: 255},
-      number: {type: 'integer'},
-      addinfo: {type: 'string', minLength: 1, maxLength: 1000},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 1, maxLength: 255 },
+      number: { type: 'integer' },
+      addinfo: { type: 'string', minLength: 1, maxLength: 1000 },
     },
   };
 

@@ -1,7 +1,7 @@
-import {Model} from 'objection';
-import {Base} from './Base';
-import {OldIndividual} from './OldIndividual';
-import {OldIssue} from './OldIssue';
+import { Model } from 'objection';
+import { Base } from './Base';
+import { OldIndividual } from './OldIndividual';
+import { OldIssue } from './OldIssue';
 
 const unique = require('objection-unique')({
   fields: ['fk_parent', 'fk_issue', 'number'],
@@ -26,10 +26,10 @@ export class OldCover extends unique(Base) {
     required: ['id', 'url', 'number', 'addinfo'],
 
     properties: {
-      id: {type: 'integer'},
-      url: {type: 'string', minLength: 1, maxLength: 1000},
-      number: {type: 'integer'},
-      addinfo: {type: 'string', minLength: 1, maxLength: 1000},
+      id: { type: 'integer' },
+      url: { type: 'string', minLength: 1, maxLength: 1000 },
+      number: { type: 'integer' },
+      addinfo: { type: 'string', minLength: 1, maxLength: 1000 },
     },
   };
 

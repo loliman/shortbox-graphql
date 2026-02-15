@@ -1,9 +1,9 @@
-import {Series} from '../database/Series';
-import {Issue} from '../database/Issue';
-import {Publisher} from '../database/Publisher';
-import {gql} from 'apollo-server';
-import {SeriesService} from '../service/SeriesService';
-import {resolvePublisher, resolveSeries} from './Resolver';
+import { Series } from '../database/Series';
+import { Issue } from '../database/Issue';
+import { Publisher } from '../database/Publisher';
+import { gql } from 'apollo-server';
+import { SeriesService } from '../service/SeriesService';
+import { resolvePublisher, resolveSeries } from './Resolver';
 
 const service = new SeriesService();
 
@@ -15,12 +15,7 @@ export const typeDef = gql`
   }
 
   extend type Query {
-    series(
-      pattern: String
-      publisher: PublisherInput!
-      offset: Int
-      filter: Filter
-    ): [Series]
+    series(pattern: String, publisher: PublisherInput!, offset: Int, filter: Filter): [Series]
     seriesd(series: SeriesInput!): Series
   }
 
@@ -62,15 +57,11 @@ export const resolvers = {
     addinfo: (parent: Series): string => parent.addinfo,
     genre: (parent: Series): string | undefined => parent.genre,
     issues: (parent: Series): Issue[] => parent.issues,
-    issueCount: async (parent: Series): Promise<number> =>
-      await parent.issueCount(),
-    firstIssue: async (parent: Series): Promise<Issue> =>
-      await parent.firstIssue(),
-    lastIssue: async (parent: Series): Promise<Issue> =>
-      await parent.lastIssue(),
+    issueCount: async (parent: Series): Promise<number> => await parent.issueCount(),
+    firstIssue: async (parent: Series): Promise<Issue> => await parent.firstIssue(),
+    lastIssue: async (parent: Series): Promise<Issue> => await parent.lastIssue(),
     active: (parent: Series): boolean => !(parent.startyear && parent.endyear),
-    publisher: async (parent: Series): Promise<Publisher> =>
-      await parent.publisher,
+    publisher: async (parent: Series): Promise<Publisher> => await parent.publisher,
   },
   Query: {
     series: async (
@@ -80,16 +71,11 @@ export const resolvers = {
         publisher,
         offset,
         filter,
-      }: {pattern: string; publisher: Publisher; offset: number; filter: string}
+      }: { pattern: string; publisher: Publisher; offset: number; filter: string },
     ): Promise<Series[]> => {
-      return await service.getSeries(
-        pattern,
-        await resolvePublisher(publisher),
-        offset,
-        filter
-      );
+      return await service.getSeries(pattern, await resolvePublisher(publisher), offset, filter);
     },
-    seriesd: async (_: void, {series}: {series: Series}) =>
+    seriesd: async (_: void, { series }: { series: Series }) =>
       await service.getSeriesDetails(await resolveSeries(series)),
   } /*,TODO
     Mutation: {

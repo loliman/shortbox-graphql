@@ -1,9 +1,9 @@
-import {Model, ModelObject} from 'objection';
-import {Base} from './Base';
-import {Feature} from './Feature';
-import {Story} from './Story';
-import {Cover} from './Cover';
-import {Issue} from './Issue';
+import { Model, ModelObject } from 'objection';
+import { Base } from './Base';
+import { Feature } from './Feature';
+import { Story } from './Story';
+import { Cover } from './Cover';
+import { Issue } from './Issue';
 
 export class Individual extends Base {
   static tableName = 'individual';
@@ -21,8 +21,8 @@ export class Individual extends Base {
     required: ['name'],
 
     properties: {
-      id: {type: 'integer'},
-      name: {type: 'string', minLength: 1, maxLength: 255},
+      id: { type: 'integer' },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
     },
   };
 

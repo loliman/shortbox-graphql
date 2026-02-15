@@ -1,4 +1,4 @@
-import {asyncForEach} from './util';
+import { asyncForEach } from './util';
 
 /*export async function update(stories, covers) {
     await asyncForEach(stories, async story => {

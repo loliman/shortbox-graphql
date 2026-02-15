@@ -1,6 +1,6 @@
-import {Individual} from '../database/Individual';
-import {gql} from 'apollo-server';
-import {IndividualService} from '../service/IndividualService';
+import { Individual } from '../database/Individual';
+import { gql } from 'apollo-server';
+import { IndividualService } from '../service/IndividualService';
 
 const service = new IndividualService();
 
@@ -30,7 +30,7 @@ export const resolvers = {
   Query: {
     individuals: async (
       _: any,
-      {pattern, type, offset}: {pattern: string; type: string; offset: number}
+      { pattern, type, offset }: { pattern: string; type: string; offset: number },
     ) => await service.getIndividuals(pattern, type, offset),
   },
 };

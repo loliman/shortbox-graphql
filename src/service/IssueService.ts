@@ -1,21 +1,17 @@
-import {Series} from '../database/Series';
-import {Issue} from '../database/Issue';
-import {raw, Transaction} from 'objection';
-import {asyncForEach} from '../util/util';
-import {Story} from '../database/Story';
-import {Publisher} from '../database/Publisher';
-import {Individual} from '../database/Individual';
-import {Arc} from '../database/Arc';
-import {Appearance} from '../database/Appearance';
-import {knex} from '../core/database';
-import {MarvelFandomCrawler} from '../core/crawler/MarvelFandomCrawler';
+import { Series } from '../database/Series';
+import { Issue } from '../database/Issue';
+import { raw, Transaction } from 'objection';
+import { asyncForEach } from '../util/util';
+import { Story } from '../database/Story';
+import { Publisher } from '../database/Publisher';
+import { Individual } from '../database/Individual';
+import { Arc } from '../database/Arc';
+import { Appearance } from '../database/Appearance';
+import { knex } from '../core/database';
+import { MarvelFandomCrawler } from '../core/crawler/MarvelFandomCrawler';
 
 export class IssueService {
-  async getIssues(
-    series: Series,
-    offset: number,
-    filter: string
-  ): Promise<Issue[]> {
+  async getIssues(series: Series, offset: number, filter: string): Promise<Issue[]> {
     let query;
 
     if (!filter) query = await IssueService.getIssuesNoFilter(series, offset);
@@ -24,10 +20,7 @@ export class IssueService {
     return query;
   }
 
-  private static async getIssuesNoFilter(
-    series: Series,
-    offset: number
-  ): Promise<Issue[]> {
+  private static async getIssuesNoFilter(series: Series, offset: number): Promise<Issue[]> {
     const publisher = await series.publisher;
 
     return Issue.query()
@@ -37,7 +30,7 @@ export class IssueService {
         raw('fromRoman(number) as numberfromroman'),
         'number',
         'releasedate',
-        'fk_series'
+        'fk_series',
       )
       .min('issue.title as title')
       .min('format as format')
@@ -52,9 +45,9 @@ export class IssueService {
         'numberfromroman',
         'releasedate',
         'number',
-        {column: 'variant', order: 'desc'},
-        {column: 'title', order: 'desc'},
-        {column: 'format', order: 'desc'},
+        { column: 'variant', order: 'desc' },
+        { column: 'title', order: 'desc' },
+        { column: 'format', order: 'desc' },
       ])
       .groupBy(['fk_series', 'number'])
       .offset(offset)
@@ -65,7 +58,7 @@ export class IssueService {
   private static getIssuesWithFilter(
     series: Series,
     offset: number,
-    filter: string
+    filter: string,
   ): Promise<Issue[]> {
     //TODO
     /*
@@ -92,7 +85,7 @@ export class IssueService {
       .first()
       .withGraphFetched(
         '[arcs, individuals, features.[individuals], cover, series.[publisher],' +
-          'stories.[reprintOf.[issue.[series.[publisher]]],reprints.[issue.[series.[publisher]]],individuals,appearances,parent.[individuals,appearances,issue.[stories,series.[publisher],arcs,individuals]],children.[individuals,appearances,issue.[series.[publisher]]]]]'
+          'stories.[reprintOf.[issue.[series.[publisher]]],reprints.[issue.[series.[publisher]]],individuals,appearances,parent.[individuals,appearances,issue.[stories,series.[publisher],arcs,individuals]],children.[individuals,appearances,issue.[series.[publisher]]]]]',
       );
   }
 
@@ -144,9 +137,9 @@ export class IssueService {
           .crawl(
             story.parent.issue.number,
             story.parent.issue.series.title,
-            story.parent.issue.series.volume
+            story.parent.issue.series.volume,
           )
-          .catch(e => {
+          .catch((e) => {
             throw e;
           });
 
@@ -304,7 +297,7 @@ export class IssueService {
       issue.individuals,
       (o: Individual) => o.name,
       this.dbFnIndividuals,
-      trx
+      trx,
     );
 
     await this.markDuplicates(
@@ -312,7 +305,7 @@ export class IssueService {
       issue.arcs,
       (o: Arc) => o.title + ' ' + o.type,
       this.dbFnArcs,
-      trx
+      trx,
     );
 
     if (issue.cover) {
@@ -321,7 +314,7 @@ export class IssueService {
         issue.cover.individuals,
         (o: Individual) => o.name,
         this.dbFnIndividuals,
-        trx
+        trx,
       );
     }
 
@@ -331,7 +324,7 @@ export class IssueService {
         story.individuals,
         (o: Individual) => o.name,
         this.dbFnIndividuals,
-        trx
+        trx,
       );
 
       await this.markDuplicates(
@@ -339,7 +332,7 @@ export class IssueService {
         story.appearances,
         (o: Appearance) => o.name + ' ' + o.type,
         this.dbFnAppearance,
-        trx
+        trx,
       );
     });
 
@@ -347,9 +340,7 @@ export class IssueService {
   }
 
   dbFnIndividuals = async (o: Individual, trx: Transaction) => {
-    let individual: Individual = await Individual.query(trx)
-      .where('name', o.name)
-      .first();
+    let individual: Individual = await Individual.query(trx).where('name', o.name).first();
     return individual ? individual.id : individual;
   };
 
@@ -362,10 +353,7 @@ export class IssueService {
   };
 
   dbFnArcs = async (o: Arc, trx: Transaction) => {
-    let arc: Arc = await Arc.query(trx)
-      .where('title', o.title)
-      .where('type', o.type)
-      .first();
+    let arc: Arc = await Arc.query(trx).where('title', o.title).where('type', o.type).first();
     return arc ? arc.id : arc;
   };
 
@@ -374,7 +362,7 @@ export class IssueService {
     array: any[],
     keyFn: any,
     dbFn: any,
-    trx: Transaction
+    trx: Transaction,
   ) {
     await asyncForEach(array, async (o: any, i: number) => {
       let idFromDb: number = await dbFn(o, trx);
@@ -412,7 +400,7 @@ export class IssueService {
         raw('cast(number as unsigned) as numberasint'),
         raw('fromRoman(number) as numberfromroman'),
         'number',
-        'releasedate'
+        'releasedate',
       )
       .min('issue.title as title')
       .where('fk_series', issue.series.id)
@@ -426,7 +414,7 @@ export class IssueService {
       .where('issue.number', parent.number)
       .where('series.id', parent.series.id)
       .withGraphFetched(
-        '[cover.[parent.[individuals],children.[individuals]], series.[publisher]]'
+        '[cover.[parent.[individuals],children.[individuals]], series.[publisher]]',
       );
   }
 }

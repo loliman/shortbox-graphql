@@ -1,9 +1,9 @@
-import {Publisher} from '../database/Publisher';
-import {Issue} from '../database/Issue';
-import {gql} from 'apollo-server';
-import {PublisherService} from '../service/PublisherService';
-import {Series} from '../database/Series';
-import {resolvePublisher} from './Resolver';
+import { Publisher } from '../database/Publisher';
+import { Issue } from '../database/Issue';
+import { gql } from 'apollo-server';
+import { PublisherService } from '../service/PublisherService';
+import { Series } from '../database/Series';
+import { resolvePublisher } from './Resolver';
 
 const service: PublisherService = new PublisherService();
 
@@ -15,12 +15,7 @@ export const typeDef = gql`
   }
 
   extend type Query {
-    publishers(
-      pattern: String
-      us: Boolean!
-      offset: Int!
-      filter: Filter
-    ): [Publisher]
+    publishers(pattern: String, us: Boolean!, offset: Int!, filter: Filter): [Publisher]
     publisher(publisher: PublisherInput!): Publisher
   }
 
@@ -56,18 +51,13 @@ export const resolvers = {
     name: (parent: Publisher): string => parent.name,
     us: (parent: Publisher): boolean => parent.us === 1,
     series: (parent: Publisher): Series[] => parent.series,
-    seriesCount: async (parent: Publisher): Promise<number> =>
-      await parent.seriesCount(),
-    issueCount: async (parent: Publisher): Promise<number> =>
-      await parent.issueCount(),
-    firstIssue: async (parent: Publisher): Promise<Issue> =>
-      await parent.firstIssue(),
-    lastIssue: async (parent: Publisher): Promise<Issue> =>
-      await parent.lastIssue(),
+    seriesCount: async (parent: Publisher): Promise<number> => await parent.seriesCount(),
+    issueCount: async (parent: Publisher): Promise<number> => await parent.issueCount(),
+    firstIssue: async (parent: Publisher): Promise<Issue> => await parent.firstIssue(),
+    lastIssue: async (parent: Publisher): Promise<Issue> => await parent.lastIssue(),
     startyear: (parent: Publisher): number | undefined => parent.startyear,
     endyear: (parent: Publisher): number | undefined => parent.endyear,
-    active: (parent: Publisher): boolean =>
-      !(parent.startyear && parent.endyear),
+    active: (parent: Publisher): boolean => !(parent.startyear && parent.endyear),
     addinfo: (parent: Publisher): string | undefined => parent.addinfo,
   },
   Query: {
@@ -78,11 +68,11 @@ export const resolvers = {
         us,
         offset,
         filter,
-      }: {pattern: string; us: boolean; offset: number; filter: string}
+      }: { pattern: string; us: boolean; offset: number; filter: string },
     ): Promise<Publisher[]> => {
       return await service.getPublishers(pattern, us, offset, filter);
     },
-    publisher: async (_: void, {publisher}: {publisher: Publisher}) =>
+    publisher: async (_: void, { publisher }: { publisher: Publisher }) =>
       await service.getPublisherDetails(await resolvePublisher(publisher)),
   } /*, TODO
     Mutation: {

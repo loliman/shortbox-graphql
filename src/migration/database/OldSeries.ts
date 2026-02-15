@@ -1,7 +1,7 @@
-import {Model} from 'objection';
-import {Base} from './Base';
-import {OldIssue} from './OldIssue';
-import {OldPublisher} from './OldPublisher';
+import { Model } from 'objection';
+import { Base } from './Base';
+import { OldIssue } from './OldIssue';
+import { OldPublisher } from './OldPublisher';
 
 const unique = require('objection-unique')({
   fields: [['title', 'volume', 'fk_publisher']],
@@ -26,12 +26,12 @@ export class OldSeries extends unique(Base) {
     required: ['title', 'volume', 'addinfo'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 1, maxLength: 255},
-      volume: {type: 'integer'},
-      addinfo: {type: 'string', minLength: 0, maxLength: 1000},
-      startyear: {type: 'integer'},
-      endyear: {type: 'integer'},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 1, maxLength: 255 },
+      volume: { type: 'integer' },
+      addinfo: { type: 'string', minLength: 0, maxLength: 1000 },
+      startyear: { type: 'integer' },
+      endyear: { type: 'integer' },
     },
   };
 

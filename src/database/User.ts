@@ -1,5 +1,5 @@
-import {Base} from './Base';
-import {ModelObject} from 'objection';
+import { Base } from './Base';
+import { ModelObject } from 'objection';
 
 export class User extends Base {
   static tableName = 'user';
@@ -14,10 +14,10 @@ export class User extends Base {
     required: ['id', 'name', 'password'],
 
     properties: {
-      id: {type: 'integer'},
-      name: {type: 'string', minLength: 1, maxLength: 255},
-      password: {type: 'string', minLength: 1, maxLength: 255},
-      sessionid: {type: 'string', minLength: 1, maxLength: 255},
+      id: { type: 'integer' },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      password: { type: 'string', minLength: 1, maxLength: 255 },
+      sessionid: { type: 'string', minLength: 1, maxLength: 255 },
     },
   };
 }

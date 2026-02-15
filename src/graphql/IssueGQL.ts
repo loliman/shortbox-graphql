@@ -1,13 +1,13 @@
-import {Issue} from '../database/Issue';
-import {Series} from '../database/Series';
-import {Individual} from '../database/Individual';
-import {Arc} from '../database/Arc';
-import {Cover} from '../database/Cover';
-import {Story} from '../database/Story';
-import {Feature} from '../database/Feature';
-import {gql} from 'apollo-server';
-import {IssueService} from '../service/IssueService';
-import {resolveIssue, resolveSeries} from './Resolver';
+import { Issue } from '../database/Issue';
+import { Series } from '../database/Series';
+import { Individual } from '../database/Individual';
+import { Arc } from '../database/Arc';
+import { Cover } from '../database/Cover';
+import { Story } from '../database/Story';
+import { Feature } from '../database/Feature';
+import { gql } from 'apollo-server';
+import { IssueService } from '../service/IssueService';
+import { resolveIssue, resolveSeries } from './Resolver';
 
 const service = new IssueService();
 
@@ -82,8 +82,7 @@ export const resolvers = {
     number: (parent: Issue): string => parent.number,
     format: (parent: Issue): string => parent.format,
     series: (parent: Issue): Series => parent.series,
-    variants: async (parent: Issue): Promise<Issue[]> =>
-      await service.getVariants(parent),
+    variants: async (parent: Issue): Promise<Issue[]> => await service.getVariants(parent),
     variant: (parent: Issue): string | undefined => parent.variant,
     features: (parent: Issue): Feature[] => parent.features,
     stories: (parent: Issue): Story[] => parent.stories,
@@ -93,8 +92,7 @@ export const resolvers = {
     price: (parent: Issue): number | undefined => parent.price,
     currency: (parent: Issue): string | undefined => parent.currency,
     pages: (parent: Issue): number | undefined => parent.pages,
-    releasedate: (parent: Issue): Date | undefined =>
-      new Date(parent.releasedate),
+    releasedate: (parent: Issue): Date | undefined => new Date(parent.releasedate),
     verified: (parent: Issue): number | undefined => parent.verified,
     edited: (parent: Issue): number | undefined => parent.edited,
     addinfo: (parent: Issue): string => parent.addinfo,
@@ -102,25 +100,20 @@ export const resolvers = {
     individuals: (parent: Issue): Individual[] => parent.individuals,
     createdAt: (parent: Issue): Date => new Date(parent.createdAt),
     updatedAt: (parent: Issue): Date => new Date(parent.updatedAt),
-    next: async (parent: Issue): Promise<Issue | null> =>
-      await service.getNextIssue(parent),
+    next: async (parent: Issue): Promise<Issue | null> => await service.getNextIssue(parent),
     previous: async (parent: Issue): Promise<Issue | null> =>
       await service.getPreviousIssue(parent),
   },
   Query: {
     issues: async (
       _: void,
-      {series, offset, filter}: {series: Series; offset: number; filter: string}
-    ): Promise<Issue[]> =>
-      await service.getIssues(await resolveSeries(series), offset, filter),
-    issue: async (
-      _: void,
-      {issue, edit}: {issue: Issue; edit: boolean}
-    ): Promise<Issue> =>
+      { series, offset, filter }: { series: Series; offset: number; filter: string },
+    ): Promise<Issue[]> => await service.getIssues(await resolveSeries(series), offset, filter),
+    issue: async (_: void, { issue, edit }: { issue: Issue; edit: boolean }): Promise<Issue> =>
       service.getIssueDetails(await resolveIssue(issue), edit),
     lastEdited: async (
       _: void,
-      {filter, offset}: {filter: string; offset: number}
+      { filter, offset }: { filter: string; offset: number },
     ): Promise<Issue[]> => await service.getLastEdited(filter, offset),
   } /*,
     Mutation: {

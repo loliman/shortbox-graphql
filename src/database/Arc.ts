@@ -1,6 +1,6 @@
-import {Model, ModelObject} from 'objection';
-import {Base} from './Base';
-import {Issue} from './Issue';
+import { Model, ModelObject } from 'objection';
+import { Base } from './Base';
+import { Issue } from './Issue';
 
 export class Arc extends Base {
   static tableName = 'arc';
@@ -15,9 +15,9 @@ export class Arc extends Base {
     required: ['title', 'type'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 1, maxLength: 255},
-      type: {type: 'string', minLength: 1, maxLength: 255},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 1, maxLength: 255 },
+      type: { type: 'string', minLength: 1, maxLength: 255 },
     },
   };
 

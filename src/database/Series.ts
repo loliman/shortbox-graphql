@@ -1,7 +1,7 @@
-import {Model, ModelObject} from 'objection';
-import {Base} from './Base';
-import {Issue} from './Issue';
-import {Publisher} from './Publisher';
+import { Model, ModelObject } from 'objection';
+import { Base } from './Base';
+import { Issue } from './Issue';
+import { Publisher } from './Publisher';
 
 export class Series extends Base {
   static tableName = 'series';
@@ -31,24 +31,22 @@ export class Series extends Base {
   }
 
   async firstIssue(): Promise<Issue> {
-    return this.seriesToIssueRelation()
-      .orderBy(['releasedate', 'number', 'format'])
-      .first();
+    return this.seriesToIssueRelation().orderBy(['releasedate', 'number', 'format']).first();
   }
 
   async lastIssue(): Promise<Issue> {
     return await this.seriesToIssueRelation()
       .orderBy([
-        {column: 'releasedate', order: 'desc'},
-        {column: 'number', order: 'desc'},
-        {column: 'format', order: 'desc'},
+        { column: 'releasedate', order: 'desc' },
+        { column: 'number', order: 'desc' },
+        { column: 'format', order: 'desc' },
       ])
       .first();
   }
 
   async lastEditedIssue(): Promise<Issue[]> {
     return this.seriesToIssueRelation()
-      .orderBy([{column: 'issues.updatedAt', order: 'desc'}])
+      .orderBy([{ column: 'issues.updatedAt', order: 'desc' }])
       .limit(25);
   }
 
@@ -57,13 +55,13 @@ export class Series extends Base {
     required: ['title', 'volume'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 1, maxLength: 255},
-      volume: {type: 'integer'},
-      addinfo: {type: 'string', minLength: 0, maxLength: 1000},
-      startyear: {type: 'integer'},
-      endyear: {type: 'integer'},
-      genre: {type: 'string', minLength: 0, maxLength: 255},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 1, maxLength: 255 },
+      volume: { type: 'integer' },
+      addinfo: { type: 'string', minLength: 0, maxLength: 1000 },
+      startyear: { type: 'integer' },
+      endyear: { type: 'integer' },
+      genre: { type: 'string', minLength: 0, maxLength: 255 },
     },
   };
 

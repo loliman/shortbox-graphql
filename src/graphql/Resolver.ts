@@ -1,7 +1,7 @@
-import {Series} from '../database/Series';
-import {Publisher} from '../database/Publisher';
-import {Issue} from '../database/Issue';
-import {StringUtils} from '../util/StringUtils';
+import { Series } from '../database/Series';
+import { Publisher } from '../database/Publisher';
+import { Issue } from '../database/Issue';
+import { StringUtils } from '../util/StringUtils';
 
 export async function resolveIssue(issue: Issue) {
   const series = await resolveSeries(issue.series);
@@ -28,7 +28,7 @@ export async function resolveIssue(issue: Issue) {
         series.volume +
         ' with publisher ' +
         series.publisher.name +
-        ' not found'
+        ' not found',
     );
 
   result.series = series;
@@ -52,23 +52,20 @@ export async function resolveSeries(series: Series): Promise<Series> {
         series.volume +
         ' with publisher ' +
         publisher.name +
-        ' not found'
+        ' not found',
     );
 
   result.publisher = publisher;
   return result;
 }
 
-export async function resolvePublisher(
-  publisher: Publisher
-): Promise<Publisher> {
+export async function resolvePublisher(publisher: Publisher): Promise<Publisher> {
   const result = await Publisher.query()
     .where('name', StringUtils.notUndefined(publisher.name))
     .where('us', publisher.us ? 1 : 0)
     .first();
 
-  if (!result)
-    throw new Error('Publisher with name ' + publisher.name + ' not found');
+  if (!result) throw new Error('Publisher with name ' + publisher.name + ' not found');
 
   return result;
 }

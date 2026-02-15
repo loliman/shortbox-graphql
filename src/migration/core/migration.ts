@@ -1,21 +1,21 @@
-import {knexMigration} from './database';
-import {OldIssue} from '../database/OldIssue';
-import {Issue} from '../../database/Issue';
-import {OldSeries} from '../database/OldSeries';
-import {asyncForEach} from '../../util/util';
-import {OldPublisher} from '../database/OldPublisher';
-import {OldStory} from '../database/OldStory';
-import {MarvelFandomCrawler} from '../../core/crawler/MarvelFandomCrawler';
-import {knex} from '../../core/database';
-import {Transaction} from 'objection';
-import {Individual} from '../../database/Individual';
-import {Appearance} from '../../database/Appearance';
-import {Publisher} from '../../database/Publisher';
-import {Series} from '../../database/Series';
-import {Story} from '../../database/Story';
+import { knexMigration } from './database';
+import { OldIssue } from '../database/OldIssue';
+import { Issue } from '../../database/Issue';
+import { OldSeries } from '../database/OldSeries';
+import { asyncForEach } from '../../util/util';
+import { OldPublisher } from '../database/OldPublisher';
+import { OldStory } from '../database/OldStory';
+import { MarvelFandomCrawler } from '../../core/crawler/MarvelFandomCrawler';
+import { knex } from '../../core/database';
+import { Transaction } from 'objection';
+import { Individual } from '../../database/Individual';
+import { Appearance } from '../../database/Appearance';
+import { Publisher } from '../../database/Publisher';
+import { Series } from '../../database/Series';
+import { Story } from '../../database/Story';
 import * as fs from 'fs';
-import {WriteStream} from 'fs';
-import {IssueService} from '../../service/IssueService';
+import { WriteStream } from 'fs';
+import { IssueService } from '../../service/IssueService';
 
 let log: WriteStream;
 let migrationLog: WriteStream;
@@ -24,9 +24,9 @@ let crawlerLog: WriteStream;
 let issueService: IssueService = new IssueService();
 
 function initLogs() {
-  log = fs.createWriteStream('logs/error.log', {flags: 'a'});
-  migrationLog = fs.createWriteStream('logs/migration.log', {flags: 'a'});
-  crawlerLog = fs.createWriteStream('logs/crawler.log', {flags: 'a'});
+  log = fs.createWriteStream('logs/error.log', { flags: 'a' });
+  migrationLog = fs.createWriteStream('logs/migration.log', { flags: 'a' });
+  crawlerLog = fs.createWriteStream('logs/crawler.log', { flags: 'a' });
 }
 
 function closeLogs() {
@@ -61,16 +61,13 @@ function logError(issue: OldIssue, e: Error) {
 function toTitleCase(str: string): string {
   let splitStr = str.toLowerCase().split(' ');
   for (let i = 0; i < splitStr.length; i++) {
-    splitStr[i] =
-      splitStr[i].charAt(0).toUpperCase() + splitStr[i].substring(1);
+    splitStr[i] = splitStr[i].charAt(0).toUpperCase() + splitStr[i].substring(1);
   }
   return splitStr.join(' ');
 }
 
 function titleOf(s: any): string {
-  return s.title
-    ? toTitleCase(s.title.replace(/[^a-zA-Z0-9 ]/g, '')).trim()
-    : s.title;
+  return s.title ? toTitleCase(s.title.replace(/[^a-zA-Z0-9 ]/g, '')).trim() : s.title;
 }
 
 async function migrateMismatchingStoryCount(issue: any, stories: any[]) {
@@ -79,11 +76,7 @@ async function migrateMismatchingStoryCount(issue: any, stories: any[]) {
 
   if (issue.stories.length > stories.length) {
     stories.forEach((s: any) => {
-      if (
-        issue.stories.filter((s2: any) => titleOf(s2) === titleOf(s)).length ===
-          0 &&
-        foundAll
-      ) {
+      if (issue.stories.filter((s2: any) => titleOf(s2) === titleOf(s)).length === 0 && foundAll) {
         foundAll = false;
       }
     });
@@ -98,10 +91,7 @@ async function migrateMismatchingStoryCount(issue: any, stories: any[]) {
       ')';
   } else {
     issue.stories.forEach((s: any) => {
-      if (
-        stories.filter((s2: any) => titleOf(s2) === titleOf(s)).length === 0 &&
-        foundAll
-      ) {
+      if (stories.filter((s2: any) => titleOf(s2) === titleOf(s)).length === 0 && foundAll) {
         foundAll = false;
       }
     });
@@ -119,11 +109,9 @@ async function migrateMismatchingStoryCount(issue: any, stories: any[]) {
   throw new Error(
     message +
       ('\n' +
-        (foundAll
-          ? 'Stories passen zusammen'
-          : 'Stories passen NICHT zusammen') +
+        (foundAll ? 'Stories passen zusammen' : 'Stories passen NICHT zusammen') +
         (await prepareStoriesForVisualization(issue, stories)) +
-        '\n')
+        '\n'),
   );
 }
 
@@ -134,9 +122,7 @@ async function prepareStoriesForVisualization(a: any, b: any[]) {
     .where('series.title', a.series.title)
     .where('series.volume', a.series.volume)
     .where('issue.number', a.number)
-    .withGraphFetched(
-      'stories.[children.[issue.[stories, series.[publisher]]]]'
-    )
+    .withGraphFetched('stories.[children.[issue.[stories, series.[publisher]]]]')
     .withGraphFetched('series.[publisher]');
 
   let stories: OldIssue[] = issues.size > 0 ? issues[0].stories : [];
@@ -192,17 +178,12 @@ async function prepareStoriesForVisualization(a: any, b: any[]) {
     }
   });
 
-  return (
-    '\n\tcrawled: ' +
-    JSON.stringify(newA) +
-    '\n\toldDb  : ' +
-    JSON.stringify(newB)
-  );
+  return '\n\tcrawled: ' + JSON.stringify(newA) + '\n\toldDb  : ' + JSON.stringify(newB);
 }
 
 function mapStories(array: any[]) {
   return array.map((s: any) =>
-    s.title ? titleOf(s) : s.reprintOf ? titleOf(s.reprintOf) + ' [R]' : ''
+    s.title ? titleOf(s) : s.reprintOf ? titleOf(s.reprintOf) + ' [R]' : '',
   );
 }
 
@@ -217,12 +198,7 @@ function prepareIssueBeforeInsertion(issue: OldIssue) {
   issue.series.publisher.updatedAt = undefined;
 }
 
-async function migrateIssue(
-  issue: OldIssue,
-  i: number,
-  array: any[],
-  imported: boolean
-) {
+async function migrateIssue(issue: OldIssue, i: number, array: any[], imported: boolean) {
   const trx: Transaction = await Issue.startTransaction(knex);
 
   try {
@@ -254,144 +230,137 @@ async function migrateIssue(
       series.volume,
       issue.number,
       publisher.name,
-      issue.variant
+      issue.variant,
     );
 
-    await asyncForEach(
-      storiesDe,
-      async (storyDe: OldStory, i: number, array: any[]) => {
-        if (!storyDe.parent) {
-          storyDe.id = undefined;
-          storyDe.title = ' ';
-          storyDe.addinfo = ' ';
-          return;
-        }
+    await asyncForEach(storiesDe, async (storyDe: OldStory, i: number, array: any[]) => {
+      if (!storyDe.parent) {
+        storyDe.id = undefined;
+        storyDe.title = ' ';
+        storyDe.addinfo = ' ';
+        return;
+      }
 
-        let storyUs: OldStory = storyDe.parent;
-        let issueUs: OldIssue = storyUs.issue;
-        let seriesUs: OldSeries = issueUs.series;
-        let publisherUs: OldPublisher = seriesUs.publisher;
-        let storiesUs: OldStory[] = issueUs.stories;
+      let storyUs: OldStory = storyDe.parent;
+      let issueUs: OldIssue = storyUs.issue;
+      let seriesUs: OldSeries = issueUs.series;
+      let publisherUs: OldPublisher = seriesUs.publisher;
+      let storiesUs: OldStory[] = issueUs.stories;
 
-        console.log(
-          '\t[STORY] [%i/%i] %s Vol. %i #%s (%s) %i',
-          i + 1,
-          array.length,
-          seriesUs.title,
-          seriesUs.volume,
-          issueUs.number,
-          publisherUs.name,
-          storyUs.number
-        );
+      console.log(
+        '\t[STORY] [%i/%i] %s Vol. %i #%s (%s) %i',
+        i + 1,
+        array.length,
+        seriesUs.title,
+        seriesUs.volume,
+        issueUs.number,
+        publisherUs.name,
+        storyUs.number,
+      );
 
-        let exists = await Issue.query(trx)
-          .leftJoinRelated('[series.publisher]')
-          .where('number', issueUs.number)
-          .where('variant', '')
-          .where('us', 1)
-          .where('series.title', seriesUs.title)
-          .where('volume', seriesUs.volume)
-          .withGraphFetched('stories')
-          .withGraphFetched('series')
-          .first();
+      let exists = await Issue.query(trx)
+        .leftJoinRelated('[series.publisher]')
+        .where('number', issueUs.number)
+        .where('variant', '')
+        .where('us', 1)
+        .where('series.title', seriesUs.title)
+        .where('volume', seriesUs.volume)
+        .withGraphFetched('stories')
+        .withGraphFetched('series')
+        .first();
 
-        if (!exists) {
-          let issueCrawled: void | any;
+      if (!exists) {
+        let issueCrawled: void | any;
 
-          try {
-            issueCrawled = await new MarvelFandomCrawler()
-              .crawl(issueUs.number, seriesUs.title, seriesUs.volume)
-              .catch(e => {
-                throw e;
-              });
-          } catch (e) {
-            if (
-              e.message.indexOf('[CRAWLER]') > -1 &&
-              e.message.indexOf('- Not found') > -1
-            ) {
-              issueCrawled = new Issue();
-              issueCrawled.title = issueUs.title;
-              issueCrawled.number = issueUs.number;
-              issueCrawled.pages = issueUs.pages;
-              issueCrawled.price = issueUs.price;
-              issueCrawled.currency = issueUs.currency;
-              issueCrawled.format = issueUs.format;
-              issueCrawled.variant = issueUs.variant;
-              issueCrawled.releasedate = issueUs.releasedate;
-              issueCrawled.addinfo = issueUs.addinfo;
-              issueCrawled.series = new Series();
-              issueCrawled.series.volume = issueUs.series.volume;
-              issueCrawled.series.title = issueUs.series.title;
-              issueCrawled.series.publisher = new Publisher();
-              issueCrawled.series.publisher.name =
-                issueUs.series.publisher.name;
-              issueCrawled.series.publisher.original = 1;
-              issueCrawled.stories = [];
-              issueUs.stories.forEach(story => {
-                let newStory: Story = new Story();
-                newStory.number = story.number;
-                newStory.title = story.title;
-                newStory.appearances = [];
-                if (story.appearances) {
-                  story.appearances.forEach(app => {
-                    let newApp: Appearance = new Appearance();
-                    newApp.name = app.name;
-                    newApp.type = app.type;
-                    newApp.role = app.role;
-                    newStory.appearances.push(newApp);
-                  });
-                }
-                newStory.individuals = [];
-                if (story.individuals) {
-                  story.individuals.forEach(individual => {
-                    let newIndividual: Individual = new Individual();
-                    newIndividual.name = individual.name;
-                    newIndividual.type = individual.type;
-                    newStory.individuals.push(newIndividual);
-                  });
-                }
-                issueCrawled.edited = 1;
-                issueCrawled.stories.push(newStory);
-              });
-            } else {
+        try {
+          issueCrawled = await new MarvelFandomCrawler()
+            .crawl(issueUs.number, seriesUs.title, seriesUs.volume)
+            .catch((e) => {
               throw e;
-            }
-          }
-
-          if (imported || issueCrawled?.stories.length == storiesUs.length) {
-            console.log(
-              '[ISSUE] %s Vol. %i #%s (%s)',
-              issue.series.title,
-              issue.series.volume,
-              issue.number,
-              issue.series.publisher ? issue.series.publisher.name : '???'
-            );
-
-            await issueService.handleIssue(issueCrawled, trx);
-
-            exists = await Issue.query(trx)
-              .leftJoinRelated('[series.publisher]')
-              .where('number', issueCrawled.number)
-              .where('variant', '')
-              .where('us', 1)
-              .where('series.title', issueCrawled.series.title)
-              .where('volume', issueCrawled.series.volume)
-              .withGraphFetched('stories')
-              .first();
+            });
+        } catch (e) {
+          if (e.message.indexOf('[CRAWLER]') > -1 && e.message.indexOf('- Not found') > -1) {
+            issueCrawled = new Issue();
+            issueCrawled.title = issueUs.title;
+            issueCrawled.number = issueUs.number;
+            issueCrawled.pages = issueUs.pages;
+            issueCrawled.price = issueUs.price;
+            issueCrawled.currency = issueUs.currency;
+            issueCrawled.format = issueUs.format;
+            issueCrawled.variant = issueUs.variant;
+            issueCrawled.releasedate = issueUs.releasedate;
+            issueCrawled.addinfo = issueUs.addinfo;
+            issueCrawled.series = new Series();
+            issueCrawled.series.volume = issueUs.series.volume;
+            issueCrawled.series.title = issueUs.series.title;
+            issueCrawled.series.publisher = new Publisher();
+            issueCrawled.series.publisher.name = issueUs.series.publisher.name;
+            issueCrawled.series.publisher.original = 1;
+            issueCrawled.stories = [];
+            issueUs.stories.forEach((story) => {
+              let newStory: Story = new Story();
+              newStory.number = story.number;
+              newStory.title = story.title;
+              newStory.appearances = [];
+              if (story.appearances) {
+                story.appearances.forEach((app) => {
+                  let newApp: Appearance = new Appearance();
+                  newApp.name = app.name;
+                  newApp.type = app.type;
+                  newApp.role = app.role;
+                  newStory.appearances.push(newApp);
+                });
+              }
+              newStory.individuals = [];
+              if (story.individuals) {
+                story.individuals.forEach((individual) => {
+                  let newIndividual: Individual = new Individual();
+                  newIndividual.name = individual.name;
+                  newIndividual.type = individual.type;
+                  newStory.individuals.push(newIndividual);
+                });
+              }
+              issueCrawled.edited = 1;
+              issueCrawled.stories.push(newStory);
+            });
           } else {
-            await migrateMismatchingStoryCount(issueCrawled, storiesUs);
+            throw e;
           }
         }
 
-        if (exists || imported) {
-          if (imported || exists.stories.length == storiesUs.length) {
-            issue.stories[i] = setStoriesInOldIssue(storyDe, exists);
-          } else {
-            await migrateMismatchingStoryCount(exists, storiesUs);
-          }
+        if (imported || issueCrawled?.stories.length == storiesUs.length) {
+          console.log(
+            '[ISSUE] %s Vol. %i #%s (%s)',
+            issue.series.title,
+            issue.series.volume,
+            issue.number,
+            issue.series.publisher ? issue.series.publisher.name : '???',
+          );
+
+          await issueService.handleIssue(issueCrawled, trx);
+
+          exists = await Issue.query(trx)
+            .leftJoinRelated('[series.publisher]')
+            .where('number', issueCrawled.number)
+            .where('variant', '')
+            .where('us', 1)
+            .where('series.title', issueCrawled.series.title)
+            .where('volume', issueCrawled.series.volume)
+            .withGraphFetched('stories')
+            .first();
+        } else {
+          await migrateMismatchingStoryCount(issueCrawled, storiesUs);
         }
       }
-    );
+
+      if (exists || imported) {
+        if (imported || exists.stories.length == storiesUs.length) {
+          issue.stories[i] = setStoriesInOldIssue(storyDe, exists);
+        } else {
+          await migrateMismatchingStoryCount(exists, storiesUs);
+        }
+      }
+    });
 
     prepareIssueBeforeInsertion(issue);
 
@@ -400,7 +369,7 @@ async function migrateIssue(
       issue.series.title,
       issue.series.volume,
       issue.number,
-      issue.series.publisher ? issue.series.publisher.name : '???'
+      issue.series.publisher ? issue.series.publisher.name : '???',
     );
 
     await issueService.handleIssue(issue, trx);
@@ -438,7 +407,7 @@ export async function migrate() {
       let allFileContents = fs.readFileSync(path, 'utf-8');
       let issuesFromFile: Issue[] = [];
 
-      allFileContents.split(/\r?\n/).forEach(line => {
+      allFileContents.split(/\r?\n/).forEach((line) => {
         if (line.trim() == '') {
           return;
         }
@@ -448,20 +417,17 @@ export async function migrate() {
         issuesFromFile.push(issue);
       });
 
-      await asyncForEach(
-        issuesFromFile,
-        async (issue: Issue, i: number, array: any[]) => {
-          console.log(
-            '[ISSUE] %s Vol. %i #%s (%s)',
-            issue.series.title,
-            issue.series.volume,
-            issue.number,
-            issue.series.publisher ? issue.series.publisher.name : '???'
-          );
+      await asyncForEach(issuesFromFile, async (issue: Issue, i: number, array: any[]) => {
+        console.log(
+          '[ISSUE] %s Vol. %i #%s (%s)',
+          issue.series.title,
+          issue.series.volume,
+          issue.number,
+          issue.series.publisher ? issue.series.publisher.name : '???',
+        );
 
-          await issueService.createIssue(issue);
-        }
-      );
+        await issueService.createIssue(issue);
+      });
     }
   } catch (err) {
     console.error(err);

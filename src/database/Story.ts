@@ -1,8 +1,8 @@
-import {Model, ModelObject} from 'objection';
-import {Base} from './Base';
-import {Individual} from './Individual';
-import {Issue} from './Issue';
-import {Appearance} from './Appearance';
+import { Model, ModelObject } from 'objection';
+import { Base } from './Base';
+import { Individual } from './Individual';
+import { Issue } from './Issue';
+import { Appearance } from './Appearance';
 
 export class Story extends Base {
   static tableName = 'story';
@@ -38,23 +38,23 @@ export class Story extends Base {
     required: ['number'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 1, maxLength: 1000},
-      number: {type: 'integer'},
-      coloured: {type: 'integer'},
-      fullsize: {type: 'integer'},
-      addinfo: {type: 'string', minLength: 1, maxLength: 1000},
-      pages: {type: 'string', minLength: 1, maxLength: 1000},
-      onlyapp: {type: 'integer'},
-      firstapp: {type: 'integer'},
-      firstpartly: {type: 'integer'},
-      firstcomplete: {type: 'integer'},
-      firstmonochrome: {type: 'integer'},
-      firstcoloured: {type: 'integer'},
-      onlytb: {type: 'integer'},
-      onlyoneprint: {type: 'integer'},
-      onlypartly: {type: 'integer'},
-      onlymonochrome: {type: 'integer'},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 1, maxLength: 1000 },
+      number: { type: 'integer' },
+      coloured: { type: 'integer' },
+      fullsize: { type: 'integer' },
+      addinfo: { type: 'string', minLength: 1, maxLength: 1000 },
+      pages: { type: 'string', minLength: 1, maxLength: 1000 },
+      onlyapp: { type: 'integer' },
+      firstapp: { type: 'integer' },
+      firstpartly: { type: 'integer' },
+      firstcomplete: { type: 'integer' },
+      firstmonochrome: { type: 'integer' },
+      firstcoloured: { type: 'integer' },
+      onlytb: { type: 'integer' },
+      onlyoneprint: { type: 'integer' },
+      onlypartly: { type: 'integer' },
+      onlymonochrome: { type: 'integer' },
     },
   };
 

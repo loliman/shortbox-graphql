@@ -1,4 +1,4 @@
-import {Config} from './config/config';
+import { Config } from './config/config';
 
 let Model: any;
 
@@ -74,18 +74,18 @@ class Person extends Model {
       required: ['firstName', 'lastName'],
 
       properties: {
-        id: {type: 'integer'},
-        movieId: {type: ['integer', 'null']},
-        firstName: {type: 'string', minLength: 1, maxLength: 255},
-        lastName: {type: 'string', minLength: 1, maxLength: 255},
-        age: {type: 'number'},
+        id: { type: 'integer' },
+        movieId: { type: ['integer', 'null'] },
+        firstName: { type: 'string', minLength: 1, maxLength: 255 },
+        lastName: { type: 'string', minLength: 1, maxLength: 255 },
+        age: { type: 'number' },
 
         address: {
           type: 'object',
           properties: {
-            street: {type: 'string'},
-            city: {type: 'string'},
-            zipCode: {type: 'string'},
+            street: { type: 'string' },
+            city: { type: 'string' },
+            zipCode: { type: 'string' },
           },
         },
       },
@@ -126,10 +126,10 @@ class Animal extends Model {
       required: ['name'],
 
       properties: {
-        id: {type: 'integer'},
-        ownerId: {type: ['integer', 'null']},
-        name: {type: 'string', minLength: 1, maxLength: 255},
-        species: {type: 'string', minLength: 1, maxLength: 255},
+        id: { type: 'integer' },
+        ownerId: { type: ['integer', 'null'] },
+        name: { type: 'string', minLength: 1, maxLength: 255 },
+        species: { type: 'string', minLength: 1, maxLength: 255 },
       },
     };
   }
@@ -159,8 +159,8 @@ class Movie extends Model {
       required: ['name'],
 
       properties: {
-        id: {type: 'integer'},
-        name: {type: 'string', minLength: 1, maxLength: 255},
+        id: { type: 'integer' },
+        name: { type: 'string', minLength: 1, maxLength: 255 },
       },
     };
   }
@@ -192,11 +192,7 @@ async function createSchema() {
   await knex.schema
     .createTable('Person', (table: any) => {
       table.increments('id').primary();
-      table
-        .integer('movieId')
-        .unsigned()
-        .references('id')
-        .inTable('Person');
+      table.integer('movieId').unsigned().references('id').inTable('Person');
       table.string('firstName');
       table.string('lastName');
       table.integer('age');
@@ -208,11 +204,7 @@ async function createSchema() {
     })
     .createTable('Animal', (table: any) => {
       table.increments('id').primary();
-      table
-        .integer('ownerId')
-        .unsigned()
-        .references('id')
-        .inTable('Person');
+      table.integer('ownerId').unsigned().references('id').inTable('Person');
       table.string('name');
       table.string('species');
     });
@@ -223,7 +215,7 @@ main()
     console.log('success');
     return knex.destroy();
   })
-  .catch(err => {
+  .catch((err) => {
     console.error(err);
     return knex.destroy();
   });
