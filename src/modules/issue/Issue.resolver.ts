@@ -252,8 +252,7 @@ export const resolvers: IssueResolvers = {
         .filter((id): id is number => id != null);
       const uniqueSiblingIds = [...new Set(siblingIds)].sort((a, b) => a - b);
       const primarySibling = siblings.find(
-        (sibling) =>
-          typeof sibling.id === 'number' && String(sibling.variant ?? '').trim() === '',
+        (sibling) => typeof sibling.id === 'number' && String(sibling.variant ?? '').trim() === '',
       ) as { id: number } | undefined;
 
       const fallbackCandidateIds = [

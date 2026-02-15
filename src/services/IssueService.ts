@@ -134,7 +134,7 @@ export class IssueService {
           },
         ],
         where: {},
-      }
+      };
 
       if (pattern && pattern !== '') {
         options.where = {
@@ -324,7 +324,12 @@ export class IssueService {
           ] as FindOptions['order'])
         : sortField === 'publisher'
           ? ([
-              [{ model: this.models.Series }, { model: this.models.Publisher }, 'name', sortDirection],
+              [
+                { model: this.models.Series },
+                { model: this.models.Publisher },
+                'name',
+                sortDirection,
+              ],
               [{ model: this.models.Series }, 'title', sortDirection],
               [{ model: this.models.Series }, 'volume', sortDirection],
               ['id', sortDirection],
@@ -353,32 +358,32 @@ export class IssueService {
       if (sortField === 'series' || sortField === 'publisher') {
         where[Op.and] = [...currentAnd, { id: { [op]: decodedCursor } }];
       } else {
-      const cursorRecord = await this.models.Issue.findByPk(decodedCursor, {
-        attributes: ['id', sortField],
-      });
+        const cursorRecord = await this.models.Issue.findByPk(decodedCursor, {
+          attributes: ['id', sortField],
+        });
 
-      if (cursorRecord) {
-        const cursorValue = cursorRecord.get(sortField as keyof typeof cursorRecord) as
-          | string
-          | number
-          | Date
-          | null
-          | undefined;
+        if (cursorRecord) {
+          const cursorValue = cursorRecord.get(sortField as keyof typeof cursorRecord) as
+            | string
+            | number
+            | Date
+            | null
+            | undefined;
 
-        if (cursorValue === null || cursorValue === undefined) {
-          where[Op.and] = [...currentAnd, { id: { [op]: decodedCursor } }];
-        } else {
-          where[Op.and] = [
-            ...currentAnd,
-            {
-              [Op.or]: [
-                { [sortField]: { [op]: cursorValue } },
-                { [sortField]: cursorValue, id: { [op]: decodedCursor } },
-              ],
-            },
-          ];
+          if (cursorValue === null || cursorValue === undefined) {
+            where[Op.and] = [...currentAnd, { id: { [op]: decodedCursor } }];
+          } else {
+            where[Op.and] = [
+              ...currentAnd,
+              {
+                [Op.or]: [
+                  { [sortField]: { [op]: cursorValue } },
+                  { [sortField]: cursorValue, id: { [op]: decodedCursor } },
+                ],
+              },
+            ];
+          }
         }
-      }
       }
     }
 
