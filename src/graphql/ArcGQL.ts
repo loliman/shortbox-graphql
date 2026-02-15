@@ -1,7 +1,7 @@
-import {Arc} from '../database/Arc';
-import {Issue} from '../database/Issue';
-import {gql} from 'apollo-server';
-import {ArcService} from '../service/ArcService';
+import { Arc } from '../database/Arc';
+import { Issue } from '../database/Issue';
+import { gql } from 'apollo-server';
+import { ArcService } from '../service/ArcService';
 
 const service = new ArcService();
 
@@ -34,7 +34,7 @@ export const resolvers = {
   Query: {
     arcs: async (
       _: any,
-      {pattern, type, offset}: {pattern: string; type: string; offset: number}
+      { pattern, type, offset }: { pattern: string; type: string; offset: number },
     ) => await service.getArcs(pattern, type, offset),
   },
 };

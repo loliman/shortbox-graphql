@@ -1,8 +1,8 @@
-import {Story} from '../database/Story';
-import {Issue} from '../database/Issue';
-import {Individual} from '../database/Individual';
-import {Appearance} from '../database/Appearance';
-import {gql} from 'apollo-server';
+import { Story } from '../database/Story';
+import { Issue } from '../database/Issue';
+import { Individual } from '../database/Individual';
+import { Appearance } from '../database/Appearance';
+import { gql } from 'apollo-server';
 
 export const typeDef = gql`
   input StoryInput {
@@ -60,8 +60,8 @@ export const resolvers = {
       parent.pages
         ? parent.pages
             .split('#')
-            .filter(x => x !== '')
-            .map(x => +x)
+            .filter((x) => x !== '')
+            .map((x) => +x)
         : [],
     coloured: (parent: Story): number => parent.coloured,
     issue: (parent: Story): Issue => parent.issue,

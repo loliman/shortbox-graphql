@@ -1,11 +1,11 @@
-import {Model} from 'objection';
-import {Base} from './Base';
-import {OldIndividual} from './OldIndividual';
-import {OldCover} from './OldCover';
-import {OldArc} from './OldArc';
-import {OldFeature} from './OldFeature';
-import {OldSeries} from './OldSeries';
-import {OldStory} from './OldStory';
+import { Model } from 'objection';
+import { Base } from './Base';
+import { OldIndividual } from './OldIndividual';
+import { OldCover } from './OldCover';
+import { OldArc } from './OldArc';
+import { OldFeature } from './OldFeature';
+import { OldSeries } from './OldSeries';
+import { OldStory } from './OldStory';
 
 const unique = require('objection-unique')({
   fields: ['number', 'fk_series', 'variant', 'format'],
@@ -36,18 +36,18 @@ export class OldIssue extends unique(Base) {
     required: ['number', 'format', 'releasedate'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 0, maxLength: 255},
-      number: {type: 'string', minLength: 1, maxLength: 255},
-      format: {type: 'string', minLength: 1, maxLength: 255},
-      limitation: {type: 'integer'},
-      variant: {type: 'string', minLength: 0, maxLength: 255},
-      releasedate: {type: 'string'},
-      pages: {type: 'integer'},
-      price: {type: 'integer'},
-      currency: {type: 'string', minLength: 0, maxLength: 3},
-      addinfo: {type: 'string', minLength: 0, maxLength: 1000},
-      verified: {type: 'integer'},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 0, maxLength: 255 },
+      number: { type: 'string', minLength: 1, maxLength: 255 },
+      format: { type: 'string', minLength: 1, maxLength: 255 },
+      limitation: { type: 'integer' },
+      variant: { type: 'string', minLength: 0, maxLength: 255 },
+      releasedate: { type: 'string' },
+      pages: { type: 'integer' },
+      price: { type: 'integer' },
+      currency: { type: 'string', minLength: 0, maxLength: 3 },
+      addinfo: { type: 'string', minLength: 0, maxLength: 1000 },
+      verified: { type: 'integer' },
     },
   };
 

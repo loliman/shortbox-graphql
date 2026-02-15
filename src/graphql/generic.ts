@@ -1,5 +1,5 @@
-import {gql} from 'apollo-server';
-import {GraphQLScalarType, Kind} from 'graphql';
+import { gql } from 'apollo-server';
+import { GraphQLScalarType, Kind } from 'graphql';
 
 const dateFormat = require('dateformat');
 

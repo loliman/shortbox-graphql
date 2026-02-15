@@ -1,6 +1,6 @@
-import {Model} from 'objection';
-import {Base} from './Base';
-import {OldIssue} from './OldIssue';
+import { Model } from 'objection';
+import { Base } from './Base';
+import { OldIssue } from './OldIssue';
 
 const unique = require('objection-unique')({
   fields: [['title', 'type']],
@@ -23,9 +23,9 @@ export class OldArc extends unique(Base) {
     required: ['title', 'type'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 1, maxLength: 255},
-      type: {type: 'string', minLength: 1, maxLength: 255},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 1, maxLength: 255 },
+      type: { type: 'string', minLength: 1, maxLength: 255 },
     },
   };
 

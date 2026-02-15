@@ -1,7 +1,7 @@
-import {Feature} from '../database/Feature';
-import {Issue} from '../database/Issue';
-import {gql} from 'apollo-server';
-import {Individual} from '../database/Individual';
+import { Feature } from '../database/Feature';
+import { Issue } from '../database/Issue';
+import { gql } from 'apollo-server';
+import { Individual } from '../database/Individual';
 
 export const typeDef = gql`
   input FeatureInput {

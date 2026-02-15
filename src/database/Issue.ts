@@ -1,11 +1,11 @@
-import {Model, ModelObject} from 'objection';
-import {Base} from './Base';
-import {Individual} from './Individual';
-import {Cover} from './Cover';
-import {Arc} from './Arc';
-import {Feature} from './Feature';
-import {Series} from './Series';
-import {Story} from './Story';
+import { Model, ModelObject } from 'objection';
+import { Base } from './Base';
+import { Individual } from './Individual';
+import { Cover } from './Cover';
+import { Arc } from './Arc';
+import { Feature } from './Feature';
+import { Series } from './Series';
+import { Story } from './Story';
 
 export class Issue extends Base {
   static tableName = 'issue';
@@ -38,19 +38,19 @@ export class Issue extends Base {
     required: ['number', 'format'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 0, maxLength: 255},
-      number: {type: 'string', minLength: 1, maxLength: 255},
-      format: {type: 'string', minLength: 1, maxLength: 255},
-      limitation: {type: 'integer'},
-      variant: {type: 'string', minLength: 0, maxLength: 255},
-      releasedate: {type: 'Date'},
-      pages: {type: 'integer'},
-      price: {type: 'float'},
-      currency: {type: 'string', minLength: 0, maxLength: 3},
-      addinfo: {type: 'string', minLength: 0, maxLength: 1000},
-      verified: {type: 'integer'},
-      edited: {type: 'integer'},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 0, maxLength: 255 },
+      number: { type: 'string', minLength: 1, maxLength: 255 },
+      format: { type: 'string', minLength: 1, maxLength: 255 },
+      limitation: { type: 'integer' },
+      variant: { type: 'string', minLength: 0, maxLength: 255 },
+      releasedate: { type: 'Date' },
+      pages: { type: 'integer' },
+      price: { type: 'float' },
+      currency: { type: 'string', minLength: 0, maxLength: 3 },
+      addinfo: { type: 'string', minLength: 0, maxLength: 1000 },
+      verified: { type: 'integer' },
+      edited: { type: 'integer' },
     },
   };
 

@@ -1,5 +1,5 @@
 import Knex from 'knex';
-import {Config} from '../../config/config';
+import { Config } from '../../config/config';
 
 export const knexMigration = Knex({
   client: 'mysql',

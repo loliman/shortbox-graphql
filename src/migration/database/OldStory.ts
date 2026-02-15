@@ -1,8 +1,8 @@
-import {Model} from 'objection';
-import {Base} from './Base';
-import {OldIndividual} from './OldIndividual';
-import {OldIssue} from './OldIssue';
-import {OldAppearance} from './OldAppearance';
+import { Model } from 'objection';
+import { Base } from './Base';
+import { OldIndividual } from './OldIndividual';
+import { OldIssue } from './OldIssue';
+import { OldAppearance } from './OldAppearance';
 
 const unique = require('objection-unique')({
   fields: ['fk_parent', 'fk_issue', 'number'],
@@ -30,10 +30,10 @@ export class OldStory extends unique(Base) {
     required: ['number'],
 
     properties: {
-      id: {type: 'integer'},
-      title: {type: 'string', minLength: 1, maxLength: 1000},
-      number: {type: 'integer'},
-      addinfo: {type: 'string', minLength: 1, maxLength: 1000},
+      id: { type: 'integer' },
+      title: { type: 'string', minLength: 1, maxLength: 1000 },
+      number: { type: 'integer' },
+      addinfo: { type: 'string', minLength: 1, maxLength: 1000 },
     },
   };
 

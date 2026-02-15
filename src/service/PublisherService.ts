@@ -1,31 +1,22 @@
-import {Publisher} from '../database/Publisher';
-import {StringUtils} from '../util/StringUtils';
-import {QueryBuilderType, raw} from 'objection';
+import { Publisher } from '../database/Publisher';
+import { StringUtils } from '../util/StringUtils';
+import { QueryBuilderType, raw } from 'objection';
 
 export class PublisherService {
   async getPublisherDetails(publisher: Publisher): Promise<Publisher> {
-    return Publisher.query()
-      .where('id', publisher.id)
-      .first();
+    return Publisher.query().where('id', publisher.id).first();
   }
 
   async getPublishers(
     pattern: string,
     us: boolean,
     offset: number,
-    filter: string
+    filter: string,
   ): Promise<Publisher[]> {
     let query;
 
-    if (!filter)
-      query = await PublisherService.getPublishersNoFilter(pattern, us, offset);
-    else
-      query = await PublisherService.getPublishersWithFilter(
-        pattern,
-        us,
-        offset,
-        filter
-      );
+    if (!filter) query = await PublisherService.getPublishersNoFilter(pattern, us, offset);
+    else query = await PublisherService.getPublishersWithFilter(pattern, us, offset, filter);
 
     return query;
   }
@@ -33,24 +24,20 @@ export class PublisherService {
   private static getPublishersNoFilter(
     pattern: string,
     us: boolean,
-    offset: number
+    offset: number,
   ): Promise<Publisher[]> {
     const query = Publisher.query()
       .where('us', us ? 1 : 0)
       .offset(offset)
       .limit(50);
 
-    if (!StringUtils.isEmpty(pattern))
-      PublisherService.setPattern(query, pattern);
+    if (!StringUtils.isEmpty(pattern)) PublisherService.setPattern(query, pattern);
     else query.orderBy('name');
 
     return query;
   }
 
-  private static setPattern(
-    query: QueryBuilderType<Publisher>,
-    pattern: string
-  ) {
+  private static setPattern(query: QueryBuilderType<Publisher>, pattern: string) {
     query.where('name', 'like', '%' + pattern.replace(/\s/g, '%') + '%');
     query.orderBy(
       raw(
@@ -64,8 +51,8 @@ export class PublisherService {
           "   WHEN name LIKE '%" +
           pattern +
           "' THEN 4 " +
-          '   ELSE 3 END '
-      )
+          '   ELSE 3 END ',
+      ),
     );
   }
 
@@ -73,7 +60,7 @@ export class PublisherService {
     pattern: string,
     us: boolean,
     offset: number,
-    filter: string
+    filter: string,
   ): Promise<Publisher[]> {
     //TODO
     /*let rawQuery = createFilterQuery(us, filter, offset);

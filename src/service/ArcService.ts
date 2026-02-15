@@ -1,15 +1,12 @@
-import {StringUtils} from '../util/StringUtils';
-import {QueryBuilderType, raw} from 'objection';
-import {Arc} from '../database/Arc';
+import { StringUtils } from '../util/StringUtils';
+import { QueryBuilderType, raw } from 'objection';
+import { Arc } from '../database/Arc';
 
 export class ArcService {
   async getArcs(pattern: string, type: string, offset: number): Promise<Arc[]> {
-    const query = Arc.query()
-      .offset(offset)
-      .limit(50);
+    const query = Arc.query().offset(offset).limit(50);
 
-    if (!StringUtils.isEmpty(type))
-      query.where('type', 'like', type.toLocaleUpperCase());
+    if (!StringUtils.isEmpty(type)) query.where('type', 'like', type.toLocaleUpperCase());
 
     if (!StringUtils.isEmpty(pattern)) ArcService.setPattern(query, pattern);
     else query.orderBy('name');
@@ -31,8 +28,8 @@ export class ArcService {
           "   WHEN name LIKE '%" +
           pattern +
           "' THEN 4 " +
-          '   ELSE 3 END '
-      )
+          '   ELSE 3 END ',
+      ),
     );
   }
 }

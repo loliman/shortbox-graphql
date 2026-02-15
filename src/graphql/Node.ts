@@ -1,5 +1,5 @@
-import {gql} from 'apollo-server';
-import {knex} from '../core/database';
+import { gql } from 'apollo-server';
+import { knex } from '../core/database';
 
 export class Node {
   type!: string;
@@ -26,10 +26,7 @@ export const resolvers = {
     url: (parent: Node): string => parent.url,
   },
   Query: {
-    nodes: async (
-      _: void,
-      {pattern, us}: {pattern: string; us: boolean; offset: number}
-    ) => {
+    nodes: async (_: void, { pattern, us }: { pattern: string; us: boolean; offset: number }) => {
       if (!pattern || pattern.trim() === '') return [];
 
       let query =

@@ -1,13 +1,6 @@
-export class Config {
-  static readonly WWW_DIR =
-    '/Users/Christian/shortbox-sandbox/shortbox-react/public';
-  static readonly COVER_DIR = 'covers';
-  static readonly DB_NAME = 'shortbox';
-  static readonly DB_USER = 'root';
-  static readonly DB_PASSWORD = '';
+import dotenv from 'dotenv';
+dotenv.config();
 
-  static readonly MIGRATE_ON_STARTUP = false;
-  static readonly MIGRATION_DB_NAME = 'shortbox_alt';
-  static readonly MIGRATION_DB_USER = 'root';
-  static readonly MIGRATION_DB_PASSWORD = '';
-}
+export const db = process.env.DB_NAME || 'shortbox';
+export const dbUser = process.env.DB_USER || 'shortbox';
+export const dbPassword = process.env.DB_PASSWORD || 'shortbox';

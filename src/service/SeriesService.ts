@@ -1,32 +1,23 @@
-import {Publisher} from '../database/Publisher';
-import {StringUtils} from '../util/StringUtils';
-import {QueryBuilderType, raw} from 'objection';
-import {Series} from '../database/Series';
+import { Publisher } from '../database/Publisher';
+import { StringUtils } from '../util/StringUtils';
+import { QueryBuilderType, raw } from 'objection';
+import { Series } from '../database/Series';
 
 export class SeriesService {
   async getSeriesDetails(series: Series): Promise<Series> {
-    return Series.query()
-      .where('id', series.id)
-      .first();
+    return Series.query().where('id', series.id).first();
   }
 
   async getSeries(
     pattern: string,
     publisher: Publisher,
     offset: number,
-    filter: string
+    filter: string,
   ): Promise<Series[]> {
     let query;
 
-    if (!filter)
-      query = SeriesService.getSeriesNoFilter(pattern, publisher, offset);
-    else
-      query = SeriesService.getSeriesWithFilter(
-        pattern,
-        publisher,
-        offset,
-        filter
-      );
+    if (!filter) query = SeriesService.getSeriesNoFilter(pattern, publisher, offset);
+    else query = SeriesService.getSeriesWithFilter(pattern, publisher, offset, filter);
 
     return query;
   }
@@ -34,7 +25,7 @@ export class SeriesService {
   private static getSeriesNoFilter(
     pattern: string,
     publisher: Publisher,
-    offset: number
+    offset: number,
   ): Promise<Series[]> {
     const query = Series.query()
       .select('series.*', 'publisher.name', 'publisher.us')
@@ -65,8 +56,8 @@ export class SeriesService {
           "   WHEN title LIKE '%" +
           pattern +
           "' THEN 4 " +
-          '   ELSE 3 END '
-      )
+          '   ELSE 3 END ',
+      ),
     );
   }
 
@@ -74,7 +65,7 @@ export class SeriesService {
     pattern: string,
     publisher: Publisher,
     offset: number,
-    filter: string
+    filter: string,
   ): Promise<Series[]> {
     //TODO
     /*let rawQuery = createFilterQuery(us, filter, offset);

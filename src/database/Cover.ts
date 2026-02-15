@@ -1,8 +1,8 @@
-import {Model, ModelObject} from 'objection';
-import {Base} from './Base';
-import {Individual} from './Individual';
-import {Issue} from './Issue';
-import {Appearance} from './Appearance';
+import { Model, ModelObject } from 'objection';
+import { Base } from './Base';
+import { Individual } from './Individual';
+import { Issue } from './Issue';
+import { Appearance } from './Appearance';
 
 export class Cover extends Base {
   static tableName = 'cover';
@@ -38,25 +38,25 @@ export class Cover extends Base {
     required: ['url', 'number'],
 
     properties: {
-      id: {type: 'integer'},
-      url: {type: 'string', minLength: 0, maxLength: 1000},
-      number: {type: 'integer'},
-      coloured: {type: 'integer'},
-      fullsize: {type: 'integer'},
-      addinfo: {type: 'string', minLength: 1, maxLength: 1000},
-      onlyapp: {type: 'integer'},
-      firstapp: {type: 'integer'},
-      firstpartly: {type: 'integer'},
-      firstcomplete: {type: 'integer'},
-      firstmonochrome: {type: 'integer'},
-      firstcoloured: {type: 'integer'},
-      firstsmall: {type: 'integer'},
-      firstfullsize: {type: 'integer'},
-      onlytb: {type: 'integer'},
-      onlyoneprint: {type: 'integer'},
-      onlypartly: {type: 'integer'},
-      onlymonochrome: {type: 'integer'},
-      onlysmall: {type: 'integer'},
+      id: { type: 'integer' },
+      url: { type: 'string', minLength: 0, maxLength: 1000 },
+      number: { type: 'integer' },
+      coloured: { type: 'integer' },
+      fullsize: { type: 'integer' },
+      addinfo: { type: 'string', minLength: 1, maxLength: 1000 },
+      onlyapp: { type: 'integer' },
+      firstapp: { type: 'integer' },
+      firstpartly: { type: 'integer' },
+      firstcomplete: { type: 'integer' },
+      firstmonochrome: { type: 'integer' },
+      firstcoloured: { type: 'integer' },
+      firstsmall: { type: 'integer' },
+      firstfullsize: { type: 'integer' },
+      onlytb: { type: 'integer' },
+      onlyoneprint: { type: 'integer' },
+      onlypartly: { type: 'integer' },
+      onlymonochrome: { type: 'integer' },
+      onlysmall: { type: 'integer' },
     },
   };
 

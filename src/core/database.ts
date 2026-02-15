@@ -1,13 +1,22 @@
-import {Config} from '../config/config';
-import Knex = require('knex');
+import { Sequelize } from 'sequelize';
+import { db, dbPassword, dbUser } from '../config/config';
 
-export const knex = Knex({
-  client: 'mysql2',
-  connection: {
-    host: '127.0.0.1',
-    user: Config.DB_USER,
-    password: Config.DB_PASSWORD,
-    database: Config.DB_NAME,
+const sequelize = new Sequelize(db, dbUser, dbPassword, {
+  logging: false,
+  host: process.env.DB_HOST || 'localhost',
+  dialect: 'mysql',
+  port: parseInt(process.env.DB_PORT || '3306', 10),
+  define: {
+    charset: 'utf8',
+    collate: 'utf8_general_ci',
+    timestamps: true,
   },
-  //debug: true,
+  pool: {
+    max: 5,
+    min: 0,
+    acquire: 30000,
+    idle: 10000,
+  },
 });
+
+export default sequelize;

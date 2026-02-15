@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "name": "Run Shortbox Backend",
+            "type": "command",
+            "program": "npm",
+            "args": ["start"]
+        },
+        {
+            "name": "import",
+            "type": "command",
+            "program": "npm",
+            "args": ["import"]
+        }
+    ]
+}
