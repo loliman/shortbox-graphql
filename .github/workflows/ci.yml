@@ -78,13 +78,13 @@ jobs:
           cp -r sql release/
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: shortbox-graphql-build
           path: release/
 
       - name: Upload Coverage Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: shortbox-graphql-coverage
           path: coverage/
