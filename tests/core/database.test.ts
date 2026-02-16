@@ -50,14 +50,12 @@ describe('database core', () => {
       expect.objectContaining({
         logging: false,
         host: 'localhost',
-        dialect: 'mysql',
-        port: 3306,
+        dialect: 'postgres',
+        port: 5432,
       }),
     );
 
     expect(sequelize.options.define).toEqual({
-      charset: 'utf8',
-      collate: 'utf8_general_ci',
       timestamps: true,
     });
     expect(sequelize.options.pool).toEqual({
@@ -70,12 +68,12 @@ describe('database core', () => {
 
   it('respects DB_HOST and DB_PORT overrides', () => {
     const { Sequelize } = loadDatabaseModule({
-      dbHost: 'mysql.internal',
-      dbPort: '3307',
+      dbHost: 'postgres.internal',
+      dbPort: '5433',
     });
 
     const config = Sequelize.mock.calls[0][3];
-    expect(config.host).toBe('mysql.internal');
-    expect(config.port).toBe(3307);
+    expect(config.host).toBe('postgres.internal');
+    expect(config.port).toBe(5433);
   });
 });
