@@ -72,7 +72,7 @@ export function romanize(num: number) {
 }
 
 export function escapeSqlString(s: string) {
-  return s.replace("'", '%');
+  return s.replace(/'/g, "''");
 }
 
 type LabelPublisher = {

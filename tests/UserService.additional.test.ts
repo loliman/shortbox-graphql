@@ -1,4 +1,3 @@
-import { createHash } from 'crypto';
 import logger from '../src/util/logger';
 import { LoginRateLimitError, UserService } from '../src/services/UserService';
 
@@ -41,18 +40,31 @@ describe('UserService additional coverage', () => {
     expect(limiter.consume).toHaveBeenCalledWith('alice|1.2.3.4', 1);
   });
 
-  it('accepts legacy sha256 hash and upgrades to scrypt', async () => {
+  it('accepts legacy client-sent sha256 hash without rehashing', async () => {
     const save = jest.fn().mockResolvedValue(undefined);
-    const storedPassword = createHash('sha256').update('secret').digest('hex');
+    const storedPassword = '2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b';
+    const userRecord = { id: 1, name: 'alice', password: storedPassword, save };
+    mockModels.User.findOne.mockResolvedValue(userRecord);
+
+    const result = await userService.login({ name: 'alice', password: storedPassword } as any, tx);
+
+    expect(result).toBe(userRecord);
+    expect(userRecord.password).toBe(storedPassword);
+    expect(save).toHaveBeenCalledWith({ transaction: tx });
+    expect(limiter.delete).toHaveBeenCalled();
+  });
+
+  it('rejects plaintext login when only legacy sha256 hash is stored', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const storedPassword = '2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b';
     const userRecord = { id: 1, name: 'alice', password: storedPassword, save };
     mockModels.User.findOne.mockResolvedValue(userRecord);
 
     const result = await userService.login({ name: 'alice', password: 'secret' } as any, tx);
 
-    expect(result).toBe(userRecord);
-    expect(userRecord.password.startsWith('scrypt$')).toBe(true);
-    expect(save).toHaveBeenCalledWith({ transaction: tx });
-    expect(limiter.delete).toHaveBeenCalled();
+    expect(result).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    expect(limiter.consume).toHaveBeenCalledWith('alice|unknown', 1);
   });
 
   it('throws LoginRateLimitError when already blocked before lookup', async () => {
@@ -106,4 +118,3 @@ describe('UserService additional coverage', () => {
     });
   });
 });
-

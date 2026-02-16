@@ -1,7 +1,7 @@
 import { Transaction } from 'sequelize';
 import logger from '../util/logger';
 import type { LoginInput } from '@loliman/shortbox-contract';
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { RateLimiterMemory, type RateLimiterRes } from 'rate-limiter-flexible';
 
 type PasswordVerificationResult = {
@@ -62,10 +62,6 @@ export class UserService {
     logger.info(message, { requestId: this.requestId });
   }
 
-  private sha256Hex(value: string): string {
-    return createHash('sha256').update(value).digest('hex');
-  }
-
   private isSha256Hex(value: string): boolean {
     return /^[a-f0-9]{64}$/i.test(value);
   }
@@ -104,16 +100,6 @@ export class UserService {
         valid: true,
         upgradePassword: legacyClientSentHash ? undefined : inputPassword,
       };
-    }
-
-    if (this.isSha256Hex(storedPassword)) {
-      const hashedInput = this.sha256Hex(inputPassword);
-      if (this.safeEqual(storedPassword, hashedInput)) {
-        return {
-          valid: true,
-          upgradePassword: inputPassword,
-        };
-      }
     }
 
     return { valid: false };
