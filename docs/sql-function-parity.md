@@ -11,7 +11,7 @@ Ziel: SQL-Funktionslogik aus der Datenbank in TypeScript verlagern und testbar m
 - Es gibt keine Laufzeitaufrufe der alten SQL-Funktionen im Anwendungscode (`src/`).
 - Die fachliche Logik ist in `/Users/christian/shortbox/shortbox-graphql/src/util/dbFunctions.ts` zentral umgesetzt.
 - Paritätstests liegen in `/Users/christian/shortbox/shortbox-graphql/tests/dbFunctions.test.ts`.
-- Die ehemalige Datei `sql/functions.sql` wurde entfernt.
+- Historische SQL-Funktionsdateien wurden entfernt.
 
 ## Paritätsmatrix
 | SQL-Funktion | TS-Ersatz | Status |
