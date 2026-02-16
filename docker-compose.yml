@@ -7,10 +7,10 @@ services:
       - "4000:4000"
     environment:
       - DB_HOST=db
-      - DB_PORT=3306
+      - DB_PORT=5432
       - DB_NAME=${DB_NAME:-shortbox}
       - DB_USER=${DB_USER:-shortbox}
-      - DB_PASSWORD=${DB_PASSWORD:-xxx}
+      - DB_PASSWORD=${DB_PASSWORD:-shortbox}
       - PORT=4000
     depends_on:
       - db
@@ -19,18 +19,16 @@ services:
       - /app/node_modules
 
   db:
-    image: mysql:8.0
-    command: --default-authentication-plugin=mysql_native_password
+    image: postgres:16
     restart: always
     environment:
-      - MYSQL_DATABASE=${DB_NAME:-shortbox}
-      - MYSQL_USER=${DB_USER:-shortbox}
-      - MYSQL_PASSWORD=${DB_PASSWORD:-xxx}
-      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-rootpassword}
+      - POSTGRES_DB=${DB_NAME:-shortbox}
+      - POSTGRES_USER=${DB_USER:-shortbox}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-shortbox}
     ports:
-      - "3336:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  mysql_data:
+  postgres_data:
