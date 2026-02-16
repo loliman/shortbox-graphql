@@ -1,4 +1,4 @@
-import { Sequelize, Op } from 'sequelize';
+import { Op } from 'sequelize';
 import { IndividualResolvers } from '../../types/graphql';
 import { buildConnectionFromNodes, decodeCursorId } from '../../core/cursor';
 
@@ -38,11 +38,27 @@ export const resolvers: IndividualResolvers = {
       ];
 
       if (decodedCursor) {
-        where[Op.and] = [
-          Sequelize.literal(
-            `(name, id) > (SELECT name, id FROM Individual WHERE id = ${decodedCursor})`,
-          ),
-        ];
+        const cursorRecord = await models.Individual.findByPk(decodedCursor, {
+          attributes: ['id', 'name'],
+        });
+
+        if (cursorRecord) {
+          const cursorName = cursorRecord.get('name') as string | null;
+          if (typeof cursorName === 'string') {
+            where[Op.and] = [
+              {
+                [Op.or]: [
+                  { name: { [Op.gt]: cursorName } },
+                  { name: cursorName, id: { [Op.gt]: decodedCursor } },
+                ],
+              },
+            ];
+          } else {
+            where[Op.and] = [{ id: { [Op.gt]: decodedCursor } }];
+          }
+        } else {
+          where[Op.and] = [{ id: { [Op.gt]: decodedCursor } }];
+        }
       }
 
       if (pattern && pattern !== '') {
