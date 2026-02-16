@@ -109,31 +109,30 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   integration-tests:
-    name: Integration Tests (MySQL)
+    name: Integration Tests (PostgreSQL)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: quality-and-build
     services:
-      mysql:
-        image: mysql:8.0
+      postgres:
+        image: postgres:16
         env:
-          MYSQL_DATABASE: shortbox
-          MYSQL_USER: shortbox
-          MYSQL_PASSWORD: xxx
-          MYSQL_ROOT_PASSWORD: rootpassword
+          POSTGRES_DB: shortbox
+          POSTGRES_USER: shortbox
+          POSTGRES_PASSWORD: shortbox
         ports:
-          - 3336:3306
+          - 5432:5432
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpassword"
+          --health-cmd="pg_isready -h 127.0.0.1 -p 5432 -U shortbox -d shortbox"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=20
     env:
       DB_HOST: 127.0.0.1
-      DB_PORT: 3336
+      DB_PORT: 5432
       DB_NAME: shortbox
       DB_USER: shortbox
-      DB_PASSWORD: xxx
+      DB_PASSWORD: shortbox
       SESSION_SECRET: integration-test-session-secret-at-least-32-chars
       NODE_ENV: test
     steps:
@@ -156,16 +155,16 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm ci
 
-      - name: Wait for MySQL
+      - name: Wait for PostgreSQL
         run: |
           for i in {1..30}; do
-            if (echo > /dev/tcp/127.0.0.1/3336) >/dev/null 2>&1; then
-              echo "MySQL is ready"
+            if (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; then
+              echo "PostgreSQL is ready"
               exit 0
             fi
             sleep 2
           done
-          echo "MySQL did not become ready in time"
+          echo "PostgreSQL did not become ready in time"
           exit 1
 
       - name: Run integration tests
