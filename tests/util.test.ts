@@ -33,8 +33,8 @@ describe('Utility Functions Unit Tests', () => {
   });
 
   describe('escapeSqlString', () => {
-    it('should replace single quotes with percent sign', () => {
-      expect(escapeSqlString("Spider-Man's")).toBe('Spider-Man%s');
+    it('should escape single quotes by doubling them', () => {
+      expect(escapeSqlString("Spider-Man's")).toBe("Spider-Man''s");
     });
   });
 });
