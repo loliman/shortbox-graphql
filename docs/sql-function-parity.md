@@ -3,7 +3,7 @@
 Stand: 2026-02-16
 
 ## Scope
-Analyse und Umsetzung der Legacy-MySQL-Funktionen aus historischem SQL-Bestand.
+Analyse und Umsetzung der Legacy-SQL-Funktionen aus historischem Bestand.
 
 Ziel: SQL-Funktionslogik aus der Datenbank in TypeScript verlagern und testbar machen.
 
