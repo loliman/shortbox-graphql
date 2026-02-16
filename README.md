@@ -53,7 +53,6 @@ Standard-URL: `http://localhost:4000/` (GraphQL via POST/OPTIONS)
 - `src/services/`: Business-Logik
 - `src/api/`: gemeinsame GraphQL-Bausteine
 - `tests/`: Unit- und Integrationstests
-- `sql/`: Legacy-SQL-Hinweise (siehe `sql/README.md`; nicht Teil des aktuellen Runtime-Pfads)
 
 ## Umgebungsvariablen
 

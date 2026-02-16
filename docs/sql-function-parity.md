@@ -1,4 +1,4 @@
-# SQL Function Parity (MySQL -> PostgreSQL)
+# SQL Function Parity (Legacy -> TypeScript)
 
 Stand: 2026-02-16
 
@@ -27,4 +27,4 @@ Ziel: SQL-Funktionslogik aus der Datenbank in TypeScript verlagern und testbar m
 
 ## Restpunkte
 - Kein offener Restpunkt fuer SQL-Funktionsparitaet.
-- Abschluss und Einordnung sind in `/Users/christian/shortbox/shortbox-graphql/sql/README.md` dokumentiert.
+- Legacy-SQL-Artefakte wurden aus dem Repository entfernt.
