@@ -93,7 +93,7 @@ Weitere relevante Variablen:
 - `LOGIN_WINDOW_SECONDS`
 - `LOGIN_LOCK_SECONDS`
 
-## CI und Releases
+## CI und Release
 
 CI-Workflow:
 
@@ -102,17 +102,14 @@ CI-Workflow:
 - Ergebnis: Build-Artifact `shortbox-graphql-<version>.tar.gz` + Coverage-Artifact
 - Zusatz: separater Integrationstest-Job mit MySQL-Service
 
-Auto-Release:
-
-- Datei: `.github/workflows/auto-release.yml`
-- Trigger: Merge/Push auf `main`
-- Verhalten: Label-basiertes Version-Bump (`major`, `minor`, `patch`, Default `minor`) + Tag
-
 Release:
 
 - Datei: `.github/workflows/release.yml`
-- Trigger: Tag `v*.*.*`
-- Verhalten: Build + Release-Bundle als Asset im GitHub Release
+- Trigger: Push auf `main` (inkl. Merge und Direkt-Push) oder manuell (`workflow_dispatch`)
+- Verhalten:
+  - Version-Bump aus PR-Labels (`major`, `minor`, `patch`, Default `minor`)
+  - Commit + Tag `vX.Y.Z`
+  - Build + Release-Bundle als Asset im GitHub Release
 
 ## Hinweise
 

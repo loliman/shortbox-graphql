@@ -2,62 +2,43 @@ name: Release Runtime Bundle
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches:
+      - main
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag (vX.Y.Z)"
-        required: true
-        type: string
+      bump_type:
+        description: "Version bump type"
+        required: false
+        type: choice
+        default: minor
+        options:
+          - major
+          - minor
+          - patch
 
 permissions:
   contents: write
   packages: read
+  pull-requests: read
 
 concurrency:
-  group: graphql-release-${{ github.ref }}
+  group: graphql-release-main
   cancel-in-progress: false
 
 jobs:
   release:
-    name: Build and Publish Release Bundle
+    name: Bump, Tag and Publish Release Bundle
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, 'chore(release): v')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       CI: true
     steps:
-      - name: Resolve release tag
-        id: release_tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${GITHUB_REF_NAME}"
-          fi
-
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Invalid release tag: $TAG"
-            exit 1
-          fi
-
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.release_tag.outputs.tag }}
+          ref: main
           fetch-depth: 0
-
-      - name: Verify tag matches package version
-        run: |
-          TAG="${{ steps.release_tag.outputs.tag }}"
-          TAG_VERSION="${TAG#v}"
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)."
-            exit 1
-          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -73,20 +54,93 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm ci
 
+      - name: Determine version bump
+        id: bump
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BUMP: ${{ github.event.inputs.bump_type || '' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            BUMP="${INPUT_BUMP:-minor}"
+            case "$BUMP" in
+              major|minor|patch) ;;
+              *)
+                echo "Invalid bump type: $BUMP"
+                exit 1
+                ;;
+            esac
+            echo "type=$BUMP" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LABELS=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].labels[].name' 2>/dev/null | tr '\n' ' ' || true)
+
+          MAJOR=0
+          MINOR=0
+          PATCH=0
+
+          for label in $LABELS; do
+            if [ "$label" = "major" ]; then MAJOR=1; fi
+            if [ "$label" = "minor" ]; then MINOR=1; fi
+            if [ "$label" = "patch" ]; then PATCH=1; fi
+          done
+
+          COUNT=$((MAJOR + MINOR + PATCH))
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No release label found. Defaulting to minor."
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$COUNT" -gt 1 ]; then
+            echo "At most one release label is allowed: major, minor, patch."
+            echo "Found labels: $LABELS"
+            exit 1
+          fi
+
+          if [ "$MAJOR" -eq 1 ]; then echo "type=major" >> "$GITHUB_OUTPUT"; fi
+          if [ "$MINOR" -eq 1 ]; then echo "type=minor" >> "$GITHUB_OUTPUT"; fi
+          if [ "$PATCH" -eq 1 ]; then echo "type=patch" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Bump version
+        run: npm version "${{ steps.bump.outputs.type }}" --no-git-tag-version
+
       - name: Build
         run: npm run build
 
       - name: Package release bundle
+        id: bundle
         run: |
-          TAG="${{ steps.release_tag.outputs.tag }}"
-          VERSION="${TAG#v}"
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
           mkdir -p release
           tar -czf "release/shortbox-graphql-${VERSION}.tar.gz" dist package.json package-lock.json sql Dockerfile docker-compose.yml
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag release
+        run: |
+          NEW_VERSION="${{ steps.bundle.outputs.version }}"
+          NEW_TAG="${{ steps.bundle.outputs.tag }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add package.json package-lock.json
+          git commit -m "chore(release): ${NEW_TAG} [skip ci]"
+          git tag -a "${NEW_TAG}" -m "Release ${NEW_TAG}"
+
+          git push origin "HEAD:main"
+          git push origin "${NEW_TAG}"
 
       - name: Publish GitHub release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_tag.outputs.tag }}
+          tag_name: ${{ steps.bundle.outputs.tag }}
           files: release/shortbox-graphql-*.tar.gz
           generate_release_notes: true
           fail_on_unmatched_files: true
