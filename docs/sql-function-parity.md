@@ -3,9 +3,8 @@
 Stand: 2026-02-16
 
 ## Scope
-Analyse und Umsetzung der Legacy-MySQL-Funktionen aus:
-- `/Users/christian/shortbox/shortbox-graphql/sql/functions.sql`
-- `/Users/christian/shortbox/shortbox-graphql/sql/apply-net-migration.sql`
+Analyse und Umsetzung der Legacy-MySQL-Funktionen aus historischem SQL-Bestand
+und `/Users/christian/shortbox/shortbox-graphql/sql/apply-net-migration.sql`.
 
 Ziel: SQL-Funktionslogik aus der Datenbank in TypeScript verlagern und testbar machen.
 
@@ -13,7 +12,7 @@ Ziel: SQL-Funktionslogik aus der Datenbank in TypeScript verlagern und testbar m
 - Es gibt keine Laufzeitaufrufe der alten SQL-Funktionen im Anwendungscode (`src/`).
 - Die fachliche Logik ist in `/Users/christian/shortbox/shortbox-graphql/src/util/dbFunctions.ts` zentral umgesetzt.
 - Paritätstests liegen in `/Users/christian/shortbox/shortbox-graphql/tests/dbFunctions.test.ts`.
-- `sql/functions.sql` ist als deprecated Stub markiert.
+- Die ehemalige Datei `sql/functions.sql` wurde entfernt.
 - `sql/apply-net-migration.sql` entfernt alte SQL-Funktionen aktiv (`DROP FUNCTION ...`) und erstellt sie nicht mehr neu.
 
 ## Paritätsmatrix

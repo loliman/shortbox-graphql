@@ -5,7 +5,6 @@ aktuellen PostgreSQL-Runtime-Pfads.
 
 ## Dateien
 - `shortbox_schema.sql`: historischer MySQL-Dump (Referenz, nicht aktiv genutzt)
-- `functions.sql`: deprecated Stub; SQL-Funktionslogik wurde nach TypeScript verschoben
 - `apply-net-migration.sql`: Legacy-MySQL-Cleanup-Skript, das alte DB-Funktionen entfernt
 
 ## Aktueller Stand

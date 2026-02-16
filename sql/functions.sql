@@ -1,3 +1,0 @@
--- Deprecated (2026-02-16)
--- Legacy MySQL function definitions were removed during PostgreSQL migration.
--- Equivalent behavior now lives in TypeScript: src/util/dbFunctions.ts.
