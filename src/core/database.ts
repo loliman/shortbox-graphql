@@ -4,11 +4,9 @@ import { db, dbPassword, dbUser } from '../config/config';
 const sequelize = new Sequelize(db, dbUser, dbPassword, {
   logging: false,
   host: process.env.DB_HOST || 'localhost',
-  dialect: 'mysql',
-  port: parseInt(process.env.DB_PORT || '3306', 10),
+  dialect: 'postgres',
+  port: parseInt(process.env.DB_PORT || '5432', 10),
   define: {
-    charset: 'utf8',
-    collate: 'utf8_general_ci',
     timestamps: true,
   },
   pool: {
