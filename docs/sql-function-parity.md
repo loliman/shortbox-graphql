@@ -30,3 +30,4 @@ Ziel: SQL-Funktionslogik aus der Datenbank in TypeScript verlagern und testbar m
 
 ## Restpunkte
 - Historische MySQL-Dumps unter `sql/` bleiben als Referenz bestehen (nicht produktiv genutzt).
+- Einordnung der Legacy-Dateien ist in `/Users/christian/shortbox/shortbox-graphql/sql/README.md` dokumentiert.

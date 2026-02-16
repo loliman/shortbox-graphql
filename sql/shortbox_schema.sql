@@ -1,3 +1,7 @@
+# Legacy archive (MySQL dump)
+# Diese Datei ist nur Referenzmaterial aus dem Altbestand und wird nicht im
+# aktuellen PostgreSQL-Runtime- oder CI-Pfad verwendet.
+#
 # ************************************************************
 # Sequel Pro SQL dump
 # Version 4541
