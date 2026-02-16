@@ -5,7 +5,6 @@ aktuellen PostgreSQL-Runtime-Pfads.
 
 ## Dateien
 - `shortbox_schema.sql`: historischer MySQL-Dump (Referenz, nicht aktiv genutzt)
-- `apply-net-migration.sql`: Legacy-MySQL-Cleanup-Skript, das alte DB-Funktionen entfernt
 
 ## Aktueller Stand
 - Aktive DB-Anbindung: PostgreSQL ueber Sequelize
