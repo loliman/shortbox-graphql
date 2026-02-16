@@ -39,3 +39,5 @@ error.log
 # local runtime state
 /listen/
 /logs/
+/.fleet/
+/.scannerwork/

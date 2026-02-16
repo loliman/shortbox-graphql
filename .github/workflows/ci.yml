@@ -55,9 +55,6 @@ jobs:
             echo "No formatting changes detected."
           fi
 
-      - name: Run GraphQL Codegen
-        run: npm run codegen
-
       - name: Lint
         run: npm run lint
 
@@ -78,7 +75,7 @@ jobs:
           cp package-lock.json release/
           cp docker-compose.yml release/
           cp Dockerfile release/
-          cp functions.sql release/
+          cp -r sql release/
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
@@ -157,9 +154,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm ci
-
-      - name: Run GraphQL Codegen
-        run: npm run codegen
 
       - name: Wait for MySQL
         run: |
