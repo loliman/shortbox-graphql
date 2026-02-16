@@ -1,40 +1,63 @@
 # shortbox-graphql
 
-GraphQL-Backend fuer Shortbox auf Basis von Apollo Server, Express 5 und Sequelize.
+GraphQL-Backend fuer Shortbox (Apollo Server, Express 5, Sequelize).
 
 ## Ueberblick
 
-- Laufzeit: Node.js + TypeScript
-- API: GraphQL (Apollo Server)
-- DB: MySQL (Sequelize)
-- Contract: externes Paket `@loliman/shortbox-contract` (Schema + Typen)
-
-## Projektstruktur
-
-- `src/app.ts`: Einstiegspunkt
-- `src/core/`: Server, Security, DB-Bootstrap, Runtime-Helfer
-- `src/modules/`: Domainen (Schema/Resolver/Model je Modul)
-- `src/services/`: Business-Logik
-- `src/api/`: gemeinsame GraphQL-Bausteine
-- `tests/`: Unit- und Integrationstests
-- `sql/`: SQL-Artefakte (`functions.sql`, `shortbox_schema.sql`, `apply-net-migration.sql`)
+- Rolle: API-Backend fuer Shortbox
+- Stack: Node.js, TypeScript, Apollo Server, Express 5, Sequelize, MySQL
+- Contract-Quelle: `@loliman/shortbox-contract`
 
 ## Voraussetzungen
 
 - Node.js 20+
 - npm 10+
 - MySQL 8+
-- Zugriff auf `@loliman` GitHub Package Registry (via `.npmrc`)
+- npm-Auth fuer GitHub Packages (`@loliman`)
 
-## Schnellstart (lokal)
-
-1. Dependencies installieren:
+## Installation
 
 ```bash
 npm ci
 ```
 
-2. `.env` setzen (Beispielwerte sind im Repo vorhanden):
+## Lokale Entwicklung
+
+```bash
+npm run dev
+```
+
+Standard-URL: `http://localhost:4000/` (GraphQL via POST/OPTIONS)
+
+## Wichtige Skripte
+
+- `npm run dev`: Start mit Watch-Mode
+- `npm run start`: Start ohne Watch-Mode
+- `npm run format`: Prettier write fuer `src/**/*.ts`
+- `npm run format:check`: Prettier check fuer `src/**/*.ts`
+- `npm run lint`: ESLint auf `src/**/*.ts`
+- `npm run typecheck`: TypeScript-Check ohne Emit
+- `npm run test`: Unit-Tests
+- `npm run test:integration`: Integrationstests
+- `npm run test:ci`: Coverage + Integration
+- `npm run build`: TypeScript-Build nach `dist/`
+- `npm run serve`: Start aus `dist/app.js`
+- `npm run docker:build`: Docker Image bauen
+- `npm run docker:up`: App + DB via Docker Compose starten
+
+## Projektstruktur
+
+- `src/app.ts`: Einstiegspunkt
+- `src/core/`: Server, Security, DB-Bootstrap, Runtime-Helfer
+- `src/modules/`: Domains mit Schema, Resolvern und Models
+- `src/services/`: Business-Logik
+- `src/api/`: gemeinsame GraphQL-Bausteine
+- `tests/`: Unit- und Integrationstests
+- `sql/`: SQL-Artefakte (Schema, Funktionen, Migrationen)
+
+## Umgebungsvariablen
+
+Typische Basiswerte in `.env`:
 
 ```env
 DB_NAME=shortbox
@@ -47,31 +70,7 @@ NODE_ENV=development
 DB_BOOTSTRAP_SYNC=false
 ```
 
-3. Dev-Server starten:
-
-```bash
-npm run dev
-```
-
-Die GraphQL-API laeuft standardmaessig auf `http://localhost:4000/` (POST/OPTIONS).
-
-## Wichtige Skripte
-
-- `npm run dev`: Start mit Watch-Mode
-- `npm run start`: Start ohne Watch-Mode
-- `npm run lint`: ESLint auf `src/**/*.ts`
-- `npm run typecheck`: TypeScript-Check ohne Emit
-- `npm run test`: Unit-Tests
-- `npm run test:integration`: Integrationstests
-- `npm run test:ci`: Coverage + Integration
-- `npm run build`: TypeScript Build nach `dist/`
-- `npm run serve`: Start aus `dist/app.js`
-- `npm run docker:build`: Docker Image bauen
-- `npm run docker:up`: App + DB via Docker Compose starten
-
-## Konfiguration (Auszug)
-
-Zusatzvariablen fuer Security/Runtime:
+Weitere relevante Variablen:
 
 - `SESSION_SECRET`
 - `SESSION_COOKIE_NAME`
@@ -94,32 +93,28 @@ Zusatzvariablen fuer Security/Runtime:
 - `LOGIN_WINDOW_SECONDS`
 - `LOGIN_LOCK_SECONDS`
 
-## Contract-Quelle
+## CI und Releases
 
-Der GraphQL-Contract ist **externisiert** und wird zur Laufzeit aus `@loliman/shortbox-contract` geladen:
+CI-Workflow:
 
-- SDL: `@loliman/shortbox-contract/schema/shortbox.graphql`
-- Typen: `@loliman/shortbox-contract` (z. B. in `src/types/graphql.ts`)
+- Datei: `.github/workflows/ci.yml`
+- Trigger: Push + Pull Request auf `main`
+- Ergebnis: Build-Artifact `shortbox-graphql-<version>.tar.gz` + Coverage-Artifact
+- Zusatz: separater Integrationstest-Job mit MySQL-Service
 
-Es gibt in diesem Repo **kein lokales Contract-Codegen** mehr.
+Auto-Release:
 
-## CI/CD
+- Datei: `.github/workflows/auto-release.yml`
+- Trigger: Merge/Push auf `main`
+- Verhalten: Label-basiertes Version-Bump (`major`, `minor`, `patch`, Default `minor`) + Tag
 
-Die Pipeline in `.github/workflows/ci.yml` fuehrt aus:
+Release:
 
-- Install
-- Lint
-- Typecheck
-- Unit-Tests (Coverage-Gate)
-- Build
-- Integrationstests mit MySQL-Service
-- SonarCloud-Analyse
+- Datei: `.github/workflows/release.yml`
+- Trigger: Tag `v*.*.*`
+- Verhalten: Build + Release-Bundle als Asset im GitHub Release
 
-Das Build-Bundle wird als `shortbox-graphql-<version>.tar.gz` erzeugt.
+## Hinweise
 
-## Releases
-
-- Auto-Version-Bump nach Merge auf `main`: `.github/workflows/auto-release.yml`
-- Label-gesteuert: `major`, `minor`, `patch` (Default ohne Label: `minor`)
-- Tag-Release baut ein deploybares Runtime-Bundle und haengt es als Asset an das GitHub Release:
-  `.github/workflows/release.yml`
+- Der Contract liegt extern; es gibt hier kein lokales Contract-Codegen-Script.
+- Runtime-Start in Produktion: `npm run serve` nach Build und Runtime-Dependency-Installation.
