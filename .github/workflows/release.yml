@@ -28,7 +28,7 @@ concurrency:
 jobs:
   release:
     name: Bump, Tag and Publish Release Bundle
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, 'chore(release): v')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
