@@ -38,7 +38,7 @@ Standard-URL: `http://localhost:4000/` (GraphQL via POST/OPTIONS)
 - `npm run lint`: ESLint auf `src/**/*.ts`
 - `npm run typecheck`: TypeScript-Check ohne Emit
 - `npm run test`: Unit-Tests
-- `npm run test:integration`: Integrationstests
+- `npm run test:integration`: Integrationstests (laufende PostgreSQL-Instanz erforderlich)
 - `npm run test:ci`: Coverage + Integration
 - `npm run build`: TypeScript-Build nach `dist/`
 - `npm run serve`: Start aus `dist/app.js`
