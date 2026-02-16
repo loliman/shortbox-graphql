@@ -4,7 +4,6 @@
   "private": true,
   "main": "src/app.ts",
   "scripts": {
-    "contract:codegen": "node scripts/contract-codegen.cjs codegen",
     "check:artifacts": "sh -c \"if git ls-files | grep -E '(^|/)(dist|build|logs|listen)/|\\\\.log$|(^|/)\\\\.output\\\\.txt$|(^|/)output\\\\.txt$'; then echo 'Remove tracked build/runtime artifacts before commit.'; exit 1; fi\"",
     "start": "ts-node src/app.ts",
     "dev": "node --watch --watch-path=src -r ts-node/register src/app.ts",
@@ -16,8 +15,7 @@
     "test:coverage": "jest --config jest.config.js --coverage",
     "test:integration": "jest --config jest.integration.config.js --runInBand",
     "test:ci": "npm run test:coverage && npm run test:integration",
-    "codegen": "npm run contract:codegen",
-    "prebuild": "npm run check:artifacts && npm run contract:codegen",
+    "prebuild": "npm run check:artifacts",
     "typecheck": "tsc --noEmit",
     "build": "npx tsc",
     "serve": "node dist/app.js",

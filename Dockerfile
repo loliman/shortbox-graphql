@@ -7,7 +7,6 @@ RUN npm install --legacy-peer-deps
 
 COPY . .
 
-RUN npm run codegen
 RUN npx tsc
 
 EXPOSE 4000
