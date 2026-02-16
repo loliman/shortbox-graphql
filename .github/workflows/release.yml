@@ -1,0 +1,64 @@
+name: Release Runtime Bundle
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: read
+
+concurrency:
+  group: graphql-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and Publish Release Bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify tag matches package version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+          registry-url: https://npm.pkg.github.com
+          scope: "@loliman"
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Package release bundle
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release
+          tar -czf "release/shortbox-graphql-${VERSION}.tar.gz" dist package.json package-lock.json sql Dockerfile docker-compose.yml
+
+      - name: Publish GitHub release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/shortbox-graphql-*.tar.gz
+          generate_release_notes: true
+          fail_on_unmatched_files: true

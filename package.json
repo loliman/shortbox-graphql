@@ -1,6 +1,6 @@
 {
   "name": "shortbox-graphql",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "main": "src/app.ts",
   "scripts": {
@@ -10,6 +10,7 @@
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint 'src/**/*.ts' --fix",
     "format": "prettier --write 'src/**/*.ts'",
+    "format:check": "prettier --check 'src/**/*.ts'",
     "test": "npm run test:unit",
     "test:unit": "jest --config jest.config.js",
     "test:coverage": "jest --config jest.config.js --coverage",

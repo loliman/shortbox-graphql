@@ -28,6 +28,7 @@ yarn-error.log*
 
 # build artifacts
 /dist
+/release
 
 # runtime logs
 *.log
