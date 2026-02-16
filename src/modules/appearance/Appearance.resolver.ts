@@ -46,10 +46,10 @@ export const resolvers: AppearanceResolvers = {
       }
 
       if (pattern && pattern !== '') {
-        where.name = { [Op.like]: '%' + pattern.replace(/\s/g, '%') + '%' };
+        where.name = { [Op.iLike]: '%' + pattern.replace(/\s/g, '%') + '%' };
       }
 
-      if (type) where.type = { [Op.like]: type.toUpperCase() };
+      if (type) where.type = { [Op.iLike]: type.toUpperCase() };
 
       const results = await models.Appearance.findAll({
         where,

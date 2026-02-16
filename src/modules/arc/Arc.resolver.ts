@@ -41,7 +41,7 @@ export const resolvers: ArcResolvers = {
       }
 
       if (pattern && pattern !== '') {
-        where.title = { [Op.like]: '%' + pattern.replace(/\s/g, '%') + '%' };
+        where.title = { [Op.iLike]: '%' + pattern.replace(/\s/g, '%') + '%' };
       }
 
       if (type) where.type = { [Op.eq]: type.toUpperCase() };

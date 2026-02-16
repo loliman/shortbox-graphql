@@ -60,7 +60,7 @@ export class PublisherService {
       if (pattern && pattern !== '') {
         options.where = {
           ...options.where,
-          name: { [Op.like]: '%' + pattern.replace(/\s/g, '%') + '%' },
+          name: { [Op.iLike]: '%' + pattern.replace(/\s/g, '%') + '%' },
         };
         // Note: Complex ordering with cursor-based pagination is tricky.
         // For now we stick to name/id ordering when using pattern search to keep cursor stability.

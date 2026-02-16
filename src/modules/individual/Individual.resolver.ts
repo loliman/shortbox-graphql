@@ -62,7 +62,7 @@ export const resolvers: IndividualResolvers = {
       }
 
       if (pattern && pattern !== '') {
-        where.name = { [Op.like]: '%' + pattern.replace(/\s/g, '%') + '%' };
+        where.name = { [Op.iLike]: '%' + pattern.replace(/\s/g, '%') + '%' };
         // Rank-based ordering is tricky with cursors, sticking to stable order
       }
 

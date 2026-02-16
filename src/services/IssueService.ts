@@ -140,8 +140,8 @@ export class IssueService {
         options.where = {
           ...options.where,
           [Op.or]: [
-            { number: { [Op.like]: pattern + '%' } },
-            { title: { [Op.like]: '%' + pattern + '%' } },
+            { number: { [Op.iLike]: pattern + '%' } },
+            { title: { [Op.iLike]: '%' + pattern + '%' } },
           ],
         };
       }

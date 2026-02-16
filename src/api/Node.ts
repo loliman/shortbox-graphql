@@ -102,7 +102,7 @@ export const resolvers: NodeResolvers = {
       const publishers = await models.Publisher.findAll({
         where: {
           original: us,
-          name: { [Op.like]: searchPattern },
+          name: { [Op.iLike]: searchPattern },
         },
         limit: 20,
       });
@@ -117,7 +117,7 @@ export const resolvers: NodeResolvers = {
           },
         ],
         where: {
-          title: { [Op.like]: searchPattern },
+          title: { [Op.iLike]: searchPattern },
         },
         limit: 20,
       });
@@ -139,8 +139,8 @@ export const resolvers: NodeResolvers = {
         ],
         where: {
           [Op.or]: [
-            { title: { [Op.like]: searchPattern } },
-            { number: { [Op.like]: `${pattern}%` } },
+            { title: { [Op.iLike]: searchPattern } },
+            { number: { [Op.iLike]: `${pattern}%` } },
           ],
         },
         limit: 20,

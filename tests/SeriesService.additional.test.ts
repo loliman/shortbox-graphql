@@ -63,7 +63,7 @@ describe('SeriesService additional coverage', () => {
     const options = mockModels.Series.findAll.mock.calls[0][0];
     expect(options.where['$Publisher.name$']).toBe('Marvel');
     expect(options.where['$Publisher.original$']).toBe(1);
-    expect(options.where.title[Symbol.for('like') as any] || options.where.title).toBeTruthy();
+    expect(options.where.title[Symbol.for('iLike') as any] || options.where.title).toBeTruthy();
   });
 
   it('treats missing or blank publisher name like wildcard for series search', async () => {

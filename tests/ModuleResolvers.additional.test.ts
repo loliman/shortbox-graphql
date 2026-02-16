@@ -953,14 +953,23 @@ describe('Smaller resolvers additional coverage', () => {
 
   it('covers arc/individual/appearance resolvers', async () => {
     const models = {
-      Arc: { findAll: jest.fn().mockResolvedValue([{ id: 1, title: ' Arc ' }]) },
+      Arc: {
+        findAll: jest.fn().mockResolvedValue([{ id: 1, title: ' Arc ' }]),
+        findByPk: jest.fn().mockResolvedValue({ get: jest.fn().mockReturnValue('Arc Cursor') }),
+      },
       Issue: { findAll: jest.fn().mockResolvedValue([{ id: 2 }]) },
-      Individual: { findAll: jest.fn().mockResolvedValue([{ id: 3, name: 'Peter' }]) },
+      Individual: {
+        findAll: jest.fn().mockResolvedValue([{ id: 3, name: 'Peter' }]),
+        findByPk: jest.fn().mockResolvedValue({ get: jest.fn().mockReturnValue('Ind Cursor') }),
+      },
       Story_Individual: { findAll: jest.fn().mockResolvedValue([{ type: 'WRITER' }]) },
       Cover_Individual: { findAll: jest.fn().mockResolvedValue([{ type: 'ARTIST' }]) },
       Issue_Individual: { findAll: jest.fn().mockResolvedValue([{ type: 'EDITOR' }]) },
       Feature_Individual: { findAll: jest.fn().mockResolvedValue([{ type: 'COLORIST' }]) },
-      Appearance: { findAll: jest.fn().mockResolvedValue([{ id: 4, name: 'Spidey', type: '' }]) },
+      Appearance: {
+        findAll: jest.fn().mockResolvedValue([{ id: 4, name: 'Spidey', type: '' }]),
+        findByPk: jest.fn().mockResolvedValue({ get: jest.fn().mockReturnValue('App Cursor') }),
+      },
       Story_Appearance: { findOne: jest.fn().mockResolvedValue({ role: 'FEATURED' }) },
     } as any;
 
