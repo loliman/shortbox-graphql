@@ -9,6 +9,7 @@ on:
       - closed
 
 permissions:
+  actions: write
   contents: write
   pull-requests: read
 
@@ -78,6 +79,7 @@ jobs:
         run: npm version "${{ steps.bump.outputs.type }}" --no-git-tag-version
 
       - name: Commit and tag release
+        id: release_tag
         run: |
           NEW_VERSION=$(node -p "require('./package.json').version")
           NEW_TAG="v${NEW_VERSION}"
@@ -91,3 +93,13 @@ jobs:
 
           git push origin "HEAD:main"
           git push origin "${NEW_TAG}"
+
+          echo "tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run release.yml \
+            --ref "${{ steps.release_tag.outputs.tag }}" \
+            -f tag="${{ steps.release_tag.outputs.tag }}"
