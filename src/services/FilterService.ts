@@ -157,7 +157,7 @@ export class FilterService {
     orderField: string | boolean = false,
     sortDirection: string | boolean = false,
   ): FindOptions {
-    const us = filter.us ? 1 : 0;
+    const us = Boolean(filter.us);
 
     const where: WhereOptions = {};
     const include: Includeable[] = [

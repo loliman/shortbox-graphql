@@ -21,7 +21,7 @@ export async function run() {
   try {
     const issues = await models.Issue.findAll({
       where: {
-        '$Series->Publisher.original$': 1,
+        '$Series->Publisher.original$': true,
       },
       group: ['fk_series', 'number'],
       include: [
@@ -158,7 +158,7 @@ export async function run() {
     //Remove all US Series without issues
     const series = await models.Series.findAll({
       where: {
-        '$Publisher.original$': 1,
+        '$Publisher.original$': true,
       },
       include: [models.Publisher],
       transaction,
@@ -182,7 +182,7 @@ export async function run() {
     //Remove all US publishers without series
     const publishers = await models.Publisher.findAll({
       where: {
-        original: 1,
+        original: true,
       },
       transaction,
     });

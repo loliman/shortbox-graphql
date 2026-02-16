@@ -188,7 +188,7 @@ describe('IssueService additional coverage', () => {
 
     const seriesInclude = options.include[0];
     const publisherInclude = seriesInclude.include[0];
-    expect(publisherInclude.where).toEqual({ original: 0, name: 'Marvel' });
+    expect(publisherInclude.where).toEqual({ original: false, name: 'Marvel' });
     expect(seriesInclude.where).toEqual({ title: 'Spider-Man', volume: 2 });
   });
 

@@ -63,7 +63,7 @@ export class SeriesService {
         options.where = { ...options.where, '$Publisher.name$': publisherName };
 
       if (shouldFilterPublisherUs)
-        options.where = { ...options.where, '$Publisher.original$': publisher.us ? 1 : 0 };
+        options.where = { ...options.where, '$Publisher.original$': Boolean(publisher.us) };
 
       if (pattern && pattern !== '') {
         options.where = {

@@ -377,7 +377,7 @@ export class IssueService {
       const publisherInclude = seriesInclude.include?.[0];
 
       if (publisherInclude && filter.us !== undefined && filter.us !== null) {
-        publisherInclude.where = { ...publisherInclude.where, original: filter.us ? 1 : 0 };
+        publisherInclude.where = { ...publisherInclude.where, original: Boolean(filter.us) };
       }
       if (
         publisherInclude &&

@@ -46,7 +46,7 @@ describe('FilterService', () => {
     expect(options.subQuery).toBe(false);
     expect(options.order).toEqual([]);
     const include = options.include as any[];
-    expect(include[0].include[0].where).toEqual({ original: 1 });
+    expect(include[0].include[0].where).toEqual({ original: true });
   });
 
   it('builds format, release date, variant and sellable filters', () => {
