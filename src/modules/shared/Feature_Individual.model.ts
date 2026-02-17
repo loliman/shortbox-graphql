@@ -27,7 +27,7 @@ export default (sequelize: Sequelize) => {
     },
     {
       sequelize,
-      tableName: 'Feature_Individual',
+      tableName: 'feature_individual',
     },
   );
 

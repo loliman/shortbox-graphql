@@ -8,14 +8,14 @@ export const typeDef = gql`
   }
 
   extend type Query {
-    publishers(
+    publisherList(
       pattern: String
       us: Boolean!
       first: Int
       after: String
       filter: Filter
     ): PublisherConnection
-    publisher(publisher: PublisherInput!): Publisher
+    publisherDetails(publisher: PublisherInput!): Publisher
   }
 
   type PublisherConnection {

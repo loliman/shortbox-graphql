@@ -18,8 +18,8 @@ export class Issue extends Model {
   public limitation!: string;
   public addinfo!: string;
   public fk_series!: number;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
+  public readonly createdat!: Date;
+  public readonly updatedat!: Date;
 
   public static associate(models: DbModels) {
     Issue.hasMany(models.Story, {
@@ -137,7 +137,7 @@ export default (sequelize: Sequelize) => {
         },
       ],
       sequelize,
-      tableName: 'Issue',
+      tableName: 'issue',
     },
   );
 

@@ -23,7 +23,7 @@ describe('GraphQL Integration Tests', () => {
     const query = {
       query: `
         query {
-          publishers(us: true) {
+          publisherList(us: true) {
             edges {
               node {
                 name
@@ -38,15 +38,15 @@ describe('GraphQL Integration Tests', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.errors).toBeUndefined();
-    expect(response.body.data.publishers.edges.length).toBeGreaterThan(0);
-    expect(response.body.data.publishers.edges[0].node.name).toBe('Marvel Comics');
+    expect(response.body.data.publisherList.edges.length).toBeGreaterThan(0);
+    expect(response.body.data.publisherList.edges[0].node.name).toBe('Marvel Comics');
   });
 
   it('fetches seeded series by pattern', async () => {
     const query = {
       query: `
         query {
-          series(pattern: "Spider", publisher: { name: "Marvel Comics", us: true }) {
+          seriesList(pattern: "Spider", publisher: { name: "Marvel Comics", us: true }) {
             edges {
               node {
                 title
@@ -62,15 +62,15 @@ describe('GraphQL Integration Tests', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.errors).toBeUndefined();
-    expect(response.body.data.series.edges.length).toBeGreaterThan(0);
-    expect(response.body.data.series.edges[0].node.title).toBe('Spider-Man');
+    expect(response.body.data.seriesList.edges.length).toBeGreaterThan(0);
+    expect(response.body.data.seriesList.edges[0].node.title).toBe('Spider-Man');
   });
 
   it('fetches issue by IssueInput', async () => {
     const query = {
       query: `
         query {
-          issue(issue: {
+          issueDetails(issue: {
             number: "1",
             series: {
               title: "Spider-Man",
@@ -91,8 +91,8 @@ describe('GraphQL Integration Tests', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.errors).toBeUndefined();
-    expect(response.body.data.issue.number).toBe('1');
-    expect(response.body.data.issue.series.title).toBe('Spider-Man');
+    expect(response.body.data.issueDetails.number).toBe('1');
+    expect(response.body.data.issueDetails.series.title).toBe('Spider-Man');
   });
 
   it('returns UNAUTHENTICATED for protected mutation', async () => {
@@ -114,13 +114,13 @@ describe('GraphQL Integration Tests', () => {
     const query = {
       query: `
         query {
-          lastEdited(filter: { us: true }, first: 2, order: "createdAt", direction: "ASC") {
+          lastEdited(filter: { us: true }, first: 2, order: "createdat", direction: "ASC") {
             edges {
               node {
                 number
                 variant
-                createdAt
-                updatedAt
+                createdat
+                updatedat
                 series { title }
                 stories { number }
                 cover { id }

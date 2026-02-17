@@ -214,14 +214,14 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       editPublisher: jest.fn().mockResolvedValue({ id: 12 }),
     } as any;
 
-    await publisherResolvers.Query.publishers(
+    await publisherResolvers.Query.publisherList(
       {},
       { pattern: '', us: true, first: 10, after: '', filter: null } as any,
       { loggedIn: true, publisherService } as any,
     );
     expect(publisherService.findPublishers).toHaveBeenCalled();
 
-    await publisherResolvers.Query.publisher(
+    await publisherResolvers.Query.publisherDetails(
       {},
       { publisher: { name: 'Marvel' } } as any,
       { models } as any,
@@ -388,12 +388,12 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     } as any;
     const publisherLoader = { load: jest.fn().mockResolvedValue({ id: 7 }) };
 
-    await seriesResolvers.Query.series(
+    await seriesResolvers.Query.seriesList(
       {},
       { pattern: '', publisher: { name: 'Marvel' }, first: 10, after: '', filter: null } as any,
       { loggedIn: true, seriesService } as any,
     );
-    await seriesResolvers.Query.seriesd(
+    await seriesResolvers.Query.seriesDetails(
       {},
       { series: { title: 'SM', volume: 1, publisher: { name: 'Marvel' } } } as any,
       { models } as any,
@@ -572,12 +572,12 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       editIssue: jest.fn().mockResolvedValue({ id: 3 }),
     } as any;
 
-    await issueResolvers.Query.issues(
+    await issueResolvers.Query.issueList(
       {},
       { pattern: '', series: { title: 'SM', volume: 1, publisher: { name: 'Marvel' } } } as any,
       { loggedIn: true, issueService } as any,
     );
-    await issueResolvers.Query.issue(
+    await issueResolvers.Query.issueDetails(
       {},
       { issue: { number: '1', variant: '', series: { title: 'SM', volume: 1, publisher: { name: 'Marvel' } } } } as any,
       { models } as any,
@@ -585,7 +585,7 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     expect(IssueInputSchema.parse).toHaveBeenCalled();
     await issueResolvers.Query.lastEdited(
       {},
-      { filter: null, first: 10, after: '', order: 'updatedAt', direction: 'DESC' } as any,
+      { filter: null, first: 10, after: '', order: 'updatedat', direction: 'DESC' } as any,
       { issueService, loggedIn: true } as any,
     );
 
@@ -780,27 +780,27 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       issueResolvers.Issue.variants(parent, {} as any, {} as any),
     ).resolves.toEqual([]);
 
-    const createdAtLegacy = issueResolvers.Issue.createdAt(
-      { createdAt: '10.02.2026 11:14' } as any,
+    const createdatLegacy = issueResolvers.Issue.createdat(
+      { createdat: '10.02.2026 11:14' } as any,
       {} as any,
       {} as any,
       {} as any,
     ) as string | null;
-    expect(typeof createdAtLegacy).toBe('string');
-    expect(Date.parse(createdAtLegacy as string)).not.toBeNaN();
+    expect(typeof createdatLegacy).toBe('string');
+    expect(Date.parse(createdatLegacy as string)).not.toBeNaN();
 
-    const updatedAtIso = issueResolvers.Issue.updatedAt(
-      { updatedAt: '2026-02-10T11:14:00.000Z' } as any,
+    const updatedatIso = issueResolvers.Issue.updatedat(
+      { updatedat: '2026-02-10T11:14:00.000Z' } as any,
       {} as any,
       {} as any,
       {} as any,
     ) as string | null;
-    expect(typeof updatedAtIso).toBe('string');
-    expect(Date.parse(updatedAtIso as string)).not.toBeNaN();
+    expect(typeof updatedatIso).toBe('string');
+    expect(Date.parse(updatedatIso as string)).not.toBeNaN();
 
     expect(
-      issueResolvers.Issue.updatedAt(
-        { updatedAt: 'not-a-date' } as any,
+      issueResolvers.Issue.updatedat(
+        { updatedat: 'not-a-date' } as any,
         {} as any,
         {} as any,
         {} as any,
@@ -918,26 +918,26 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     ).resolves.toBeNull();
 
     expect(
-      issueResolvers.Issue.createdAt(
-        { createdAt: new Date('2026-02-10T11:14:00.000Z') } as any,
+      issueResolvers.Issue.createdat(
+        { createdat: new Date('2026-02-10T11:14:00.000Z') } as any,
         {} as any,
         {} as any,
         {} as any,
       ),
     ).toBe('2026-02-10T11:14:00.000Z');
-    const updatedAtFromTimestamp = issueResolvers.Issue.updatedAt(
-      { updatedAt: Date.parse('2026-02-10T11:14:00.000Z') } as any,
+    const updatedatFromTimestamp = issueResolvers.Issue.updatedat(
+      { updatedat: Date.parse('2026-02-10T11:14:00.000Z') } as any,
       {} as any,
       {} as any,
       {} as any,
     ) as string | null;
-    expect(updatedAtFromTimestamp).toBe('2026-02-10T11:14:00.000Z');
+    expect(updatedatFromTimestamp).toBe('2026-02-10T11:14:00.000Z');
     expect(
-      issueResolvers.Issue.createdAt({ createdAt: {} } as any, {} as any, {} as any, {} as any),
+      issueResolvers.Issue.createdat({ createdat: {} } as any, {} as any, {} as any, {} as any),
     ).toBeNull();
     expect(
-      issueResolvers.Issue.updatedAt(
-        { updatedAt: '31.13.2026 10:10' } as any,
+      issueResolvers.Issue.updatedat(
+        { updatedat: '31.13.2026 10:10' } as any,
         {} as any,
         {} as any,
         {} as any,

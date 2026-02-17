@@ -8,14 +8,14 @@ export const typeDef = gql`
   }
 
   extend type Query {
-    issues(
+    issueList(
       pattern: String
       series: SeriesInput!
       first: Int
       after: String
       filter: Filter
     ): IssueConnection
-    issue(issue: IssueInput!, edit: Boolean): Issue
+    issueDetails(issue: IssueInput!, edit: Boolean): Issue
     lastEdited(
       filter: Filter
       first: Int
@@ -67,7 +67,7 @@ export const typeDef = gql`
     verified: Boolean
     collected: Boolean
     comicguideid: String
-    createdAt: DateTime
+    createdat: DateTime
     updatedAt: DateTime
     series: Series
     stories: [Story]

@@ -63,7 +63,7 @@ export default (sequelize: Sequelize) => {
         },
       ],
       sequelize,
-      tableName: 'Publisher',
+      tableName: 'publisher',
     },
   );
 

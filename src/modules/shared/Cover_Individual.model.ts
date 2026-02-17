@@ -27,7 +27,7 @@ export default (sequelize: Sequelize) => {
     },
     {
       sequelize,
-      tableName: 'Cover_Individual',
+      tableName: 'cover_individual',
     },
   );
 

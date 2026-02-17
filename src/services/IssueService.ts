@@ -7,8 +7,8 @@ import { naturalCompare } from '../util/util';
 import { fromRoman } from '../util/dbFunctions';
 
 const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
-  'updatedAt',
-  'createdAt',
+  'updatedat',
+  'createdat',
   'number',
   'format',
   'variant',
@@ -20,7 +20,7 @@ const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
 ]);
 
 const normalizeSortField = (field: string | undefined): string =>
-  field && ALLOWED_LAST_EDITED_SORT_FIELDS.has(field) ? field : 'updatedAt';
+  field && ALLOWED_LAST_EDITED_SORT_FIELDS.has(field) ? field : 'updatedat';
 
 const normalizeSortDirection = (direction: string | undefined): 'ASC' | 'DESC' => {
   if (!direction) return 'DESC';

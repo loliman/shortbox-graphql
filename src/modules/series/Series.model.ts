@@ -78,7 +78,7 @@ export default (sequelize: Sequelize) => {
         },
       ],
       sequelize,
-      tableName: 'Series',
+      tableName: 'series',
     },
   );
 

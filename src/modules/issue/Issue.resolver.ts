@@ -10,7 +10,9 @@ type IssueParent = {
   comicguideid?: unknown;
   variant?: string;
   createdAt?: unknown;
+  createdat?: unknown;
   updatedAt?: unknown;
+  updatedat?: unknown;
   series?: unknown;
   Series?: unknown;
   story?: unknown;
@@ -100,7 +102,7 @@ const normalizeDateTime = (value: unknown): string | null => {
 
 export const resolvers: IssueResolvers = {
   Query: {
-    issues: async (_, { pattern, series, first, after, filter }, context) => {
+    issueList: async (_, { pattern, series, first, after, filter }, context) => {
       const { loggedIn, issueService } = context;
       return await issueService.findIssues(
         pattern || undefined,
@@ -111,7 +113,7 @@ export const resolvers: IssueResolvers = {
         filter || undefined,
       );
     },
-    issue: async (_, { issue }, { models }) => {
+    issueDetails: async (_, { issue }, { models }) => {
       IssueInputSchema.parse(issue);
       return await models.Issue.findOne({
         where: { number: issue?.number || '', variant: issue?.variant || '' },
@@ -203,8 +205,14 @@ export const resolvers: IssueResolvers = {
     },
   },
   Issue: {
-    createdAt: (parent) => normalizeDateTime((parent as IssueParent).createdAt),
-    updatedAt: (parent) => normalizeDateTime((parent as IssueParent).updatedAt),
+    createdat: (parent: unknown) => {
+      const issueParent = parent as IssueParent;
+      return normalizeDateTime(issueParent.createdat ?? issueParent.createdAt);
+    },
+    updatedat: (parent: unknown) => {
+      const issueParent = parent as IssueParent;
+      return normalizeDateTime(issueParent.updatedAt ?? issueParent.updatedat);
+    },
     series: async (parent, _, { seriesLoader }) => {
       const issueParent = parent as IssueParent;
       if (issueParent.Series) return issueParent.Series;

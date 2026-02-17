@@ -20,7 +20,7 @@ const hasLoad = <K, V>(loader: unknown): loader is LoaderLike<K, V> =>
 
 export const resolvers: SeriesResolvers = {
   Query: {
-    series: async (_, { pattern, publisher, first, after, filter }, context) => {
+    seriesList: async (_, { pattern, publisher, first, after, filter }, context) => {
       const { loggedIn, seriesService } = context;
       return await seriesService.findSeries(
         pattern || undefined,
@@ -31,7 +31,7 @@ export const resolvers: SeriesResolvers = {
         filter || undefined,
       );
     },
-    seriesd: async (_, { series }, { models }) => {
+    seriesDetails: async (_, { series }, { models }) => {
       SeriesInputSchema.parse(series);
       return await models.Series.findOne({
         where: {
@@ -130,7 +130,7 @@ export const resolvers: SeriesResolvers = {
     lastEdited: async (parent, { limit }, { models }) =>
       await models.Issue.findAll({
         where: { fk_series: (parent as SeriesParent).id },
-        order: [['updatedAt', 'DESC']],
+        order: [['updatedat', 'DESC']],
         limit: limit || 25,
       }),
     active: (parent) => !(parent as SeriesParent).endyear || (parent as SeriesParent).endyear === 0,

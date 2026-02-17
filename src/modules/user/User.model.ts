@@ -26,7 +26,7 @@ export default (sequelize: Sequelize) => {
     },
     {
       sequelize,
-      tableName: 'User',
+      tableName: 'user',
       indexes: [
         {
           unique: true,

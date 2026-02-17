@@ -11,7 +11,7 @@ type PublisherParent = {
 
 export const resolvers: PublisherResolvers = {
   Query: {
-    publishers: async (_, { pattern, us, first, after, filter }, context) => {
+    publisherList: async (_, { pattern, us, first, after, filter }, context) => {
       const { loggedIn, publisherService } = context;
       return await publisherService.findPublishers(
         pattern || undefined,
@@ -22,7 +22,7 @@ export const resolvers: PublisherResolvers = {
         filter || undefined,
       );
     },
-    publisher: (_, { publisher }, { models }) => {
+    publisherDetails: (_, { publisher }, { models }) => {
       PublisherInputSchema.parse(publisher);
       return models.Publisher.findOne({
         where: {
@@ -121,7 +121,7 @@ export const resolvers: PublisherResolvers = {
             where: { fk_publisher: (parent as PublisherParent).id },
           },
         ],
-        order: [['updatedAt', 'DESC']],
+        order: [['updatedat', 'DESC']],
         limit: limit || 25,
       }),
     firstIssue: async (parent, _, { models }) =>

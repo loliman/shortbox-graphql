@@ -99,7 +99,7 @@ export default (sequelize: Sequelize) => {
     },
     {
       sequelize,
-      tableName: 'Story',
+      tableName: 'story',
     },
   );
 

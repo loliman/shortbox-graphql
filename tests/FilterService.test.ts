@@ -236,8 +236,8 @@ describe('FilterService', () => {
     const noCoverCondition = where[Op.or].find((entry: any) => entry['$Covers.id$'] === null);
     expect(noCoverCondition).toBeTruthy();
 
-    const customOrderOptions = service.getFilterOptions(false, { us: true } as any, false, 'updatedAt', 'DESC');
-    expect(customOrderOptions.order).toEqual([['updatedAt', 'DESC']]);
+    const customOrderOptions = service.getFilterOptions(false, { us: true } as any, false, 'updatedat', 'DESC');
+    expect(customOrderOptions.order).toEqual([['updatedat', 'DESC']]);
   });
 
   it('exports csv with sorted publishers, series and natural issue order', async () => {

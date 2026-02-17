@@ -102,7 +102,7 @@ describe('IssueService', () => {
   });
 
   it('should handle lastEdited with cursor', async () => {
-    mockModels.Issue.findAll.mockResolvedValue([{ id: 100, updatedAt: new Date() }]);
+    mockModels.Issue.findAll.mockResolvedValue([{ id: 100, updatedat: new Date() }]);
     mockModels.Issue.findByPk.mockResolvedValue(null);
 
     const result = await issueService.getLastEdited(undefined, 1, undefined, undefined, undefined, false);
@@ -110,7 +110,7 @@ describe('IssueService', () => {
     expect(result.edges.length).toBe(1);
     expect(mockModels.Issue.findAll).toHaveBeenCalledWith(expect.objectContaining({
       limit: 2,
-      order: [['updatedAt', 'DESC'], ['id', 'DESC']]
+      order: [['updatedat', 'DESC'], ['id', 'DESC']]
     }));
   });
 
@@ -122,14 +122,14 @@ describe('IssueService', () => {
       undefined,
       10,
       undefined,
-      'updatedAt; DROP TABLE Issue; --',
+      'updatedat; DROP TABLE Issue; --',
       'desc; DROP TABLE User; --',
       false
     );
 
     expect(mockModels.Issue.findAll).toHaveBeenCalledWith(
       expect.objectContaining({
-        order: [['updatedAt', 'DESC'], ['id', 'DESC']],
+        order: [['updatedat', 'DESC'], ['id', 'DESC']],
       })
     );
   });
@@ -175,14 +175,14 @@ describe('IssueService', () => {
     const cursorDate = new Date('2026-02-12T10:00:00.000Z');
 
     mockModels.Issue.findByPk.mockResolvedValue({
-      get: (field: string) => (field === 'updatedAt' ? cursorDate : undefined),
+      get: (field: string) => (field === 'updatedat' ? cursorDate : undefined),
     });
     mockModels.Issue.findAll.mockResolvedValue([]);
 
-    await issueService.getLastEdited(undefined, 10, cursor, 'updatedAt', 'DESC', false);
+    await issueService.getLastEdited(undefined, 10, cursor, 'updatedat', 'DESC', false);
 
     const callArgs = mockModels.Issue.findAll.mock.calls[0][0];
-    expect(callArgs.order).toEqual([['updatedAt', 'DESC'], ['id', 'DESC']]);
+    expect(callArgs.order).toEqual([['updatedat', 'DESC'], ['id', 'DESC']]);
 
     const andKey = Object.getOwnPropertySymbols(callArgs.where).find((key) =>
       String(key).includes('and')
@@ -195,7 +195,7 @@ describe('IssueService', () => {
     mockModels.Issue.findAll.mockResolvedValue([]);
     mockModels.Issue.findByPk.mockResolvedValue(null);
 
-    await issueService.getLastEdited(undefined, 10, undefined, 'updatedAt', 'DESC', false);
+    await issueService.getLastEdited(undefined, 10, undefined, 'updatedat', 'DESC', false);
 
     const callArgs = mockModels.Issue.findAll.mock.calls[0][0];
     expect(callArgs.where).toEqual(
