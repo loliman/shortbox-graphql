@@ -75,7 +75,6 @@ export const typeDef = gql`
     covers: [Cover]
     individuals: [Individual]
     arcs: [Arc]
-    features: [Feature]
     variants: [Issue]
     tags: [String]
   }

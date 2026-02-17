@@ -3,7 +3,6 @@ import {
   ArcInputSchema,
   CoverInputSchema,
   DateFilterSchema,
-  FeatureInputSchema,
   FilterSchema,
   IndividualInputSchema,
   IssueInputSchema,
@@ -62,13 +61,6 @@ describe('schemas', () => {
       }),
     ).toMatchObject({ number: 1 });
     expect(
-      FeatureInputSchema.parse({
-        number: 1,
-        title: 'Backup Story',
-        individuals: [{ name: 'Writer' }],
-      }),
-    ).toMatchObject({ number: 1 });
-    expect(
       FilterSchema.parse({
         us: true,
         publishers: [{ name: 'Marvel' }],
@@ -84,4 +76,3 @@ describe('schemas', () => {
     expect(() => IssueInputSchema.parse({ number: '' })).toThrow();
   });
 });
-

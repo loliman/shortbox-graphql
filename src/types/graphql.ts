@@ -8,8 +8,6 @@ import type {
   Cover,
   CoverInput,
   DateFilter,
-  Feature,
-  FeatureInput,
   Filter,
   Individual,
   IndividualConnection,
@@ -69,8 +67,6 @@ export type {
   Cover,
   CoverInput,
   DateFilter,
-  Feature,
-  FeatureInput,
   Filter,
   Individual,
   IndividualConnection,
@@ -224,10 +220,6 @@ export interface AppearanceResolvers {
   Appearance?: ObjectResolverFields<unknown, Appearance>;
 }
 
-export interface FeatureResolvers {
-  Feature?: ObjectResolverFields<unknown, Feature>;
-}
-
 export interface ArcResolvers {
   Query?: Pick<QueryResolvers, 'arcs'>;
   Arc?: ObjectResolverFields<unknown, Arc>;
@@ -282,6 +274,5 @@ export interface Resolvers {
   Arc?: ObjectResolverFields<unknown, Arc>;
   Individual?: ObjectResolverFields<unknown, Individual>;
   Appearance?: ObjectResolverFields<unknown, Appearance>;
-  Feature?: ObjectResolverFields<unknown, Feature>;
   User?: ObjectResolverFields<unknown, User>;
 }

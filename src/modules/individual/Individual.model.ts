@@ -10,10 +10,6 @@ export class Individual extends Model {
       through: models.Cover_Individual,
       foreignKey: 'fk_individual',
     });
-    Individual.belongsToMany(models.Feature, {
-      through: models.Feature_Individual,
-      foreignKey: 'fk_individual',
-    });
     Individual.belongsToMany(models.Story, {
       through: models.Story_Individual,
       foreignKey: 'fk_individual',

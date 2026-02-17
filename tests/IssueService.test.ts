@@ -23,9 +23,6 @@ describe('IssueService', () => {
       Cover: {
         findAll: jest.fn(),
       },
-      Feature: {
-        findAll: jest.fn(),
-      },
       Series: {
         findAll: jest.fn(),
         findOne: jest.fn(),
@@ -210,7 +207,7 @@ describe('IssueService', () => {
     );
   });
 
-  it('should batch stories/covers/features by issue ids', async () => {
+  it('should batch stories/covers by issue ids', async () => {
     mockModels.Story.findAll.mockResolvedValue([
       { id: 1, fk_issue: 10, number: 1 },
       { id: 2, fk_issue: 11, number: 1 },
@@ -221,15 +218,9 @@ describe('IssueService', () => {
       { id: 5, fk_issue: 10, number: 1 },
       { id: 6, fk_issue: 11, number: 0 },
     ]);
-    mockModels.Feature.findAll.mockResolvedValue([
-      { id: 7, fk_issue: 11, number: 1 },
-      { id: 8, fk_issue: 10, number: 1 },
-    ]);
-
     const stories = await issueService.getStoriesByIssueIds([10, 11]);
     const primaryCovers = await issueService.getPrimaryCoversByIssueIds([10, 11, 12]);
     const allCovers = await issueService.getCoversByIssueIds([10, 11]);
-    const features = await issueService.getFeaturesByIssueIds([10, 11]);
 
     expect(stories).toHaveLength(2);
     expect(stories[0].map((s: any) => s.id)).toEqual([1, 3]);
@@ -241,9 +232,6 @@ describe('IssueService', () => {
 
     expect(allCovers[0].map((c: any) => c.id)).toEqual([4, 5]);
     expect(allCovers[1].map((c: any) => c.id)).toEqual([6]);
-
-    expect(features[0].map((f: any) => f.id)).toEqual([8]);
-    expect(features[1].map((f: any) => f.id)).toEqual([7]);
   });
 
   it('should batch variants by series/number key', async () => {

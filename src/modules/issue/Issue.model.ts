@@ -39,7 +39,6 @@ export class Issue extends Model {
   public async deleteInstance(transaction: Transaction, models: DbModels): Promise<void> {
     // Kaskadiertes DB-Cleanup für abhängige Entitäten.
     await models.Story.destroy({ where: { fk_issue: this.id }, transaction });
-    await models.Feature.destroy({ where: { fk_issue: this.id }, transaction });
     await models.Cover.destroy({ where: { fk_issue: this.id }, transaction });
 
     await this.destroy({ transaction });
