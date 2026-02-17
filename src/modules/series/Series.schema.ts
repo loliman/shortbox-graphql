@@ -8,14 +8,14 @@ export const typeDef = gql`
   }
 
   extend type Query {
-    series(
+    seriesList(
       pattern: String
       publisher: PublisherInput!
       first: Int
       after: String
       filter: Filter
     ): SeriesConnection
-    seriesd(series: SeriesInput!): Series
+    seriesDetails(series: SeriesInput!): Series
   }
 
   type SeriesConnection {

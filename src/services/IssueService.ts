@@ -4,10 +4,11 @@ import logger from '../util/logger';
 import type { Filter, IssueInput, SeriesInput } from '@loliman/shortbox-contract';
 import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
 import { naturalCompare } from '../util/util';
+import { fromRoman } from '../util/dbFunctions';
 
 const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
-  'updatedAt',
-  'createdAt',
+  'updatedat',
+  'createdat',
   'number',
   'format',
   'variant',
@@ -19,7 +20,7 @@ const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
 ]);
 
 const normalizeSortField = (field: string | undefined): string =>
-  field && ALLOWED_LAST_EDITED_SORT_FIELDS.has(field) ? field : 'updatedAt';
+  field && ALLOWED_LAST_EDITED_SORT_FIELDS.has(field) ? field : 'updatedat';
 
 const normalizeSortDirection = (direction: string | undefined): 'ASC' | 'DESC' => {
   if (!direction) return 'DESC';
@@ -29,26 +30,6 @@ const normalizeSortDirection = (direction: string | undefined): 'ASC' | 'DESC' =
 
 const ROMAN_NUMBER_PATTERN = /^(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))$/i;
 
-const romanToNumber = (roman: string): number => {
-  const values: Record<string, number> = {
-    I: 1,
-    V: 5,
-    X: 10,
-    L: 50,
-    C: 100,
-    D: 500,
-    M: 1000,
-  };
-  const chars = roman.toUpperCase().split('');
-  let total = 0;
-  for (let i = 0; i < chars.length; i++) {
-    const current = values[chars[i]] || 0;
-    const next = values[chars[i + 1]] || 0;
-    total += current < next ? -current : current;
-  }
-  return total;
-};
-
 const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
   const left = String(leftRaw ?? '').trim();
   const right = String(rightRaw ?? '').trim();
@@ -56,7 +37,7 @@ const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
   const rightIsRoman = right !== '' && ROMAN_NUMBER_PATTERN.test(right);
 
   if (leftIsRoman && rightIsRoman) {
-    return romanToNumber(left) - romanToNumber(right);
+    return fromRoman(left) - fromRoman(right);
   }
   if (leftIsRoman) return -1;
   if (rightIsRoman) return 1;
@@ -140,8 +121,8 @@ export class IssueService {
         options.where = {
           ...options.where,
           [Op.or]: [
-            { number: { [Op.like]: pattern + '%' } },
-            { title: { [Op.like]: '%' + pattern + '%' } },
+            { number: { [Op.iLike]: pattern + '%' } },
+            { title: { [Op.iLike]: '%' + pattern + '%' } },
           ],
         };
       }
@@ -396,7 +377,7 @@ export class IssueService {
       const publisherInclude = seriesInclude.include?.[0];
 
       if (publisherInclude && filter.us !== undefined && filter.us !== null) {
-        publisherInclude.where = { ...publisherInclude.where, original: filter.us ? 1 : 0 };
+        publisherInclude.where = { ...publisherInclude.where, original: Boolean(filter.us) };
       }
       if (
         publisherInclude &&

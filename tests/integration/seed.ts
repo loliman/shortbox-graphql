@@ -1,6 +1,9 @@
 import models from '../../src/models';
 
+const TEST_SCHEMA = 'shortbox';
+
 export const resetAndSeedDatabase = async () => {
+  await models.sequelize.query(`CREATE SCHEMA IF NOT EXISTS "${TEST_SCHEMA}"`);
   await models.sequelize.sync({ force: true });
 
   const publisher = await models.Publisher.create({

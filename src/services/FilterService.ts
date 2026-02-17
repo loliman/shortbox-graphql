@@ -157,7 +157,7 @@ export class FilterService {
     orderField: string | boolean = false,
     sortDirection: string | boolean = false,
   ): FindOptions {
-    const us = filter.us ? 1 : 0;
+    const us = Boolean(filter.us);
 
     const where: WhereOptions = {};
     const include: Includeable[] = [
@@ -219,8 +219,8 @@ export class FilterService {
     if (filter.appearances) {
       storyConditions.push({
         [Op.or]: [
-          { '$Stories.Appearances.name$': { [Op.like]: `%${filter.appearances}%` } },
-          { '$Stories.Children.Appearances.name$': { [Op.like]: `%${filter.appearances}%` } },
+          { '$Stories.Appearances.name$': { [Op.iLike]: `%${filter.appearances}%` } },
+          { '$Stories.Children.Appearances.name$': { [Op.iLike]: `%${filter.appearances}%` } },
         ],
       });
     }
@@ -297,7 +297,7 @@ export class FilterService {
         model: this.models.Arc,
         as: 'Arcs',
         required: true,
-        where: { title: { [Op.like]: `%${filter.arcs}%` } },
+        where: { title: { [Op.iLike]: `%${filter.arcs}%` } },
       });
     }
 

@@ -34,6 +34,7 @@ module.exports = {
     'src/modules/story/Story.resolver.ts',
     'src/modules/user/User.resolver.ts',
     'src/types/schemas.ts',
+    'src/util/dbFunctions.ts',
     'src/util/logger.ts',
     'src/util/util.ts',
   ],

@@ -45,7 +45,7 @@ export default (sequelize: Sequelize) => {
     },
     {
       sequelize,
-      tableName: 'Cover',
+      tableName: 'cover',
       indexes: [
         {
           unique: true,

@@ -1,4 +1,4 @@
-import { Sequelize, Op } from 'sequelize';
+import { Op } from 'sequelize';
 import { AppearanceResolvers } from '../../types/graphql';
 import { buildConnectionFromNodes, decodeCursorId } from '../../core/cursor';
 
@@ -22,18 +22,34 @@ export const resolvers: AppearanceResolvers = {
       ];
 
       if (decodedCursor) {
-        where[Op.and] = [
-          Sequelize.literal(
-            `(name, id) > (SELECT name, id FROM Appearance WHERE id = ${decodedCursor})`,
-          ),
-        ];
+        const cursorRecord = await models.Appearance.findByPk(decodedCursor, {
+          attributes: ['id', 'name'],
+        });
+
+        if (cursorRecord) {
+          const cursorName = cursorRecord.get('name') as string | null;
+          if (typeof cursorName === 'string') {
+            where[Op.and] = [
+              {
+                [Op.or]: [
+                  { name: { [Op.gt]: cursorName } },
+                  { name: cursorName, id: { [Op.gt]: decodedCursor } },
+                ],
+              },
+            ];
+          } else {
+            where[Op.and] = [{ id: { [Op.gt]: decodedCursor } }];
+          }
+        } else {
+          where[Op.and] = [{ id: { [Op.gt]: decodedCursor } }];
+        }
       }
 
       if (pattern && pattern !== '') {
-        where.name = { [Op.like]: '%' + pattern.replace(/\s/g, '%') + '%' };
+        where.name = { [Op.iLike]: '%' + pattern.replace(/\s/g, '%') + '%' };
       }
 
-      if (type) where.type = { [Op.like]: type.toUpperCase() };
+      if (type) where.type = { [Op.iLike]: type.toUpperCase() };
 
       const results = await models.Appearance.findAll({
         where,

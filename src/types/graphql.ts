@@ -41,14 +41,14 @@ import type {
   QueryArcsArgs,
   QueryExportArgs,
   QueryIndividualsArgs,
-  QueryIssueArgs,
-  QueryIssuesArgs,
+  QueryIssueDetailsArgs,
+  QueryIssueListArgs,
   QueryLastEditedArgs,
   QueryNodesArgs,
-  QueryPublisherArgs,
-  QueryPublishersArgs,
-  QuerySeriesArgs,
-  QuerySeriesdArgs,
+  QueryPublisherDetailsArgs,
+  QueryPublisherListArgs,
+  QuerySeriesDetailsArgs,
+  QuerySeriesListArgs,
   Series,
   SeriesConnection,
   SeriesInput,
@@ -126,15 +126,27 @@ export type QueryResolverFields = {
   arcs: ResolverFn<unknown, QueryArcsArgs, ResolverResult<Query['arcs']>>;
   export: ResolverFn<unknown, QueryExportArgs, ResolverResult<Query['export']>>;
   individuals: ResolverFn<unknown, QueryIndividualsArgs, ResolverResult<Query['individuals']>>;
-  issue: ResolverFn<unknown, QueryIssueArgs, ResolverResult<Query['issue']>>;
-  issues: ResolverFn<unknown, QueryIssuesArgs, ResolverResult<Query['issues']>>;
+  issueDetails: ResolverFn<unknown, QueryIssueDetailsArgs, ResolverResult<Query['issueDetails']>>;
+  issueList: ResolverFn<unknown, QueryIssueListArgs, ResolverResult<Query['issueList']>>;
   lastEdited: ResolverFn<unknown, QueryLastEditedArgs, ResolverResult<Query['lastEdited']>>;
   me: ResolverFn<unknown, EmptyArgs, ResolverResult<Query['me']>>;
   nodes: ResolverFn<unknown, QueryNodesArgs, ResolverResult<Query['nodes']>>;
-  publisher: ResolverFn<unknown, QueryPublisherArgs, ResolverResult<Query['publisher']>>;
-  publishers: ResolverFn<unknown, QueryPublishersArgs, ResolverResult<Query['publishers']>>;
-  series: ResolverFn<unknown, QuerySeriesArgs, ResolverResult<Query['series']>>;
-  seriesd: ResolverFn<unknown, QuerySeriesdArgs, ResolverResult<Query['seriesd']>>;
+  publisherDetails: ResolverFn<
+    unknown,
+    QueryPublisherDetailsArgs,
+    ResolverResult<Query['publisherDetails']>
+  >;
+  publisherList: ResolverFn<
+    unknown,
+    QueryPublisherListArgs,
+    ResolverResult<Query['publisherList']>
+  >;
+  seriesDetails: ResolverFn<
+    unknown,
+    QuerySeriesDetailsArgs,
+    ResolverResult<Query['seriesDetails']>
+  >;
+  seriesList: ResolverFn<unknown, QuerySeriesListArgs, ResolverResult<Query['seriesList']>>;
 };
 
 export type MutationResolverFields = {
@@ -227,13 +239,13 @@ export interface IndividualResolvers {
 }
 
 export interface PublisherResolvers {
-  Query?: Pick<QueryResolvers, 'publishers' | 'publisher'>;
+  Query?: Pick<QueryResolvers, 'publisherList' | 'publisherDetails'>;
   Mutation?: Pick<MutationResolvers, 'deletePublisher' | 'createPublisher' | 'editPublisher'>;
   Publisher?: PublisherObjectResolverFields;
 }
 
 export interface IssueResolvers {
-  Query?: Pick<QueryResolvers, 'issues' | 'issue' | 'lastEdited'>;
+  Query?: Pick<QueryResolvers, 'issueList' | 'issueDetails' | 'lastEdited'>;
   Mutation?: Pick<MutationResolvers, 'deleteIssue' | 'createIssue' | 'editIssue'>;
   Issue?: ObjectResolverFields<unknown, Issue>;
 }
@@ -245,7 +257,7 @@ export interface UserResolvers {
 }
 
 export interface SeriesResolvers {
-  Query?: Pick<QueryResolvers, 'series' | 'seriesd'>;
+  Query?: Pick<QueryResolvers, 'seriesList' | 'seriesDetails'>;
   Mutation?: Pick<MutationResolvers, 'deleteSeries' | 'createSeries' | 'editSeries'>;
   Series?: SeriesObjectResolverFields;
 }

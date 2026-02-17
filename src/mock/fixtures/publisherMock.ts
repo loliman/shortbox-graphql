@@ -10,8 +10,8 @@ export const mockPublisherFixture = {
     number: '1',
     format: 'Album Hardcover',
     variant: '',
-    createdAt: '10.04.2019 00:47',
-    updatedAt: '11.05.2023 14:17',
+    createdat: '10.04.2019 00:47',
+    updatedat: '11.05.2023 14:17',
     cover: { url: 'https://www.comicguide.de/pics/large/117162.jpg', __typename: 'Cover' },
     covers: [
       {
@@ -120,8 +120,8 @@ export const mockPublisherFixture = {
     number: '2',
     format: 'Hardcover',
     variant: '',
-    createdAt: '03.10.2025 17:10',
-    updatedAt: '23.10.2025 14:07',
+    createdat: '03.10.2025 17:10',
+    updatedat: '23.10.2025 14:07',
     cover: null,
     covers: [],
     comicguideid: 0,

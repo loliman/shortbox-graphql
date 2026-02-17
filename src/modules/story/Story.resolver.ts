@@ -40,7 +40,7 @@ export const resolvers: StoryResolvers = {
       if (storyParent.parent) return storyParent.parent;
 
       const fkParent = storyParent.fk_parent;
-      if (typeof fkParent === 'number') {
+      if (fkParent) {
         if (!hasLoad<number, unknown | null>(storyLoader)) return null;
         return await storyLoader.load(fkParent);
       }
@@ -90,9 +90,7 @@ export const resolvers: StoryResolvers = {
     exclusive: (parent) => {
       const storyParent = parent as StoryParent;
       const hasOriginalStoryReference =
-        Boolean(storyParent.Parent) ||
-        Boolean(storyParent.parent) ||
-        typeof storyParent.fk_parent === 'number';
+        Boolean(storyParent.Parent) || Boolean(storyParent.parent) || storyParent.fk_parent;
 
       return !hasOriginalStoryReference;
     },

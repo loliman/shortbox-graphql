@@ -1,4 +1,4 @@
-import { Sequelize, Op } from 'sequelize';
+import { Op } from 'sequelize';
 import { ArcResolvers } from '../../types/graphql';
 import { buildConnectionFromNodes, decodeCursorId } from '../../core/cursor';
 
@@ -17,15 +17,31 @@ export const resolvers: ArcResolvers = {
       ];
 
       if (decodedCursor) {
-        where[Op.and] = [
-          Sequelize.literal(
-            `(title, id) > (SELECT title, id FROM Arc WHERE id = ${decodedCursor})`,
-          ),
-        ];
+        const cursorRecord = await models.Arc.findByPk(decodedCursor, {
+          attributes: ['id', 'title'],
+        });
+
+        if (cursorRecord) {
+          const cursorTitle = cursorRecord.get('title') as string | null;
+          if (typeof cursorTitle === 'string') {
+            where[Op.and] = [
+              {
+                [Op.or]: [
+                  { title: { [Op.gt]: cursorTitle } },
+                  { title: cursorTitle, id: { [Op.gt]: decodedCursor } },
+                ],
+              },
+            ];
+          } else {
+            where[Op.and] = [{ id: { [Op.gt]: decodedCursor } }];
+          }
+        } else {
+          where[Op.and] = [{ id: { [Op.gt]: decodedCursor } }];
+        }
       }
 
       if (pattern && pattern !== '') {
-        where.title = { [Op.like]: '%' + pattern.replace(/\s/g, '%') + '%' };
+        where.title = { [Op.iLike]: '%' + pattern.replace(/\s/g, '%') + '%' };
       }
 
       if (type) where.type = { [Op.eq]: type.toUpperCase() };

@@ -5,14 +5,14 @@ GraphQL-Backend fuer Shortbox (Apollo Server, Express 5, Sequelize).
 ## Ueberblick
 
 - Rolle: API-Backend fuer Shortbox
-- Stack: Node.js, TypeScript, Apollo Server, Express 5, Sequelize, MySQL
+- Stack: Node.js, TypeScript, Apollo Server, Express 5, Sequelize, PostgreSQL
 - Contract-Quelle: `@loliman/shortbox-contract`
 
 ## Voraussetzungen
 
 - Node.js 20+
 - npm 10+
-- MySQL 8+
+- PostgreSQL 16+
 - npm-Auth fuer GitHub Packages (`@loliman`)
 
 ## Installation
@@ -38,7 +38,7 @@ Standard-URL: `http://localhost:4000/` (GraphQL via POST/OPTIONS)
 - `npm run lint`: ESLint auf `src/**/*.ts`
 - `npm run typecheck`: TypeScript-Check ohne Emit
 - `npm run test`: Unit-Tests
-- `npm run test:integration`: Integrationstests
+- `npm run test:integration`: Integrationstests (laufende PostgreSQL-Instanz erforderlich)
 - `npm run test:ci`: Coverage + Integration
 - `npm run build`: TypeScript-Build nach `dist/`
 - `npm run serve`: Start aus `dist/app.js`
@@ -53,7 +53,6 @@ Standard-URL: `http://localhost:4000/` (GraphQL via POST/OPTIONS)
 - `src/services/`: Business-Logik
 - `src/api/`: gemeinsame GraphQL-Bausteine
 - `tests/`: Unit- und Integrationstests
-- `sql/`: SQL-Artefakte (Schema, Funktionen, Migrationen)
 
 ## Umgebungsvariablen
 
@@ -64,7 +63,7 @@ DB_NAME=shortbox
 DB_USER=shortbox
 DB_PASSWORD=shortbox
 DB_HOST=localhost
-DB_PORT=3306
+DB_PORT=5432
 PORT=4000
 NODE_ENV=development
 DB_BOOTSTRAP_SYNC=false
@@ -100,7 +99,7 @@ CI-Workflow:
 - Datei: `.github/workflows/ci.yml`
 - Trigger: Push + Pull Request auf `main`
 - Ergebnis: Build-Artifact `shortbox-graphql-<version>.tar.gz` + Coverage-Artifact
-- Zusatz: separater Integrationstest-Job mit MySQL-Service
+- Zusatz: separater Integrationstest-Job mit PostgreSQL-Service
 
 Release:
 

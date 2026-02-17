@@ -1,6 +1,6 @@
 import gql from 'graphql-tag';
 import models from '../models';
-import { naturalCompare, generateLabel, romanize } from '../util/util';
+import { createNodeIssueLabel, createNodeSeriesLabel, createNodeUrl } from '../util/dbFunctions';
 import { NodeResolvers } from '../types/graphql';
 import { Op } from 'sequelize';
 
@@ -32,65 +32,6 @@ type IssueWithSeries = {
   Series: SeriesWithPublisher;
 };
 
-const createUrl = (
-  type: string,
-  original: boolean,
-  publisherName: string,
-  seriesTitle: string,
-  seriesVolume: number,
-  number: string,
-  format: string,
-  variant: string,
-) => {
-  let url = original ? '/us/' : '/de/';
-  url += encodeURIComponent(publisherName);
-  if (type !== 'publisher') {
-    url += `/${encodeURIComponent(seriesTitle)}_Vol_${seriesVolume}`;
-    if (type !== 'series') {
-      url += `/${encodeURIComponent(number)}/${encodeURIComponent(format)}`;
-      if (variant) {
-        url += `_${encodeURIComponent(variant)}`;
-      }
-    }
-  }
-  return url;
-};
-
-const createSeriesLabel = (
-  seriesTitle: string,
-  publisherName: string,
-  volume: number,
-  startyear: number,
-  endyear: number | null,
-) => {
-  let years = ` (${startyear}`;
-  if (endyear && endyear > startyear) {
-    years += `-${endyear}`;
-  }
-  years += ')';
-  return `${seriesTitle} (Vol. ${romanize(volume)})${years} (${publisherName})`;
-};
-
-const createIssueLabel = (
-  seriesLabel: string,
-  number: string,
-  format: string,
-  variant: string,
-  issueTitle: string,
-) => {
-  let label = `${seriesLabel} #${number}`;
-  let fmt = ` (${format}`;
-  if (variant) {
-    fmt += `/${variant}`;
-  }
-  fmt += ')';
-  label += fmt;
-  if (issueTitle) {
-    label += `: ${issueTitle}`;
-  }
-  return label;
-};
-
 export const resolvers: NodeResolvers = {
   Query: {
     nodes: async (_, { pattern, us, offset }) => {
@@ -102,7 +43,7 @@ export const resolvers: NodeResolvers = {
       const publishers = await models.Publisher.findAll({
         where: {
           original: us,
-          name: { [Op.like]: searchPattern },
+          name: { [Op.iLike]: searchPattern },
         },
         limit: 20,
       });
@@ -117,7 +58,7 @@ export const resolvers: NodeResolvers = {
           },
         ],
         where: {
-          title: { [Op.like]: searchPattern },
+          title: { [Op.iLike]: searchPattern },
         },
         limit: 20,
       });
@@ -139,8 +80,8 @@ export const resolvers: NodeResolvers = {
         ],
         where: {
           [Op.or]: [
-            { title: { [Op.like]: searchPattern } },
-            { number: { [Op.like]: `${pattern}%` } },
+            { title: { [Op.iLike]: searchPattern } },
+            { number: { [Op.iLike]: `${pattern}%` } },
           ],
         },
         limit: 20,
@@ -150,11 +91,11 @@ export const resolvers: NodeResolvers = {
         ...publishers.map((p) => ({
           type: 'publisher',
           label: p.name,
-          url: createUrl('publisher', us, p.name, '', 0, '', '', ''),
+          url: createNodeUrl('publisher', us, p.name, '', 0, '', '', ''),
         })),
         ...series.map((s) => {
           const seriesNode = s as unknown as SeriesWithPublisher;
-          const label = createSeriesLabel(
+          const label = createNodeSeriesLabel(
             seriesNode.title,
             seriesNode.Publisher.name,
             seriesNode.volume,
@@ -164,7 +105,7 @@ export const resolvers: NodeResolvers = {
           return {
             type: 'series',
             label,
-            url: createUrl(
+            url: createNodeUrl(
               'series',
               us,
               seriesNode.Publisher.name,
@@ -179,14 +120,14 @@ export const resolvers: NodeResolvers = {
         ...issues.map((i) => {
           const issueNode = i as unknown as IssueWithSeries;
           const issueSeries = issueNode.Series;
-          const seriesLabel = createSeriesLabel(
+          const seriesLabel = createNodeSeriesLabel(
             issueSeries.title,
             issueSeries.Publisher.name,
             issueSeries.volume,
             issueSeries.startyear,
             issueSeries.endyear,
           );
-          const label = createIssueLabel(
+          const label = createNodeIssueLabel(
             seriesLabel,
             issueNode.number,
             issueNode.format,
@@ -196,7 +137,7 @@ export const resolvers: NodeResolvers = {
           return {
             type: 'issue',
             label,
-            url: createUrl(
+            url: createNodeUrl(
               'issue',
               us,
               issueSeries.Publisher.name,

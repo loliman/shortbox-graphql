@@ -31,7 +31,7 @@ export default (sequelize: Sequelize) => {
     },
     {
       sequelize,
-      tableName: 'Arc',
+      tableName: 'arc',
       indexes: [
         {
           unique: true,

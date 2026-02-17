@@ -41,7 +41,7 @@ export default (sequelize: Sequelize) => {
     },
     {
       sequelize,
-      tableName: 'Individual',
+      tableName: 'individual',
       indexes: [
         {
           unique: true,

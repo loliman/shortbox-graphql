@@ -62,8 +62,8 @@ describe('SeriesService additional coverage', () => {
     expect(result.edges).toHaveLength(1);
     const options = mockModels.Series.findAll.mock.calls[0][0];
     expect(options.where['$Publisher.name$']).toBe('Marvel');
-    expect(options.where['$Publisher.original$']).toBe(1);
-    expect(options.where.title[Symbol.for('like') as any] || options.where.title).toBeTruthy();
+    expect(options.where['$Publisher.original$']).toBe(true);
+    expect(options.where.title[Symbol.for('iLike') as any] || options.where.title).toBeTruthy();
   });
 
   it('treats missing or blank publisher name like wildcard for series search', async () => {
@@ -80,7 +80,7 @@ describe('SeriesService additional coverage', () => {
 
     const options = mockModels.Series.findAll.mock.calls[0][0];
     expect(options.where['$Publisher.name$']).toBeUndefined();
-    expect(options.where['$Publisher.original$']).toBe(1);
+    expect(options.where['$Publisher.original$']).toBe(true);
   });
 
   it('retries wildcard search without us filter when first query is empty', async () => {
@@ -99,7 +99,7 @@ describe('SeriesService additional coverage', () => {
 
     expect(result.edges).toHaveLength(1);
     expect(mockModels.Series.findAll).toHaveBeenCalledTimes(2);
-    expect(mockModels.Series.findAll.mock.calls[0][0].where['$Publisher.original$']).toBe(1);
+    expect(mockModels.Series.findAll.mock.calls[0][0].where['$Publisher.original$']).toBe(true);
     expect(mockModels.Series.findAll.mock.calls[1][0].where['$Publisher.original$']).toBeUndefined();
   });
 
@@ -153,7 +153,7 @@ describe('SeriesService additional coverage', () => {
     expect(result.edges).toHaveLength(1);
     const options = mockModels.Series.findAll.mock.calls[0][0];
     expect(options.where['$Publisher.name$']).toBeUndefined();
-    expect(options.where['$Publisher.original$']).toBe(0);
+    expect(options.where['$Publisher.original$']).toBe(false);
   });
 
   it('uses filter-based lookup path and maps issue series nodes', async () => {

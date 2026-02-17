@@ -19,27 +19,27 @@ export const mockResolvers = {
     me: () => ({ id: 1 }),
     nodes: (_: unknown, args: { pattern?: string }) => getNodes(args.pattern),
     export: () => 'Mock export content',
-    publishers: (_: unknown, args: { pattern?: string }) =>
+    publisherList: (_: unknown, args: { pattern?: string }) =>
       createConnection(mockPublishers.filter((p) => matches(p.name, args.pattern))),
-    publisher: (_: unknown, args: { publisher?: { us?: boolean } }) => {
+    publisherDetails: (_: unknown, args: { publisher?: { us?: boolean } }) => {
       const us = typeof args.publisher?.us === 'boolean' ? args.publisher.us : false;
       return getPublisherFixture(us);
     },
-    series: (_: unknown, args: { pattern?: string; publisher?: { name?: string } }) =>
+    seriesList: (_: unknown, args: { pattern?: string; publisher?: { name?: string } }) =>
       createConnection(
         mockSeriesList.filter(
           (s) => matches(s.title, args.pattern) && matches(s.publisher.name, args.publisher?.name),
         ),
       ),
-    seriesd: (_: unknown, args: { series?: { publisher?: { us?: boolean } } }) => {
+    seriesDetails: (_: unknown, args: { series?: { publisher?: { us?: boolean } } }) => {
       const us = typeof args.series?.publisher?.us === 'boolean' ? args.series.publisher.us : false;
       return getSeriesFixture(us);
     },
-    issues: (_: unknown, args: { pattern?: string }) =>
+    issueList: (_: unknown, args: { pattern?: string }) =>
       createConnection(
         mockIssuesList.filter((i) => matches(String(i.title || i.number), args.pattern)),
       ),
-    issue: (
+    issueDetails: (
       _: unknown,
       args: {
         issue?: { series?: { publisher?: { us?: boolean } } };
@@ -108,5 +108,9 @@ export const mockResolvers = {
     lastIssue: (parent: { lastIssue?: unknown }) => parent.lastIssue ?? null,
     lastEdited: () => mockLastEdited,
     active: (parent: { active?: boolean }) => parent.active ?? true,
+  },
+  Issue: {
+    updatedAt: (parent: { updatedAt?: string; updatedat?: string }) =>
+      parent.updatedAt ?? parent.updatedat ?? null,
   },
 };

@@ -78,7 +78,7 @@ const resolvers = merge(
 
 const mockModeEnabled = (process.env.MOCK_MODE || '').toLowerCase() === 'true';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-only-change-me';
-const SESSION_STORE_TABLE = process.env.SESSION_STORE_TABLE || 'Sessions';
+const SESSION_STORE_TABLE = (process.env.SESSION_STORE_TABLE || 'sessions').toLowerCase();
 const parsedSessionTtlSeconds = parseInt(process.env.SESSION_TTL_SECONDS || '1209600', 10);
 const SESSION_TTL_SECONDS = Number.isFinite(parsedSessionTtlSeconds)
   ? parsedSessionTtlSeconds
