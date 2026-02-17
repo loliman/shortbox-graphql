@@ -32,7 +32,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "axios": "^1.13.5",
-    "cheerio": "^1.1.2",
+    "cheerio": "^1.2.0",
     "connect-session-sequelize": "^8.0.5",
     "cookie-parser": "^1.4.7",
     "cron": "^1.8.2",
@@ -58,7 +58,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@types/cheerio": "^0.22.35",
+    "@types/cheerio": "^1.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cron": "^2.0.1",
     "@types/dateformat": "^5.0.3",
