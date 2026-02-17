@@ -75,7 +75,7 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           mkdir -p release
-          tar -czf "release/shortbox-graphql-${VERSION}.tar.gz" dist package.json package-lock.json sql Dockerfile docker-compose.yml
+          tar -czf "release/shortbox-graphql-${VERSION}.tar.gz" dist package.json package-lock.json Dockerfile docker-compose.yml
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v6

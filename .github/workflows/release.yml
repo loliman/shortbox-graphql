@@ -117,7 +117,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
           mkdir -p release
-          tar -czf "release/shortbox-graphql-${VERSION}.tar.gz" dist package.json package-lock.json sql Dockerfile docker-compose.yml
+          tar -czf "release/shortbox-graphql-${VERSION}.tar.gz" dist package.json package-lock.json Dockerfile docker-compose.yml
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
