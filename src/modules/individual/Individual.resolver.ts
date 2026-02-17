@@ -93,11 +93,7 @@ export const resolvers: IndividualResolvers = {
       }
 
       const where: Record<string, number> = {};
-      let table:
-        | 'Story_Individual'
-        | 'Cover_Individual'
-        | 'Issue_Individual'
-        | '' = '';
+      let table: 'Story_Individual' | 'Cover_Individual' | 'Issue_Individual' | '' = '';
 
       if (individualParent.Stories && individualParent.Stories.length > 0) {
         where.fk_story = individualParent.Stories[0].id;
