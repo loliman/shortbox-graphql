@@ -1,7 +1,7 @@
 import { Sequelize } from 'sequelize';
 import { db, dbPassword, dbUser } from '../config/config';
 
-const dbSchema = (process.env.DB_SCHEMA || 'public').toLowerCase();
+const dbSchema = 'shortbox';
 
 const sequelize = new Sequelize(db, dbUser, dbPassword, {
   logging: false,
