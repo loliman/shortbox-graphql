@@ -90,9 +90,7 @@ export const resolvers: StoryResolvers = {
     exclusive: (parent) => {
       const storyParent = parent as StoryParent;
       const hasOriginalStoryReference =
-        Boolean(storyParent.Parent) ||
-        Boolean(storyParent.parent) ||
-        storyParent.fk_parent;
+        Boolean(storyParent.Parent) || Boolean(storyParent.parent) || storyParent.fk_parent;
 
       return !hasOriginalStoryReference;
     },

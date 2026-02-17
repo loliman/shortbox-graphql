@@ -136,8 +136,16 @@ export type QueryResolverFields = {
     QueryPublisherDetailsArgs,
     ResolverResult<Query['publisherDetails']>
   >;
-  publisherList: ResolverFn<unknown, QueryPublisherListArgs, ResolverResult<Query['publisherList']>>;
-  seriesDetails: ResolverFn<unknown, QuerySeriesDetailsArgs, ResolverResult<Query['seriesDetails']>>;
+  publisherList: ResolverFn<
+    unknown,
+    QueryPublisherListArgs,
+    ResolverResult<Query['publisherList']>
+  >;
+  seriesDetails: ResolverFn<
+    unknown,
+    QuerySeriesDetailsArgs,
+    ResolverResult<Query['seriesDetails']>
+  >;
   seriesList: ResolverFn<unknown, QuerySeriesListArgs, ResolverResult<Query['seriesList']>>;
 };
 
