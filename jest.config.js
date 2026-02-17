@@ -26,7 +26,6 @@ module.exports = {
     'src/modules/appearance/Appearance.resolver.ts',
     'src/modules/arc/Arc.resolver.ts',
     'src/modules/cover/Cover.resolver.ts',
-    'src/modules/feature/Feature.resolver.ts',
     'src/modules/individual/Individual.resolver.ts',
     'src/modules/issue/Issue.resolver.ts',
     'src/modules/publisher/Publisher.resolver.ts',

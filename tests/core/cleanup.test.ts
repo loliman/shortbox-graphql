@@ -55,9 +55,6 @@ const createModelMocks = () => {
     Story_Individual: {
       count: jest.fn(),
     },
-    Feature_Individual: {
-      count: jest.fn(),
-    },
     Issue_Individual: {
       count: jest.fn(),
     },
@@ -162,7 +159,6 @@ describe('cleanup core', () => {
     models.Individual.findAll.mockResolvedValueOnce([individual]);
     models.Cover_Individual.count.mockResolvedValueOnce(0);
     models.Story_Individual.count.mockResolvedValueOnce(0);
-    models.Feature_Individual.count.mockResolvedValueOnce(0);
     models.Issue_Individual.count.mockResolvedValueOnce(0);
 
     models.Arc.findAll.mockResolvedValueOnce([arc]);

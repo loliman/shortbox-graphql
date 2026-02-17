@@ -101,14 +101,6 @@ export const CoverInputSchema: z.ZodType<unknown> = z.lazy(() =>
   }),
 );
 
-export const FeatureInputSchema = z.object({
-  id: z.string().optional(),
-  number: z.number().int(),
-  individuals: z.array(IndividualInputSchema).optional(),
-  title: z.string().optional(),
-  addinfo: z.string().optional(),
-});
-
 export const FilterSchema = z.object({
   us: z.boolean(),
   formats: z.array(z.string()).optional(),

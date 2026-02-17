@@ -31,7 +31,6 @@ import { resolvers as individualResolvers } from '../src/modules/individual/Indi
 import { resolvers as appearanceResolvers } from '../src/modules/appearance/Appearance.resolver';
 import { resolvers as storyResolvers } from '../src/modules/story/Story.resolver';
 import { resolvers as coverResolvers } from '../src/modules/cover/Cover.resolver';
-import { resolvers as featureResolvers } from '../src/modules/feature/Feature.resolver';
 
 const zodError = () => {
   const e = new Error('invalid');
@@ -708,7 +707,6 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     const issueStoriesLoader = { load: jest.fn().mockResolvedValue([{ id: 81 }]) };
     const issueCoverLoader = { load: jest.fn().mockResolvedValue({ id: 82 }) };
     const issueCoversLoader = { load: jest.fn().mockResolvedValue([{ id: 83 }]) };
-    const issueFeaturesLoader = { load: jest.fn().mockResolvedValue([{ id: 84 }]) };
     const issueVariantsLoader = { load: jest.fn().mockResolvedValue([{ id: 85 }]) };
     const parent = { id: 4, fk_series: 8, number: '1' } as any;
 
@@ -761,15 +759,6 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     await expect(
       issueResolvers.Issue.arcs({ getArcs: async () => ['a'] } as any, {} as any, {} as any),
     ).resolves.toEqual(['a']);
-    await expect(
-      issueResolvers.Issue.features(parent, {} as any, { issueFeaturesLoader } as any),
-    ).resolves.toEqual([{ id: 84 }]);
-    await expect(
-      issueResolvers.Issue.features({ ...parent, features: [{ id: 841 }] } as any, {} as any, {} as any),
-    ).resolves.toEqual([{ id: 841 }]);
-    await expect(
-      issueResolvers.Issue.features(parent, {} as any, {} as any),
-    ).resolves.toEqual([]);
     await expect(
       issueResolvers.Issue.variants(parent, {} as any, { issueVariantsLoader } as any),
     ).resolves.toEqual([{ id: 85 }]);
@@ -965,7 +954,6 @@ describe('Smaller resolvers additional coverage', () => {
       Story_Individual: { findAll: jest.fn().mockResolvedValue([{ type: 'WRITER' }]) },
       Cover_Individual: { findAll: jest.fn().mockResolvedValue([{ type: 'ARTIST' }]) },
       Issue_Individual: { findAll: jest.fn().mockResolvedValue([{ type: 'EDITOR' }]) },
-      Feature_Individual: { findAll: jest.fn().mockResolvedValue([{ type: 'COLORIST' }]) },
       Appearance: {
         findAll: jest.fn().mockResolvedValue([{ id: 4, name: 'Spidey', type: '' }]),
         findByPk: jest.fn().mockResolvedValue({ get: jest.fn().mockReturnValue('App Cursor') }),
@@ -1016,9 +1004,6 @@ describe('Smaller resolvers additional coverage', () => {
     await expect(
       individualResolvers.Individual.type({ id: 7, Issues: [{ id: 10 }] } as any, {} as any, { models } as any),
     ).resolves.toEqual(['EDITOR']);
-    await expect(
-      individualResolvers.Individual.type({ id: 7, Features: [{ id: 10 }] } as any, {} as any, { models } as any),
-    ).resolves.toEqual(['COLORIST']);
     await expect(individualResolvers.Individual.type({ id: 7 } as any, {} as any, { models } as any)).resolves.toEqual(
       [],
     );
@@ -1169,34 +1154,6 @@ describe('Smaller resolvers additional coverage', () => {
     ).resolves.toBe(false);
     expect(coverResolvers.Cover.exclusive({} as any, {} as any, {} as any, {} as any)).toBe(false);
 
-    expect(featureResolvers.Feature.id({ id: 7 } as any, {} as any, { loggedIn: false } as any)).toMatch(
-      /^\d+$/,
-    );
-    expect(featureResolvers.Feature.title({ title: ' Back-up ' } as any, {} as any, {} as any, {} as any)).toBe(
-      'Back-up',
-    );
-    await expect(
-      featureResolvers.Feature.issue({ fk_issue: 1 } as any, {} as any, { issueLoader } as any),
-    ).resolves.toEqual({ id: 6, Series: { Publisher: { original: true } } });
-    await expect(
-      featureResolvers.Feature.issue({ issue: { id: 63 } } as any, {} as any, {} as any),
-    ).resolves.toEqual({ id: 63 });
-    await expect(
-      featureResolvers.Feature.issue({ fk_issue: 1 } as any, {} as any, {} as any),
-    ).resolves.toBeNull();
-    await expect(
-      featureResolvers.Feature.issue(
-        { fk_issue: 1, Issue: { id: 123 } } as any,
-        {} as any,
-        { issueLoader } as any,
-      ),
-    ).resolves.toEqual({ id: 123 });
-    await expect(featureResolvers.Feature.individuals({} as any, {} as any, {} as any)).resolves.toEqual(
-      [],
-    );
-    await expect(
-      featureResolvers.Feature.individuals({ getIndividuals: async () => ['p'] } as any, {} as any, {} as any),
-    ).resolves.toEqual(['p']);
   });
 
   it('covers additional cover resolver id/url branches', async () => {

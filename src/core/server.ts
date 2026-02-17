@@ -37,7 +37,6 @@ import { resolvers as ArcResolvers } from '../modules/arc/Arc.resolver';
 import { resolvers as IndividualResolvers } from '../modules/individual/Individual.resolver';
 import { resolvers as AppearanceResolvers } from '../modules/appearance/Appearance.resolver';
 import { resolvers as UserResolvers } from '../modules/user/User.resolver';
-import { resolvers as FeatureResolvers } from '../modules/feature/Feature.resolver';
 
 import { resolvers as NodeResolvers } from '../api/Node';
 import { resolvers as FilterResolvers } from '../api/Filter';
@@ -58,7 +57,6 @@ import { Series } from '../modules/series/Series.model';
 import { Issue } from '../modules/issue/Issue.model';
 import { Story } from '../modules/story/Story.model';
 import { Cover } from '../modules/cover/Cover.model';
-import { Feature } from '../modules/feature/Feature.model';
 
 const resolvers = merge(
   ScalarResolvers,
@@ -73,7 +71,6 @@ const resolvers = merge(
   ArcResolvers,
   IndividualResolvers,
   AppearanceResolvers,
-  FeatureResolvers,
 );
 
 const mockModeEnabled = (process.env.MOCK_MODE || '').toLowerCase() === 'true';
@@ -218,7 +215,6 @@ export interface Context {
   issueStoriesLoader: DataLoader<number, Story[]>;
   issueCoverLoader: DataLoader<number, Cover | null>;
   issueCoversLoader: DataLoader<number, Cover[]>;
-  issueFeaturesLoader: DataLoader<number, Feature[]>;
   issueVariantsLoader: DataLoader<string, Issue[]>;
 }
 
@@ -421,7 +417,6 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
             issueStoriesLoader: {} as DataLoader<number, Story[]>,
             issueCoverLoader: {} as DataLoader<number, Cover | null>,
             issueCoversLoader: {} as DataLoader<number, Cover[]>,
-            issueFeaturesLoader: {} as DataLoader<number, Feature[]>,
             issueVariantsLoader: {} as DataLoader<string, Issue[]>,
           };
         }
@@ -485,9 +480,6 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         const issueCoversLoader = new DataLoader<number, Cover[]>((ids) =>
           issueService.getCoversByIssueIds(ids),
         );
-        const issueFeaturesLoader = new DataLoader<number, Feature[]>((ids) =>
-          issueService.getFeaturesByIssueIds(ids),
-        );
         const issueVariantsLoader = new DataLoader<string, Issue[]>(
           (keys) => issueService.getVariantsBySeriesAndNumberKeys(keys),
           { cacheKeyFn: (key) => key },
@@ -518,7 +510,6 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           issueStoriesLoader,
           issueCoverLoader,
           issueCoversLoader,
-          issueFeaturesLoader,
           issueVariantsLoader,
         };
         return contextBase;

@@ -8,15 +8,12 @@ type IndividualParent = {
   Stories?: Array<{ id: number }>;
   Covers?: Array<{ id: number }>;
   Issues?: Array<{ id: number }>;
-  Features?: Array<{ id: number }>;
   Story_Individual?: { type?: unknown } | null;
   story_individual?: { type?: unknown } | null;
   Cover_Individual?: { type?: unknown } | null;
   cover_individual?: { type?: unknown } | null;
   Issue_Individual?: { type?: unknown } | null;
   issue_individual?: { type?: unknown } | null;
-  Feature_Individual?: { type?: unknown } | null;
-  feature_individual?: { type?: unknown } | null;
 };
 
 const toTypeArray = (value: unknown): string[] => {
@@ -90,8 +87,6 @@ export const resolvers: IndividualResolvers = {
         ...toTypeArray(individualParent.cover_individual?.type),
         ...toTypeArray(individualParent.Issue_Individual?.type),
         ...toTypeArray(individualParent.issue_individual?.type),
-        ...toTypeArray(individualParent.Feature_Individual?.type),
-        ...toTypeArray(individualParent.feature_individual?.type),
       ];
       if (directTypes.length > 0) {
         return [...new Set(directTypes)];
@@ -102,7 +97,6 @@ export const resolvers: IndividualResolvers = {
         | 'Story_Individual'
         | 'Cover_Individual'
         | 'Issue_Individual'
-        | 'Feature_Individual'
         | '' = '';
 
       if (individualParent.Stories && individualParent.Stories.length > 0) {
@@ -114,9 +108,6 @@ export const resolvers: IndividualResolvers = {
       } else if (individualParent.Issues && individualParent.Issues.length > 0) {
         where.fk_issue = individualParent.Issues[0].id;
         table = 'Issue_Individual';
-      } else if (individualParent.Features && individualParent.Features.length > 0) {
-        where.fk_feature = individualParent.Features[0].id;
-        table = 'Feature_Individual';
       } else {
         return [];
       }

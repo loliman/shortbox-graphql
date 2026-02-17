@@ -42,7 +42,6 @@ describe('IssueService additional coverage', () => {
       Issue: { findAll: jest.fn(), findOne: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
       Story: { findAll: jest.fn() },
       Cover: { findAll: jest.fn() },
-      Feature: { findAll: jest.fn() },
     };
     issueService = new IssueService(mockModels, 'req-1');
   });

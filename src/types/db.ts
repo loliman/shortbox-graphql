@@ -8,7 +8,6 @@ import { Arc } from '../modules/arc/Arc.model';
 import { Individual } from '../modules/individual/Individual.model';
 import { Appearance } from '../modules/appearance/Appearance.model';
 import { User } from '../modules/user/User.model';
-import { Feature } from '../modules/feature/Feature.model';
 
 export interface DbModels {
   Publisher: ModelStatic<Publisher>;
@@ -20,13 +19,11 @@ export interface DbModels {
   Individual: ModelStatic<Individual>;
   Appearance: ModelStatic<Appearance>;
   User: ModelStatic<User>;
-  Feature: ModelStatic<Feature>;
   Issue_Individual: ModelStatic<Model>;
   Issue_Arc: ModelStatic<Model>;
   Story_Individual: ModelStatic<Model>;
   Story_Appearance: ModelStatic<Model>;
   Cover_Individual: ModelStatic<Model>;
-  Feature_Individual: ModelStatic<Model>;
   sequelize: Sequelize;
   Sequelize: typeof Sequelize;
 }

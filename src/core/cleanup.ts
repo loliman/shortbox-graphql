@@ -221,14 +221,6 @@ export async function run() {
       }
 
       if (del) {
-        c = await models.Feature_Individual.count({
-          where: { fk_individual: individual.id },
-          transaction,
-        });
-        del = c === 0;
-      }
-
-      if (del) {
         c = await models.Issue_Individual.count({
           where: { fk_individual: individual.id },
           transaction,

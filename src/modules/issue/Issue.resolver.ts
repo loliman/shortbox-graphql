@@ -22,9 +22,6 @@ type IssueParent = {
   cover?: unknown;
   Covers?: unknown[];
   covers?: unknown[];
-  Feature?: unknown;
-  Features?: unknown[];
-  features?: unknown[];
   variants?: unknown[];
   Individuals?: unknown[];
   individuals?: unknown[];
@@ -311,13 +308,6 @@ export const resolvers: IssueResolvers = {
         : [],
     arcs: async (parent) =>
       (parent as IssueParent).getArcs ? await (parent as IssueParent).getArcs?.() : [],
-    features: async (parent, _, { issueFeaturesLoader }) => {
-      const issueParent = parent as IssueParent;
-      if (Array.isArray(issueParent.Features)) return issueParent.Features;
-      if (Array.isArray(issueParent.features)) return issueParent.features;
-      if (!hasLoad<number, unknown[]>(issueFeaturesLoader)) return [];
-      return await issueFeaturesLoader.load(issueParent.id);
-    },
     variants: async (parent, _, { issueVariantsLoader }) => {
       const issueParent = parent as IssueParent;
       if (Array.isArray(issueParent.variants)) return issueParent.variants;
