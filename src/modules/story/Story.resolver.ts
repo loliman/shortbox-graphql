@@ -1,10 +1,10 @@
 import { StoryResolvers } from '../../types/graphql';
 
 type StoryParent = {
-  id: number;
-  fk_parent?: number | null;
-  fk_reprint?: number | null;
-  fk_issue: number;
+  id: number | string;
+  fk_parent?: number | string | null;
+  fk_reprint?: number | string | null;
+  fk_issue: number | string;
   parent?: unknown;
   Parent?: unknown;
   children?: unknown[];
@@ -28,6 +28,18 @@ type LoaderLike<K, V> = {
 const hasLoad = <K, V>(loader: unknown): loader is LoaderLike<K, V> =>
   Boolean(loader) && typeof (loader as { load?: unknown }).load === 'function';
 
+const normalizeId = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+
+  return Number(trimmed);
+};
+
 export const resolvers: StoryResolvers = {
   Story: {
     id: (parent, _, { loggedIn }) => {
@@ -39,8 +51,8 @@ export const resolvers: StoryResolvers = {
       if (storyParent.Parent) return storyParent.Parent;
       if (storyParent.parent) return storyParent.parent;
 
-      const fkParent = storyParent.fk_parent;
-      if (typeof fkParent === 'number') {
+      const fkParent = normalizeId(storyParent.fk_parent);
+      if (fkParent !== null) {
         if (!hasLoad<number, unknown | null>(storyLoader)) return null;
         return await storyLoader.load(fkParent);
       }
@@ -51,15 +63,19 @@ export const resolvers: StoryResolvers = {
       if (Array.isArray(storyParent.Children)) return storyParent.Children;
       if (Array.isArray(storyParent.children)) return storyParent.children;
       if (!hasLoad<number, unknown[]>(storyChildrenLoader)) return [];
-      return await storyChildrenLoader.load(storyParent.id);
+
+      const storyId = normalizeId(storyParent.id);
+      if (storyId === null) return [];
+
+      return await storyChildrenLoader.load(storyId);
     },
     reprintOf: async (parent, _, { storyLoader }) => {
       const storyParent = parent as StoryParent;
       if (storyParent.ReprintOf) return storyParent.ReprintOf;
       if (storyParent.reprintOf) return storyParent.reprintOf;
 
-      const fkReprint = storyParent.fk_reprint;
-      if (typeof fkReprint === 'number') {
+      const fkReprint = normalizeId(storyParent.fk_reprint);
+      if (fkReprint !== null) {
         if (!hasLoad<number, unknown | null>(storyLoader)) return null;
         return await storyLoader.load(fkReprint);
       }
@@ -70,14 +86,22 @@ export const resolvers: StoryResolvers = {
       if (Array.isArray(storyParent.Reprints)) return storyParent.Reprints;
       if (Array.isArray(storyParent.reprints)) return storyParent.reprints;
       if (!hasLoad<number, unknown[]>(storyReprintsLoader)) return [];
-      return await storyReprintsLoader.load(storyParent.id);
+
+      const storyId = normalizeId(storyParent.id);
+      if (storyId === null) return [];
+
+      return await storyReprintsLoader.load(storyId);
     },
     issue: async (parent, _, { issueLoader }) => {
       const storyParent = parent as StoryParent;
       if (storyParent.Issue) return storyParent.Issue;
       if (storyParent.issue) return storyParent.issue;
       if (!hasLoad<number, unknown | null>(issueLoader)) return null;
-      return await issueLoader.load(storyParent.fk_issue);
+
+      const issueId = normalizeId(storyParent.fk_issue);
+      if (issueId === null) return null;
+
+      return await issueLoader.load(issueId);
     },
     individuals: async (parent) =>
       (parent as StoryParent).getIndividuals
@@ -92,7 +116,7 @@ export const resolvers: StoryResolvers = {
       const hasOriginalStoryReference =
         Boolean(storyParent.Parent) ||
         Boolean(storyParent.parent) ||
-        typeof storyParent.fk_parent === 'number';
+        normalizeId(storyParent.fk_parent) !== null;
 
       return !hasOriginalStoryReference;
     },

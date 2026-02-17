@@ -1067,6 +1067,9 @@ describe('Smaller resolvers additional coverage', () => {
       storyResolvers.Story.parent({ fk_parent: 2 } as any, {} as any, { storyLoader } as any),
     ).resolves.toEqual({ id: 3 });
     await expect(
+      storyResolvers.Story.parent({ fk_parent: '2' } as any, {} as any, { storyLoader } as any),
+    ).resolves.toEqual({ id: 3 });
+    await expect(
       storyResolvers.Story.parent({ parent: { id: 31 } } as any, {} as any, { storyLoader } as any),
     ).resolves.toEqual({ id: 31 });
     await expect(
@@ -1086,6 +1089,9 @@ describe('Smaller resolvers additional coverage', () => {
     ).resolves.toEqual([]);
     await expect(
       storyResolvers.Story.reprintOf({ fk_reprint: 2 } as any, {} as any, { storyLoader } as any),
+    ).resolves.toEqual({ id: 3 });
+    await expect(
+      storyResolvers.Story.reprintOf({ fk_reprint: '2' } as any, {} as any, { storyLoader } as any),
     ).resolves.toEqual({ id: 3 });
     await expect(
       storyResolvers.Story.reprintOf({ reprintOf: { id: 32 } } as any, {} as any, { storyLoader } as any),
@@ -1124,6 +1130,9 @@ describe('Smaller resolvers additional coverage', () => {
     ).toBe(true);
     expect(
       storyResolvers.Story.exclusive({ fk_parent: 7 } as any, {} as any, {} as any, {} as any),
+    ).toBe(false);
+    expect(
+      storyResolvers.Story.exclusive({ fk_parent: '7' } as any, {} as any, {} as any, {} as any),
     ).toBe(false);
     expect(
       storyResolvers.Story.exclusive({ parent: { id: 7 } } as any, {} as any, {} as any, {} as any),
