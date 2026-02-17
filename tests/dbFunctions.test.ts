@@ -1,4 +1,7 @@
 import {
+  createNodeIssueLabel,
+  createNodeSeriesLabel,
+  createNodeUrl,
   createIssueLabel,
   createLabel,
   createSeriesLabel,
@@ -17,8 +20,11 @@ describe('dbFunctions', () => {
       expect(toRoman(4)).toBe('IV');
       expect(toRoman(2026)).toBe('MMXXVI');
       expect(toRoman(3999)).toBe('MMMCMXCIX');
+      expect(toRoman(3.9)).toBe('III');
       expect(toRoman(4000)).toBe('overflow');
       expect(toRoman(-1)).toBe('overflow');
+      expect(toRoman(Number.NaN)).toBe('overflow');
+      expect(toRoman(Number.POSITIVE_INFINITY)).toBe('overflow');
     });
 
     it('converts roman to arabic and returns 0 for invalid values', () => {
@@ -82,7 +88,9 @@ describe('dbFunctions', () => {
       expect(urlEncode('AZaz09-._~')).toBe('AZaz09-._~');
       expect(urlEncode('Spider Man')).toBe('Spider%20Man');
       expect(urlEncode('ÄÖÜß')).toBe('%C3%84%C3%96%C3%9C%C3%9F');
+      expect(urlEncode('🕷️')).toBe('%F0%9F%95%B7%EF%B8%8F');
       expect(urlEncode(null)).toBeNull();
+      expect(urlEncode(undefined)).toBeNull();
     });
 
     it('builds urls for publisher/series/issue', () => {
@@ -94,6 +102,42 @@ describe('dbFunctions', () => {
       );
       expect(createUrl('issue', true, 'Marvel Comics', 'Spider-Man', 2, '1', 'HEFT', 'Ä')).toBe(
         '/us/Marvel%20Comics/Spider-Man_Vol_2/1/HEFT_%C3%84',
+      );
+      expect(createUrl('ISSUE', 1, 'Marvel Comics', 'Spider-Man', 2, '1', 'HEFT', '')).toBe(
+        '/us/Marvel%20Comics/Spider-Man_Vol_2/1/HEFT',
+      );
+    });
+  });
+
+  describe('node helpers', () => {
+    it('builds node urls for publisher/series/issue', () => {
+      expect(createNodeUrl('publisher', true, 'Marvel Comics', 'Spider-Man', 2, '1', 'HEFT', '')).toBe(
+        '/us/Marvel%20Comics',
+      );
+      expect(createNodeUrl('series', false, 'Panini Deutschland', 'Spider-Man', 2, '1', 'HEFT', '')).toBe(
+        '/de/Panini%20Deutschland/Spider-Man_Vol_2',
+      );
+      expect(
+        createNodeUrl('issue', false, 'Panini Deutschland', 'Spider-Man', 2, '1/2', 'Hard Cover', 'A/B'),
+      ).toBe('/de/Panini%20Deutschland/Spider-Man_Vol_2/1%2F2/Hard%20Cover_A%2FB');
+    });
+
+    it('builds node labels for series and issue with optional parts', () => {
+      expect(createNodeSeriesLabel('Spider-Man', 'Marvel', 2, 2018, 2021)).toBe(
+        'Spider-Man (Vol. II) (2018-2021) (Marvel)',
+      );
+      expect(createNodeSeriesLabel('Spider-Man', 'Marvel', 2, 2018, null)).toBe(
+        'Spider-Man (Vol. II) (2018) (Marvel)',
+      );
+      expect(createNodeSeriesLabel('Spider-Man', 'Marvel', 2, 2018, 2018)).toBe(
+        'Spider-Man (Vol. II) (2018) (Marvel)',
+      );
+
+      expect(createNodeIssueLabel('Spider-Man (Vol. II) (2018) (Marvel)', '1', 'HEFT', 'B', 'First Swing')).toBe(
+        'Spider-Man (Vol. II) (2018) (Marvel) #1 (HEFT/B): First Swing',
+      );
+      expect(createNodeIssueLabel('Spider-Man (Vol. II) (2018) (Marvel)', '1', 'HEFT', '', '')).toBe(
+        'Spider-Man (Vol. II) (2018) (Marvel) #1 (HEFT)',
       );
     });
   });
