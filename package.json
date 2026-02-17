@@ -58,7 +58,6 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/cheerio": "^1.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cron": "^2.0.1",
     "@types/dateformat": "^5.0.3",
