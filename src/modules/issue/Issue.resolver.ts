@@ -20,8 +20,6 @@ type IssueParent = {
   stories?: unknown[];
   Cover?: unknown;
   cover?: unknown;
-  Covers?: unknown[];
-  covers?: unknown[];
   variants?: unknown[];
   Individuals?: unknown[];
   individuals?: unknown[];
@@ -276,12 +274,6 @@ export const resolvers: IssueResolvers = {
       const issueParent = parent as IssueParent;
       if (issueParent.Cover) return issueParent.Cover;
       if (issueParent.cover) return issueParent.cover;
-      if (Array.isArray(issueParent.Covers) && issueParent.Covers.length > 0) {
-        return issueParent.Covers[0] || null;
-      }
-      if (Array.isArray(issueParent.covers) && issueParent.covers.length > 0) {
-        return issueParent.covers[0] || null;
-      }
       if (!hasLoad<number, unknown | null>(issueCoverLoader)) return null;
       const loadedCover = await issueCoverLoader.load(issueParent.id);
       if (loadedCover) return loadedCover;
@@ -294,13 +286,6 @@ export const resolvers: IssueResolvers = {
         issue: issueParent,
         url: `https://www.comicguide.de/pics/large/${comicguideId}.jpg`,
       };
-    },
-    covers: async (parent, _, { issueCoversLoader }) => {
-      const issueParent = parent as IssueParent;
-      if (Array.isArray(issueParent.Covers)) return issueParent.Covers;
-      if (Array.isArray(issueParent.covers)) return issueParent.covers;
-      if (!hasLoad<number, unknown[]>(issueCoversLoader)) return [];
-      return await issueCoversLoader.load(issueParent.id);
     },
     individuals: async (parent) =>
       (parent as IssueParent).getIndividuals

@@ -72,7 +72,6 @@ export const typeDef = gql`
     series: Series
     stories: [Story]
     cover: Cover
-    covers: [Cover]
     individuals: [Individual]
     arcs: [Arc]
     variants: [Issue]

@@ -432,17 +432,6 @@ export class IssueService {
     return issueIds.map((issueId) => covers.find((cover) => cover.fk_issue === issueId) || null);
   }
 
-  async getCoversByIssueIds(issueIds: readonly number[]) {
-    const covers = await this.models.Cover.findAll({
-      where: { fk_issue: { [Op.in]: [...issueIds] } },
-      order: [
-        ['number', 'ASC'],
-        ['id', 'ASC'],
-      ],
-    });
-    return issueIds.map((issueId) => covers.filter((cover) => cover.fk_issue === issueId));
-  }
-
   async getVariantsBySeriesAndNumberKeys(keys: readonly string[]) {
     if (keys.length === 0) return [];
 

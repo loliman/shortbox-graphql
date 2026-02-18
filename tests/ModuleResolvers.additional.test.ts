@@ -706,7 +706,6 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     const seriesLoader = { load: jest.fn().mockResolvedValue({ id: 8 }) };
     const issueStoriesLoader = { load: jest.fn().mockResolvedValue([{ id: 81 }]) };
     const issueCoverLoader = { load: jest.fn().mockResolvedValue({ id: 82 }) };
-    const issueCoversLoader = { load: jest.fn().mockResolvedValue([{ id: 83 }]) };
     const issueVariantsLoader = { load: jest.fn().mockResolvedValue([{ id: 85 }]) };
     const parent = { id: 4, fk_series: 8, number: '1' } as any;
 
@@ -740,15 +739,6 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     await expect(
       issueResolvers.Issue.cover(parent, {} as any, {} as any),
     ).resolves.toBeNull();
-    await expect(
-      issueResolvers.Issue.covers(parent, {} as any, { issueCoversLoader } as any),
-    ).resolves.toEqual([{ id: 83 }]);
-    await expect(
-      issueResolvers.Issue.covers({ ...parent, covers: [{ id: 831 }] } as any, {} as any, {} as any),
-    ).resolves.toEqual([{ id: 831 }]);
-    await expect(
-      issueResolvers.Issue.covers(parent, {} as any, {} as any),
-    ).resolves.toEqual([]);
     await expect(
       issueResolvers.Issue.individuals({} as any, {} as any, {} as any),
     ).resolves.toEqual([]);
@@ -855,20 +845,6 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       ),
     ).resolves.toEqual([]);
 
-    await expect(
-      issueResolvers.Issue.cover(
-        { id: 4, Covers: [{ id: 701 }] } as any,
-        {} as any,
-        { issueCoverLoader: { load: jest.fn() } } as any,
-      ),
-    ).resolves.toEqual({ id: 701 });
-    await expect(
-      issueResolvers.Issue.cover(
-        { id: 4, covers: [{ id: 702 }] } as any,
-        {} as any,
-        { issueCoverLoader: { load: jest.fn() } } as any,
-      ),
-    ).resolves.toEqual({ id: 702 });
     await expect(
       issueResolvers.Issue.cover(
         { id: 4, comicguideid: 91529 } as any,
