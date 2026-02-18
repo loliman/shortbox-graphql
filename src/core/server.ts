@@ -214,7 +214,6 @@ export interface Context {
   storyReprintsLoader: DataLoader<number, Story[]>;
   issueStoriesLoader: DataLoader<number, Story[]>;
   issueCoverLoader: DataLoader<number, Cover | null>;
-  issueCoversLoader: DataLoader<number, Cover[]>;
   issueVariantsLoader: DataLoader<string, Issue[]>;
 }
 
@@ -416,7 +415,6 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
             storyReprintsLoader: {} as DataLoader<number, Story[]>,
             issueStoriesLoader: {} as DataLoader<number, Story[]>,
             issueCoverLoader: {} as DataLoader<number, Cover | null>,
-            issueCoversLoader: {} as DataLoader<number, Cover[]>,
             issueVariantsLoader: {} as DataLoader<string, Issue[]>,
           };
         }
@@ -477,9 +475,6 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         const issueCoverLoader = new DataLoader<number, Cover | null>((ids) =>
           issueService.getPrimaryCoversByIssueIds(ids),
         );
-        const issueCoversLoader = new DataLoader<number, Cover[]>((ids) =>
-          issueService.getCoversByIssueIds(ids),
-        );
         const issueVariantsLoader = new DataLoader<string, Issue[]>(
           (keys) => issueService.getVariantsBySeriesAndNumberKeys(keys),
           { cacheKeyFn: (key) => key },
@@ -509,7 +504,6 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
           storyReprintsLoader,
           issueStoriesLoader,
           issueCoverLoader,
-          issueCoversLoader,
           issueVariantsLoader,
         };
         return contextBase;

@@ -207,7 +207,7 @@ describe('IssueService', () => {
     );
   });
 
-  it('should batch stories/covers by issue ids', async () => {
+  it('should batch stories/primary cover by issue ids', async () => {
     mockModels.Story.findAll.mockResolvedValue([
       { id: 1, fk_issue: 10, number: 1 },
       { id: 2, fk_issue: 11, number: 1 },
@@ -220,7 +220,6 @@ describe('IssueService', () => {
     ]);
     const stories = await issueService.getStoriesByIssueIds([10, 11]);
     const primaryCovers = await issueService.getPrimaryCoversByIssueIds([10, 11, 12]);
-    const allCovers = await issueService.getCoversByIssueIds([10, 11]);
 
     expect(stories).toHaveLength(2);
     expect(stories[0].map((s: any) => s.id)).toEqual([1, 3]);
@@ -229,9 +228,6 @@ describe('IssueService', () => {
     expect(primaryCovers[0]?.id).toBe(4);
     expect(primaryCovers[1]?.id).toBe(6);
     expect(primaryCovers[2]).toBeNull();
-
-    expect(allCovers[0].map((c: any) => c.id)).toEqual([4, 5]);
-    expect(allCovers[1].map((c: any) => c.id)).toEqual([6]);
   });
 
   it('should batch variants by series/number key', async () => {
