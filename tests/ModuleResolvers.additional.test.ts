@@ -149,7 +149,7 @@ describe('User resolver additional coverage', () => {
       ),
     ).rejects.toThrow('invalid');
 
-    userService.login.mockResolvedValueOnce({ id: 9 });
+    userService.login.mockResolvedValueOnce({ id: '9' });
     const loginResult = await userResolvers.Mutation.login(
       {},
       { credentials: { name: 'alice', password: 'x' } } as any,
@@ -162,7 +162,7 @@ describe('User resolver additional coverage', () => {
         request,
       } as any,
     );
-    expect(loginResult).toEqual({ id: 9 });
+    expect(loginResult).toEqual({ id: '9' });
     expect(request.session.userId).toBe(9);
     expect(mockIssueCsrfToken).toHaveBeenCalled();
 
@@ -809,6 +809,22 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
         {} as any,
       ),
     ).toBeNull();
+    expect(
+      issueResolvers.Issue.releasedate(
+        { releasedate: '2020-03-02T23:00:00.000Z' } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
+    ).toBe('2020-03-03');
+    expect(
+      issueResolvers.Issue.releasedate(
+        { releasedate: '2020-03-03' } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
+    ).toBe('2020-03-03');
   });
 
   it('falls back to first variant in issueDetails when parent variant is missing', async () => {

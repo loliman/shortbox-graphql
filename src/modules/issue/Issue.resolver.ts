@@ -70,6 +70,8 @@ const resolveComicguideId = (value: unknown): string | null => {
 };
 
 const LEGACY_DATE_TIME_PATTERN = /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const RELEASE_DATE_TIMEZONE = 'Europe/Berlin';
 
 const normalizeDateTime = (value: unknown): string | null => {
   const toIso = (date: Date): string | null =>
@@ -113,6 +115,32 @@ const normalizeDateTime = (value: unknown): string | null => {
     parsed.getSeconds() === second;
 
   return isValid ? toIso(parsed) : null;
+};
+
+const normalizeReleaseDate = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return null;
+    if (ISO_DATE_PATTERN.test(trimmed)) return trimmed;
+  }
+
+  const asDate =
+    value instanceof Date ? value : typeof value === 'number' || typeof value === 'string' ? new Date(value) : null;
+  if (!asDate || Number.isNaN(asDate.getTime())) return null;
+
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: RELEASE_DATE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(asDate);
+
+  const year = dateParts.find((part) => part.type === 'year')?.value;
+  const month = dateParts.find((part) => part.type === 'month')?.value;
+  const day = dateParts.find((part) => part.type === 'day')?.value;
+  if (!year || !month || !day) return null;
+
+  return `${year}-${month}-${day}`;
 };
 
 export const resolvers: IssueResolvers = {
@@ -251,6 +279,7 @@ export const resolvers: IssueResolvers = {
     },
   },
   Issue: {
+    releasedate: (parent: unknown) => normalizeReleaseDate((parent as { releasedate?: unknown }).releasedate),
     createdat: (parent: unknown) => {
       const issueParent = parent as IssueParent;
       return normalizeDateTime(issueParent.createdat ?? issueParent.createdAt);

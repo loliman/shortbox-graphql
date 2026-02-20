@@ -48,6 +48,9 @@ export const typeDef = gql`
     isbn: String
     limitation: String
     addinfo: String
+    verified: Boolean
+    collected: Boolean
+    comicguideid: Int
     series: SeriesInput
   }
 

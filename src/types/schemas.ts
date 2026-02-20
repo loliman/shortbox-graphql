@@ -43,6 +43,9 @@ export const IssueInputSchema = z.object({
   isbn: z.string().optional(),
   limitation: z.string().optional(),
   addinfo: z.string().optional(),
+  verified: z.boolean().optional(),
+  collected: z.boolean().optional(),
+  comicguideid: z.number().int().optional(),
   series: SeriesInputSchema.optional(),
 });
 

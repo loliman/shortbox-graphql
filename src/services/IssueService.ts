@@ -5,6 +5,7 @@ import type { Filter, IssueInput, SeriesInput } from '@loliman/shortbox-contract
 import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
 import { naturalCompare } from '../util/util';
 import { fromRoman } from '../util/dbFunctions';
+import { MarvelCrawlerService } from './MarvelCrawlerService';
 
 const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
   'updatedat',
@@ -137,7 +138,18 @@ const toIdKey = (value: unknown): string | null => {
 const normalizeDbIds = (ids: readonly unknown[]): number[] =>
   ids.map((id) => toNumericId(id)).filter((id): id is number => id != null);
 
+const normalizeLimitationForDb = (value: unknown): string => {
+  if (value === null || value === undefined) return '0';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value));
+  const trimmed = String(value).trim();
+  if (!trimmed) return '0';
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? String(parsed) : '0';
+};
+
 export class IssueService {
+  private readonly crawler = new MarvelCrawlerService();
+
   constructor(
     private models: typeof import('../models').default,
     private requestId?: string,
@@ -302,7 +314,9 @@ export class IssueService {
 
     if (!series) throw new Error('Series not found');
 
-    return await this.models.Issue.create(
+    const issueInput = item as IssueInput & { comicguideid?: number };
+
+    const createdIssue = await this.models.Issue.create(
       {
         title: (item.title || '').trim(),
         number: (item.number || '').trim(),
@@ -312,14 +326,17 @@ export class IssueService {
         pages: item.pages,
         price: item.price,
         currency: item.currency,
-        comicguideid: 0,
+        comicguideid: String(issueInput.comicguideid ?? 0),
         fk_series: series.id,
         isbn: item.isbn,
-        limitation: item.limitation,
+        limitation: normalizeLimitationForDb(item.limitation),
         addinfo: item.addinfo,
       },
       { transaction },
     );
+
+    await this.syncStoriesFromParentRefs(createdIssue.id, item, transaction);
+    return createdIssue;
   }
 
   async editIssue(old: IssueInput, item: IssueInput, transaction: Transaction) {
@@ -362,9 +379,272 @@ export class IssueService {
     res.price = item.price || 0;
     res.currency = item.currency || '';
     res.isbn = item.isbn || '';
-    res.limitation = item.limitation || '';
+    res.limitation = normalizeLimitationForDb(item.limitation);
     res.addinfo = item.addinfo || '';
-    return await res.save({ transaction });
+
+    const statusItem = item as IssueInput & {
+      verified?: boolean;
+      collected?: boolean;
+      comicguideid?: number;
+    };
+    if (typeof statusItem.verified === 'boolean') res.verified = statusItem.verified;
+    if (typeof statusItem.collected === 'boolean') res.collected = statusItem.collected;
+    if (typeof statusItem.comicguideid === 'number') {
+      res.comicguideid = String(statusItem.comicguideid);
+    }
+
+    //edit issues
+
+    const savedIssue = await res.save({ transaction });
+    await this.syncStoriesFromParentRefs(savedIssue.id, item, transaction);
+    return savedIssue;
+  }
+
+  private async syncStoriesFromParentRefs(
+    issueId: number,
+    item: IssueInput,
+    transaction: Transaction,
+  ): Promise<void> {
+    type StoryParentRef = {
+      number?: number;
+      issue?: {
+        number?: string;
+        series?: { title?: string; volume?: number };
+      };
+    };
+
+    type StoryInputLike = {
+      number?: number;
+      title?: string;
+      addinfo?: string;
+      part?: string;
+      onlyapp?: boolean;
+      firstapp?: boolean;
+      onlytb?: boolean;
+      otheronlytb?: boolean;
+      onlyoneprint?: boolean;
+      collected?: boolean;
+      parent?: StoryParentRef;
+    };
+
+    const inputStories = Array.isArray((item as { stories?: unknown[] }).stories)
+      ? (((item as { stories?: unknown[] }).stories as unknown[]) || [])
+      : [];
+
+    const existingStories = await this.models.Story.findAll({
+      where: { fk_issue: issueId },
+      order: [
+        ['number', 'ASC'],
+        ['id', 'ASC'],
+      ],
+      transaction,
+    });
+
+    const existingParentsByNumber = new Map<number, Array<number | null>>();
+    for (const existingStory of existingStories) {
+      const storyNumber = Number(existingStory.number || 0);
+      const list = existingParentsByNumber.get(storyNumber) || [];
+      list.push(existingStory.fk_parent ?? null);
+      existingParentsByNumber.set(storyNumber, list);
+    }
+
+    await this.models.Story.destroy({
+      where: { fk_issue: issueId },
+      transaction,
+    });
+
+    if (inputStories.length === 0) return;
+
+    let nextStoryNumber = 1;
+    const parentIssueCache = new Map<string, number>();
+
+    for (const rawStory of inputStories) {
+      if (!rawStory || typeof rawStory !== 'object') continue;
+      const story = rawStory as StoryInputLike;
+      const sourceStoryNumber = Number(story.number || 0);
+      const fallbackParentCandidates =
+        sourceStoryNumber > 0 ? existingParentsByNumber.get(sourceStoryNumber) || [] : [];
+      const fallbackParentId =
+        fallbackParentCandidates.length > 0 ? fallbackParentCandidates.shift() ?? null : null;
+      const parent = story.parent;
+      const parentIssue = parent?.issue;
+      const parentSeries = parentIssue?.series;
+
+      const parentTitle = String(parentSeries?.title || '').trim();
+      const parentVolume = Number(parentSeries?.volume || 0);
+      const parentNumber = String(parentIssue?.number || '').trim();
+      const createStoryRow = async (parentStoryId: number | null) =>
+        this.models.Story.create(
+          {
+            fk_issue: issueId,
+            fk_parent: parentStoryId,
+            number: nextStoryNumber++,
+            title: String(story.title || ''),
+            addinfo: String(story.addinfo || ''),
+            part: String(story.part || ''),
+            onlyapp: Boolean(story.onlyapp),
+            firstapp: Boolean(story.firstapp),
+            onlytb: Boolean(story.onlytb),
+            otheronlytb: Boolean(story.otheronlytb),
+            onlyoneprint: Boolean(story.onlyoneprint),
+            collected: Boolean(story.collected),
+          },
+          { transaction },
+        );
+
+      let hasCreatedStory = false;
+
+      if (parentTitle && parentVolume > 0 && parentNumber) {
+        const cacheKey = `${parentTitle}::${parentVolume}::${parentNumber}`;
+        let parentIssueId = parentIssueCache.get(cacheKey);
+
+        if (!parentIssueId) {
+          parentIssueId = await this.findOrCrawlParentIssue(
+            {
+              title: parentTitle,
+              volume: parentVolume,
+              number: parentNumber,
+            },
+            transaction,
+          );
+          parentIssueCache.set(cacheKey, parentIssueId);
+        }
+
+        const parentStories = await this.models.Story.findAll({
+          where: { fk_issue: parentIssueId },
+          order: [
+            ['number', 'ASC'],
+            ['id', 'ASC'],
+          ],
+          transaction,
+        });
+
+        const requestedParentStoryNumber = Number(parent?.number || 0);
+        if (requestedParentStoryNumber === 0) {
+          for (const parentStory of parentStories) {
+            await createStoryRow(parentStory.id);
+            hasCreatedStory = true;
+          }
+        } else {
+          const selectedParentStory = parentStories.find(
+            (entry) => entry.number === requestedParentStoryNumber,
+          );
+          if (selectedParentStory) {
+            await createStoryRow(selectedParentStory.id);
+            hasCreatedStory = true;
+          }
+        }
+      }
+
+      if (!hasCreatedStory) await createStoryRow(fallbackParentId);
+    }
+  }
+
+  private async findOrCrawlParentIssue(
+    parent: { title: string; volume: number; number: string },
+    transaction: Transaction,
+  ): Promise<number> {
+    const title = parent.title.trim();
+    const number = parent.number.trim();
+    const volume = parent.volume;
+
+    let series = await this.models.Series.findOne({
+      where: {
+        title,
+        volume,
+      },
+      include: [
+        {
+          model: this.models.Publisher,
+          where: { original: true },
+        },
+      ],
+      transaction,
+    });
+
+    if (!series) {
+      const crawledSeries = await this.crawler.crawlSeries(title, volume);
+      const [publisher] = await this.models.Publisher.findOrCreate({
+        where: { name: crawledSeries.publisherName.trim() || 'Marvel Comics' },
+        defaults: {
+          name: crawledSeries.publisherName.trim() || 'Marvel Comics',
+          original: true,
+          addinfo: '',
+          startyear: 0,
+          endyear: 0,
+        },
+        transaction,
+      });
+
+      series = await this.models.Series.create(
+        {
+          title: crawledSeries.title,
+          volume: crawledSeries.volume,
+          startyear: crawledSeries.startyear || 0,
+          endyear: crawledSeries.endyear || 0,
+          addinfo: '',
+          fk_publisher: publisher.id,
+        },
+        { transaction },
+      );
+    }
+
+    let issue = await this.models.Issue.findOne({
+      where: {
+        number,
+        fk_series: series.id,
+      },
+      transaction,
+    });
+
+    if (!issue) {
+      const crawledIssue = await this.crawler.crawlIssue(title, volume, number);
+      issue = await this.models.Issue.create(
+        {
+          title: '',
+          number,
+          format: 'Heft',
+          variant: '',
+          releasedate: crawledIssue.releasedate,
+          pages: 0,
+          price: crawledIssue.price || 0,
+          currency: crawledIssue.currency || 'USD',
+          comicguideid: '0',
+          isbn: '',
+          limitation: normalizeLimitationForDb(undefined),
+          addinfo: '',
+          fk_series: series.id,
+        },
+        { transaction },
+      );
+
+      if (crawledIssue.coverUrl) {
+        await this.models.Cover.create(
+          {
+            fk_issue: issue.id,
+            number: 0,
+            url: crawledIssue.coverUrl,
+            addinfo: '',
+          },
+          { transaction },
+        );
+      }
+
+      for (const crawledStory of crawledIssue.stories) {
+        await this.models.Story.create(
+          {
+            fk_issue: issue.id,
+            number: Number(crawledStory.number || 0) || 1,
+            title: String(crawledStory.title || ''),
+            addinfo: '',
+            part: '',
+          },
+          { transaction },
+        );
+      }
+    }
+
+    return issue.id;
   }
 
   async getLastEdited(

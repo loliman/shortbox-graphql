@@ -29,6 +29,19 @@ const requireResponse = (response: Response | undefined): Response => {
   return response;
 };
 
+const toSessionUserId = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  return null;
+};
+
 const regenerateSession = async (request: Request): Promise<void> => {
   await new Promise<void>((resolve, reject) => {
     request.session.regenerate((error) => {
@@ -101,7 +114,13 @@ export const resolvers: UserResolvers = {
         const sessionWithUserId = requestObject.session as typeof requestObject.session & {
           userId?: number;
         };
-        sessionWithUserId.userId = loginResult.id;
+        const userId = toSessionUserId(loginResult.id);
+        if (!userId) {
+          throw new GraphQLError('Ungültige User-ID nach Login', {
+            extensions: { code: 'INTERNAL_SERVER_ERROR' },
+          });
+        }
+        sessionWithUserId.userId = userId;
         await saveSession(requestObject);
         issueCsrfToken(requestObject, responseObject, true);
         return loginResult;

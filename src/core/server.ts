@@ -190,6 +190,19 @@ const validateStartupSecurityConfiguration = (
   }
 };
 
+const resolveAuthenticatedUserId = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return undefined;
+};
+
 export interface Context {
   loggedIn: boolean;
   authenticatedUserId?: number;
@@ -433,8 +446,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         const sessionWithUserId = req.session as
           | (typeof req.session & { userId?: number })
           | undefined;
-        const authenticatedUserId =
-          typeof sessionWithUserId?.userId === 'number' ? sessionWithUserId.userId : undefined;
+        const authenticatedUserId = resolveAuthenticatedUserId(sessionWithUserId?.userId);
         const loggedIn = Boolean(authenticatedUserId);
 
         if (loggedIn && CSRF_PROTECTION_ENABLED) {
