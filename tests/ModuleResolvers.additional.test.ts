@@ -357,12 +357,6 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     await expect(
       publisherResolvers.Publisher.lastEdited(parent as any, { limit: 5 } as any, { models } as any),
     ).resolves.toEqual([{}, {}]);
-    await expect(
-      publisherResolvers.Publisher.firstIssue(parent as any, {} as any, { models } as any),
-    ).resolves.toEqual({ id: 1 });
-    await expect(
-      publisherResolvers.Publisher.lastIssue(parent as any, {} as any, { models } as any),
-    ).resolves.toEqual({ id: 1 });
     expect(publisherResolvers.Publisher.active(parent as any, {} as any, {} as any, {} as any)).toBe(
       true,
     );
@@ -375,7 +369,6 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       Publisher: {},
       Issue: {
         count: jest.fn().mockResolvedValue([{ count: 1 }]),
-        findOne: jest.fn().mockResolvedValue({ id: 10 }),
         findAll: jest.fn().mockResolvedValue([{ id: 20 }]),
       },
     } as any;
@@ -542,12 +535,6 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     await expect(
       seriesResolvers.Series.issueCount(parent as any, {} as any, { models } as any),
     ).resolves.toBe(5);
-    await expect(
-      seriesResolvers.Series.firstIssue(parent as any, {} as any, { models } as any),
-    ).resolves.toEqual({ id: 10 });
-    await expect(
-      seriesResolvers.Series.lastIssue(parent as any, {} as any, { models } as any),
-    ).resolves.toEqual({ id: 10 });
     await expect(
       seriesResolvers.Series.lastEdited(parent as any, { limit: 3 } as any, { models } as any),
     ).resolves.toEqual([{ id: 20 }]);

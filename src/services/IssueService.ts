@@ -544,6 +544,207 @@ export class IssueService {
     parent: { title: string; volume: number; number: string },
     transaction: Transaction,
   ): Promise<number> {
+    type CrawledNamedType = {
+      name?: string;
+      type?: string | string[];
+    };
+    type CrawledArcLike = {
+      title?: string;
+      type?: string;
+    };
+    type CrawledAppearanceLike = {
+      name?: string;
+      type?: string;
+      role?: string;
+    };
+    type CrawledCoverLike = {
+      number?: number;
+      url?: string;
+      individuals?: CrawledNamedType[];
+    };
+    type CrawledStoryLike = {
+      number?: number;
+      title?: string;
+      addinfo?: string;
+      part?: string;
+      individuals?: CrawledNamedType[];
+      appearances?: CrawledAppearanceLike[];
+    };
+    type CrawledVariantLike = {
+      number?: string;
+      format?: string;
+      variant?: string;
+      releasedate?: string;
+      price?: number;
+      currency?: string;
+      cover?: CrawledCoverLike;
+    };
+    type CrawledIssueLike = {
+      releasedate?: string;
+      price?: number;
+      currency?: string;
+      coverUrl?: string;
+      cover?: CrawledCoverLike;
+      stories?: CrawledStoryLike[];
+      individuals?: CrawledNamedType[];
+      arcs?: CrawledArcLike[];
+      variants?: CrawledVariantLike[];
+    };
+
+    const normalizeTypeList = (raw: unknown): string[] => {
+      if (Array.isArray(raw)) {
+        return raw
+          .map((entry) => String(entry || '').trim())
+          .filter((entry) => entry.length > 0);
+      }
+      const normalized = String(raw || '').trim();
+      return normalized ? [normalized] : [];
+    };
+
+    const findOrCreateIndividual = async (rawName: unknown) => {
+      const name = String(rawName || '').trim();
+      if (!name) return null;
+      const [individual] = await this.models.Individual.findOrCreate({
+        where: { name },
+        defaults: { name },
+        transaction,
+      });
+      return individual;
+    };
+
+    const linkIssueIndividuals = async (issueId: number, individuals: CrawledNamedType[]) => {
+      for (const entry of individuals) {
+        const individual = await findOrCreateIndividual(entry?.name);
+        if (!individual) continue;
+
+        const types = normalizeTypeList(entry?.type);
+        if (types.length === 0) continue;
+
+        for (const type of types) {
+          await this.models.Issue_Individual.findOrCreate({
+            where: {
+              fk_issue: issueId,
+              fk_individual: individual.id,
+              type,
+            },
+            defaults: {
+              fk_issue: issueId,
+              fk_individual: individual.id,
+              type,
+            },
+            transaction,
+          });
+        }
+      }
+    };
+
+    const linkCoverIndividuals = async (coverId: number, individuals: CrawledNamedType[]) => {
+      for (const entry of individuals) {
+        const individual = await findOrCreateIndividual(entry?.name);
+        if (!individual) continue;
+
+        const types = normalizeTypeList(entry?.type);
+        if (types.length === 0) continue;
+
+        for (const type of types) {
+          await this.models.Cover_Individual.findOrCreate({
+            where: {
+              fk_cover: coverId,
+              fk_individual: individual.id,
+              type,
+            },
+            defaults: {
+              fk_cover: coverId,
+              fk_individual: individual.id,
+              type,
+            },
+            transaction,
+          });
+        }
+      }
+    };
+
+    const linkIssueArcs = async (issueId: number, arcs: CrawledArcLike[]) => {
+      for (const rawArc of arcs) {
+        const title = String(rawArc?.title || '').trim();
+        const type = String(rawArc?.type || '').trim();
+        if (!title || !type) continue;
+
+        const [arc] = await this.models.Arc.findOrCreate({
+          where: { title, type },
+          defaults: { title, type },
+          transaction,
+        });
+
+        await this.models.Issue_Arc.findOrCreate({
+          where: {
+            fk_issue: issueId,
+            fk_arc: arc.id,
+          },
+          defaults: {
+            fk_issue: issueId,
+            fk_arc: arc.id,
+          },
+          transaction,
+        });
+      }
+    };
+
+    const linkStoryIndividuals = async (storyId: number, individuals: CrawledNamedType[]) => {
+      for (const entry of individuals) {
+        const individual = await findOrCreateIndividual(entry?.name);
+        if (!individual) continue;
+
+        const types = normalizeTypeList(entry?.type);
+        if (types.length === 0) continue;
+
+        for (const type of types) {
+          await this.models.Story_Individual.findOrCreate({
+            where: {
+              fk_story: storyId,
+              fk_individual: individual.id,
+              type,
+            },
+            defaults: {
+              fk_story: storyId,
+              fk_individual: individual.id,
+              type,
+            },
+            transaction,
+          });
+        }
+      }
+    };
+
+    const linkStoryAppearances = async (storyId: number, appearances: CrawledAppearanceLike[]) => {
+      for (const rawAppearance of appearances) {
+        const name = String(rawAppearance?.name || '').trim();
+        const type = String(rawAppearance?.type || '').trim();
+        const role = String(rawAppearance?.role || '').trim();
+        if (!name || !type) continue;
+
+        const [appearance] = await this.models.Appearance.findOrCreate({
+          where: { name, type },
+          defaults: { name, type },
+          transaction,
+        });
+
+        await this.models.Story_Appearance.findOrCreate({
+          where: {
+            fk_story: storyId,
+            fk_appearance: appearance.id,
+            role,
+          },
+          defaults: {
+            fk_story: storyId,
+            fk_appearance: appearance.id,
+            role,
+          },
+          transaction,
+        });
+      }
+    };
+
     const title = parent.title.trim();
     const number = parent.number.trim();
     const volume = parent.volume;
@@ -598,7 +799,7 @@ export class IssueService {
     });
 
     if (!issue) {
-      const crawledIssue = await this.crawler.crawlIssue(title, volume, number);
+      const crawledIssue = (await this.crawler.crawlIssue(title, volume, number)) as CrawledIssueLike;
       issue = await this.models.Issue.create(
         {
           title: '',
@@ -618,29 +819,103 @@ export class IssueService {
         { transaction },
       );
 
-      if (crawledIssue.coverUrl) {
-        await this.models.Cover.create(
-          {
-            fk_issue: issue.id,
-            number: 0,
-            url: crawledIssue.coverUrl,
-            addinfo: '',
-          },
-          { transaction },
-        );
+      const mainCover = crawledIssue.cover || {
+        number: 0,
+        url: crawledIssue.coverUrl || '',
+        individuals: [],
+      };
+
+      const [createdMainCover] = await this.models.Cover.findOrCreate({
+        where: {
+          fk_issue: issue.id,
+          fk_parent: null,
+          number: Number(mainCover.number || 0),
+        },
+        defaults: {
+          fk_issue: issue.id,
+          number: Number(mainCover.number || 0),
+          url: String(mainCover.url || ''),
+          addinfo: '',
+        },
+        transaction,
+      });
+      if (!createdMainCover.url && mainCover.url) {
+        createdMainCover.url = String(mainCover.url || '');
+        await createdMainCover.save({ transaction });
       }
 
-      for (const crawledStory of crawledIssue.stories) {
-        await this.models.Story.create(
+      await linkCoverIndividuals(createdMainCover.id, mainCover.individuals || []);
+      await linkIssueIndividuals(issue.id, crawledIssue.individuals || []);
+      await linkIssueArcs(issue.id, crawledIssue.arcs || []);
+
+      for (const crawledStory of crawledIssue.stories || []) {
+        const createdStory = await this.models.Story.create(
           {
             fk_issue: issue.id,
             number: Number(crawledStory.number || 0) || 1,
             title: String(crawledStory.title || ''),
-            addinfo: '',
-            part: '',
+            addinfo: String(crawledStory.addinfo || ''),
+            part: String(crawledStory.part || ''),
           },
           { transaction },
         );
+        await linkStoryIndividuals(createdStory.id, crawledStory.individuals || []);
+        await linkStoryAppearances(createdStory.id, crawledStory.appearances || []);
+      }
+
+      for (const crawledVariant of crawledIssue.variants || []) {
+        const variantNumber = String(crawledVariant.number || issue.number || number).trim();
+        const variantName = String(crawledVariant.variant || '').trim();
+        if (!variantName) continue;
+
+        const [variantIssue] = await this.models.Issue.findOrCreate({
+          where: {
+            number: variantNumber,
+            variant: variantName,
+            fk_series: series.id,
+          },
+          defaults: {
+            title: '',
+            number: variantNumber,
+            format: String(crawledVariant.format || issue.format || 'Heft'),
+            variant: variantName,
+            releasedate: String(crawledVariant.releasedate || issue.releasedate || crawledIssue.releasedate || ''),
+            pages: 0,
+            price: Number(crawledVariant.price || 0),
+            currency: String(crawledVariant.currency || crawledIssue.currency || 'USD'),
+            comicguideid: '0',
+            isbn: '',
+            limitation: normalizeLimitationForDb(undefined),
+            addinfo: '',
+            fk_series: series.id,
+          },
+          transaction,
+        });
+
+        const variantCover = crawledVariant.cover;
+        if (!variantCover) continue;
+
+        const [createdVariantCover] = await this.models.Cover.findOrCreate({
+          where: {
+            fk_issue: variantIssue.id,
+            fk_parent: null,
+            number: Number(variantCover.number || 0),
+          },
+          defaults: {
+            fk_issue: variantIssue.id,
+            number: Number(variantCover.number || 0),
+            url: String(variantCover.url || ''),
+            addinfo: '',
+          },
+          transaction,
+        });
+
+        if (!createdVariantCover.url && variantCover.url) {
+          createdVariantCover.url = String(variantCover.url || '');
+          await createdVariantCover.save({ transaction });
+        }
+
+        await linkCoverIndividuals(createdVariantCover.id, variantCover.individuals || []);
       }
     }
 
@@ -794,7 +1069,11 @@ export class IssueService {
       },
       order: [['id', 'ASC']],
     });
-    return issueIds.map((issueId) => covers.find((cover) => cover.fk_issue === issueId) || null);
+    return issueIds.map((issueId) => {
+      const issueIdKey = toIdKey(issueId);
+      if (!issueIdKey) return null;
+      return covers.find((cover) => toIdKey(cover.fk_issue) === issueIdKey) || null;
+    });
   }
 
   async getVariantsBySeriesAndNumberKeys(keys: readonly string[]) {

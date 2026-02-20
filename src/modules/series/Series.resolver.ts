@@ -117,16 +117,6 @@ export const resolvers: SeriesResolvers = {
         where: { fk_series: (parent as SeriesParent).id },
         group: ['number'],
       }).then((res) => (Array.isArray(res) ? res.length : Number(res))),
-    firstIssue: async (parent, _, { models }) =>
-      await models.Issue.findOne({
-        where: { fk_series: (parent as SeriesParent).id },
-        order: [['number', 'ASC']],
-      }),
-    lastIssue: async (parent, _, { models }) =>
-      await models.Issue.findOne({
-        where: { fk_series: (parent as SeriesParent).id },
-        order: [['number', 'DESC']],
-      }),
     lastEdited: async (parent, { limit }, { models }) =>
       await models.Issue.findAll({
         where: { fk_series: (parent as SeriesParent).id },

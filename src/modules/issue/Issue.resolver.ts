@@ -26,8 +26,20 @@ type IssueParent = {
   individuals?: unknown[];
   Arcs?: unknown[];
   arcs?: unknown[];
+  __shortboxEdit?: boolean;
+  __storyStatePromise?: Promise<StoryResolutionState>;
   getIndividuals?: () => Promise<unknown[]>;
   getArcs?: () => Promise<unknown[]>;
+};
+
+type IssueSibling = { id?: unknown; variant?: unknown };
+
+type StoryResolutionState = {
+  ownStories: unknown[];
+  resolvedStories: unknown[];
+  ownerIssueId: number | null;
+  inheritsStories: boolean;
+  siblings: IssueSibling[];
 };
 
 type LoaderLike<K, V> = {
@@ -143,6 +155,122 @@ const normalizeReleaseDate = (value: unknown): string | null => {
   return `${year}-${month}-${day}`;
 };
 
+const emptyStoryResolutionState: StoryResolutionState = {
+  ownStories: [],
+  resolvedStories: [],
+  ownerIssueId: null,
+  inheritsStories: false,
+  siblings: [],
+};
+
+const loadSiblings = async (
+  issueParent: IssueParent,
+  issueId: number,
+  issueVariantsLoader: unknown,
+  models: unknown,
+): Promise<IssueSibling[]> => {
+  let siblings: IssueSibling[] = [];
+
+  if (hasLoad<number, unknown[]>(issueVariantsLoader)) {
+    const loadedSiblings = await issueVariantsLoader.load(issueId);
+    if (Array.isArray(loadedSiblings)) siblings = loadedSiblings as IssueSibling[];
+  }
+
+  if (
+    siblings.length === 0 &&
+    models &&
+    typeof models === 'object' &&
+    'Issue' in models &&
+    (models as { Issue?: unknown }).Issue &&
+    typeof ((models as { Issue?: { findAll?: unknown } }).Issue?.findAll) === 'function'
+  ) {
+    const loadedSiblings = await (models as { Issue: { findAll: (params: unknown) => Promise<unknown[]> } }).Issue.findAll(
+      {
+        where: { fk_series: issueParent.fk_series, number: issueParent.number },
+        order: [['id', 'ASC']],
+      },
+    );
+    if (Array.isArray(loadedSiblings)) siblings = loadedSiblings as IssueSibling[];
+  }
+
+  return siblings;
+};
+
+const resolveStoryState = async (
+  issueParent: IssueParent,
+  issueStoriesLoader: unknown,
+  issueVariantsLoader: unknown,
+  models: unknown,
+): Promise<StoryResolutionState> => {
+  if (issueParent.__storyStatePromise) return await issueParent.__storyStatePromise;
+
+  issueParent.__storyStatePromise = (async () => {
+    if (!hasLoad<number, unknown[]>(issueStoriesLoader)) return emptyStoryResolutionState;
+    const issueId = toNumericLoaderId(issueParent.id);
+    if (issueId == null) return emptyStoryResolutionState;
+
+    const ownStories = await issueStoriesLoader.load(issueId);
+    if (Array.isArray(ownStories) && ownStories.length > 0) {
+      return {
+        ownStories,
+        resolvedStories: ownStories,
+        ownerIssueId: issueId,
+        inheritsStories: false,
+        siblings: [],
+      };
+    }
+
+    if (issueParent.fk_series == null || !issueParent.number) {
+      return {
+        ownStories: ownStories ?? [],
+        resolvedStories: ownStories ?? [],
+        ownerIssueId: null,
+        inheritsStories: false,
+        siblings: [],
+      };
+    }
+
+    const siblings = await loadSiblings(issueParent, issueId, issueVariantsLoader, models);
+    const siblingIds = siblings
+      .map((sibling) => toNumericLoaderId(sibling.id))
+      .filter((id): id is number => id != null);
+    const uniqueSiblingIds = [...new Set(siblingIds)].sort((a, b) => a - b);
+    const primarySibling = siblings.find(
+      (sibling) => toNumericLoaderId(sibling.id) != null && String(sibling.variant ?? '').trim() === '',
+    ) as { id: number } | undefined;
+
+    const fallbackCandidateIds = [
+      ...(primarySibling ? [toNumericLoaderId(primarySibling.id)] : []),
+      ...uniqueSiblingIds,
+    ]
+      .filter((id): id is number => id != null)
+      .filter((id, index, arr) => arr.indexOf(id) === index && id !== issueId);
+
+    for (const fallbackIssueId of fallbackCandidateIds) {
+      const inheritedStories = await issueStoriesLoader.load(fallbackIssueId);
+      if (Array.isArray(inheritedStories) && inheritedStories.length > 0) {
+        return {
+          ownStories: ownStories ?? [],
+          resolvedStories: inheritedStories,
+          ownerIssueId: fallbackIssueId,
+          inheritsStories: true,
+          siblings,
+        };
+      }
+    }
+
+    return {
+      ownStories: ownStories ?? [],
+      resolvedStories: ownStories ?? [],
+      ownerIssueId: null,
+      inheritsStories: false,
+      siblings,
+    };
+  })();
+
+  return await issueParent.__storyStatePromise;
+};
+
 export const resolvers: IssueResolvers = {
   Query: {
     issueList: async (_, { pattern, series, first, after, filter }, context) => {
@@ -156,7 +284,7 @@ export const resolvers: IssueResolvers = {
         filter || undefined,
       );
     },
-    issueDetails: async (_, { issue }, { models }) => {
+    issueDetails: async (_, { issue, edit }, { models }) => {
       IssueInputSchema.parse(issue);
       const requestedNumber = issue?.number || '';
       const requestedVariant = issue?.variant || '';
@@ -185,7 +313,10 @@ export const resolvers: IssueResolvers = {
         include: [seriesInclude],
       });
 
-      if (exactMatch) return exactMatch;
+      if (exactMatch) {
+        (exactMatch as IssueParent).__shortboxEdit = Boolean(edit);
+        return exactMatch;
+      }
       if (requestedVariant.trim() !== '') return null;
 
       const variantFallbackWhere: Record<string, unknown> = {
@@ -196,7 +327,7 @@ export const resolvers: IssueResolvers = {
         variantFallbackWhere.format = requestedFormat;
       }
 
-      return await models.Issue.findOne({
+      const fallback = await models.Issue.findOne({
         where: variantFallbackWhere,
         include: [seriesInclude],
         order: [
@@ -204,6 +335,8 @@ export const resolvers: IssueResolvers = {
           ['id', 'ASC'],
         ],
       });
+      if (fallback) (fallback as IssueParent).__shortboxEdit = Boolean(edit);
+      return fallback;
     },
     lastEdited: async (_, { filter, first, after, order, direction }, context) => {
       const { issueService, loggedIn } = context;
@@ -301,56 +434,30 @@ export const resolvers: IssueResolvers = {
       const issueParent = parent as IssueParent;
       if (Array.isArray(issueParent.Stories) && issueParent.Stories.length > 0) return issueParent.Stories;
       if (Array.isArray(issueParent.stories) && issueParent.stories.length > 0) return issueParent.stories;
-      if (!hasLoad<number, unknown[]>(issueStoriesLoader)) return [];
-      const issueId = toLoaderId(issueParent.id);
-      if (issueId == null) return [];
+      const storyState = await resolveStoryState(issueParent, issueStoriesLoader, issueVariantsLoader, models);
+      if (issueParent.__shortboxEdit) return storyState.ownStories;
+      return storyState.resolvedStories;
+    },
+    storyOwner: async (parent, _, { issueStoriesLoader, issueVariantsLoader, issueLoader, models }) => {
+      const issueParent = parent as IssueParent;
+      const storyState = await resolveStoryState(issueParent, issueStoriesLoader, issueVariantsLoader, models);
+      const issueId = toNumericLoaderId(issueParent.id);
+      const ownerIssueId = storyState.ownerIssueId;
+      if (ownerIssueId == null) return null;
+      if (issueId != null && ownerIssueId === issueId) return issueParent;
 
-      const ownStories = await issueStoriesLoader.load(issueId as number);
-      if (Array.isArray(ownStories) && ownStories.length > 0) return ownStories;
-
-      if (issueParent.fk_series == null || !issueParent.number) return ownStories ?? [];
-
-      type IssueSibling = { id?: unknown; variant?: unknown };
-      let siblings: IssueSibling[] = [];
-
-      if (hasLoad<number, unknown[]>(issueVariantsLoader)) {
-        const loadedSiblings = await issueVariantsLoader.load(issueId as number);
-        if (Array.isArray(loadedSiblings)) siblings = loadedSiblings as IssueSibling[];
+      if (hasLoad<number, unknown | null>(issueLoader)) {
+        const loadedOwner = await issueLoader.load(ownerIssueId);
+        if (loadedOwner) return loadedOwner;
       }
 
-      if (
-        siblings.length === 0 &&
-        models?.Issue &&
-        typeof (models.Issue as { findAll?: unknown }).findAll === 'function'
-      ) {
-        const loadedSiblings = await models.Issue.findAll({
-          where: { fk_series: issueParent.fk_series, number: issueParent.number },
-          order: [['id', 'ASC']],
-        });
-        if (Array.isArray(loadedSiblings)) siblings = loadedSiblings as IssueSibling[];
-      }
-
-      const siblingIds = siblings
-        .map((sibling) => toNumericLoaderId(sibling.id))
-        .filter((id): id is number => id != null);
-      const uniqueSiblingIds = [...new Set(siblingIds)].sort((a, b) => a - b);
-      const primarySibling = siblings.find(
-        (sibling) => toNumericLoaderId(sibling.id) != null && String(sibling.variant ?? '').trim() === '',
-      ) as { id: number } | undefined;
-
-      const fallbackCandidateIds = [
-        ...(primarySibling ? [toNumericLoaderId(primarySibling.id)] : []),
-        ...uniqueSiblingIds,
-      ]
-        .filter((id): id is number => id != null)
-        .filter((id, index, arr) => arr.indexOf(id) === index && String(id) !== String(issueId));
-
-      for (const fallbackIssueId of fallbackCandidateIds) {
-        const inheritedStories = await issueStoriesLoader.load(fallbackIssueId);
-        if (Array.isArray(inheritedStories) && inheritedStories.length > 0) return inheritedStories;
-      }
-
-      return ownStories ?? [];
+      const siblingOwner = storyState.siblings.find((sibling) => toNumericLoaderId(sibling.id) === ownerIssueId);
+      return siblingOwner ?? null;
+    },
+    inheritsStories: async (parent, _, { issueStoriesLoader, issueVariantsLoader, models }) => {
+      const issueParent = parent as IssueParent;
+      const storyState = await resolveStoryState(issueParent, issueStoriesLoader, issueVariantsLoader, models);
+      return storyState.inheritsStories;
     },
     cover: async (parent, _, { issueCoverLoader }) => {
       const issueParent = parent as IssueParent;

@@ -28,7 +28,7 @@
   "dependencies": {
     "@apollo/server": "5.4.0",
     "@as-integrations/express5": "^1.1.2",
-    "@loliman/shortbox-contract": "^2.6.0",
+    "@loliman/shortbox-contract": "^2.7.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "axios": "^1.13.5",

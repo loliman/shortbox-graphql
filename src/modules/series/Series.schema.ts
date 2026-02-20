@@ -45,8 +45,6 @@ export const typeDef = gql`
     endyear: Int
     volume: Int
     issueCount: Int
-    firstIssue: Issue
-    lastIssue: Issue
     lastEdited(limit: Int): [Issue]
     active: Boolean
     addinfo: String

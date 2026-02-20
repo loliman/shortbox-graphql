@@ -13,6 +13,10 @@ export interface CrawledSeries {
 export interface CrawledStory {
   number: number;
   title: string;
+  addinfo?: string;
+  part?: string;
+  individuals?: CrawledIndividual[];
+  appearances?: CrawledAppearance[];
 }
 
 export interface CrawledIssue {
@@ -22,6 +26,33 @@ export interface CrawledIssue {
   currency: string;
   coverUrl: string;
   stories: CrawledStory[];
+  cover?: CrawledCover;
+  variants?: unknown[];
+  individuals?: CrawledIndividual[];
+  arcs?: CrawledArc[];
+}
+
+export interface CrawledAppearance {
+  name: string;
+  type: string;
+  role: string;
+  firstapp?: boolean;
+}
+
+export interface CrawledArc {
+  title: string;
+  type: string;
+}
+
+export interface CrawledIndividual {
+  name: string;
+  type: string;
+}
+
+export interface CrawledCover {
+  number: number;
+  url?: string;
+  individuals: CrawledIndividual[];
 }
 
 type CrawlerAppearance = {
@@ -603,6 +634,9 @@ function extractAppearances(count: number, issue: CrawlerIssue, indexOfLine: num
         }
         app = app.trim();
 
+        if(app.startsWith("["))
+          app = app.substring(app.indexOf('[') + 1);
+
         getAppearances(issue.stories[count], currentType, app, firstApp);
       });
     }
@@ -1129,13 +1163,31 @@ export class MarvelCrawlerService {
   async crawlIssue(title: string, volume: number, number: string): Promise<CrawledIssue> {
     const issue = await crawlIssue(String(number || '').trim(), String(title || '').trim(), Number(volume || 0));
 
-    const normalizedStories: CrawledStory[] = (issue.stories || [])
-      .slice()
-      .sort((a, b) => Number(a.number || 0) - Number(b.number || 0))
-      .map((story, index) => ({
-        number: Number(story.number || index + 1),
-        title: String(story.title || ''),
-      }));
+    const fallbackStory: CrawledStory = {
+      number: 1,
+      title: '',
+      addinfo: '',
+      part: '',
+      individuals: [],
+      appearances: [],
+    };
+
+    const normalizedStories: CrawledStory[] = (issue.stories || []).map((story, index) => ({
+      number: Number(story.number || index + 1),
+      title: String(story.title || ''),
+      addinfo: String(story.addinfo || ''),
+      part: String(story.part || ''),
+      individuals: (story.individuals || []).map((entry) => ({
+        name: String(entry.name || ''),
+        type: String(entry.type || ''),
+      })),
+      appearances: (story.appearances || []).map((entry) => ({
+        name: String(entry.name || ''),
+        type: String(entry.type || ''),
+        role: String(entry.role || ''),
+        firstapp: Boolean(entry.firstapp),
+      })),
+    }));
 
     return {
       number: String(issue.number || number).trim(),
@@ -1143,7 +1195,24 @@ export class MarvelCrawlerService {
       price: Number(issue.price || 0),
       currency: String(issue.currency || 'USD'),
       coverUrl: String(issue.cover?.url || ''),
-      stories: normalizedStories.length > 0 ? normalizedStories : [{ number: 1, title: '' }],
+      stories: normalizedStories.length > 0 ? normalizedStories : [fallbackStory],
+      cover: {
+        number: Number(issue.cover?.number || 0),
+        url: String(issue.cover?.url || ''),
+        individuals: (issue.cover?.individuals || []).map((entry) => ({
+          name: String(entry.name || ''),
+          type: String(entry.type || ''),
+        })),
+      },
+      variants: issue.variants || [],
+      individuals: (issue.individuals || []).map((entry) => ({
+        name: String(entry.name || ''),
+        type: String(entry.type || ''),
+      })),
+      arcs: (issue.arcs || []).map((entry) => ({
+        title: String(entry.title || ''),
+        type: String(entry.type || ''),
+      })),
     };
   }
 }

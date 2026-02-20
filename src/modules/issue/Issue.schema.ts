@@ -74,6 +74,8 @@ export const typeDef = gql`
     updatedAt: DateTime
     series: Series
     stories: [Story]
+    storyOwner: Issue
+    inheritsStories: Boolean
     cover: Cover
     individuals: [Individual]
     arcs: [Arc]

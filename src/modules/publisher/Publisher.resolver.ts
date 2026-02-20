@@ -124,32 +124,6 @@ export const resolvers: PublisherResolvers = {
         order: [['updatedat', 'DESC']],
         limit: limit || 25,
       }),
-    firstIssue: async (parent, _, { models }) =>
-      await models.Issue.findOne({
-        include: [
-          {
-            model: models.Series,
-            where: { fk_publisher: (parent as PublisherParent).id },
-          },
-        ],
-        order: [
-          ['number', 'ASC'],
-          ['variant', 'ASC'],
-        ],
-      }),
-    lastIssue: async (parent, _, { models }) =>
-      await models.Issue.findOne({
-        include: [
-          {
-            model: models.Series,
-            where: { fk_publisher: (parent as PublisherParent).id },
-          },
-        ],
-        order: [
-          ['number', 'DESC'],
-          ['variant', 'DESC'],
-        ],
-      }),
     active: (parent) =>
       !(parent as PublisherParent).endyear || (parent as PublisherParent).endyear === 0,
   },

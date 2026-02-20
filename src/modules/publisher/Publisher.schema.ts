@@ -45,8 +45,6 @@ export const typeDef = gql`
     seriesCount: Int
     issueCount: Int
     lastEdited(limit: Int): [Issue]
-    firstIssue: Issue
-    lastIssue: Issue
     active: Boolean
     startyear: Int
     endyear: Int

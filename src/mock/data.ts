@@ -155,18 +155,4 @@ export const getPublisherFixture = (us: boolean) => ({
 export const getSeriesFixture = (us: boolean) => ({
   ...mockSeriesFixture,
   publisher: { ...mockSeriesFixture.publisher, us },
-  firstIssue: {
-    ...mockSeriesFixture.firstIssue,
-    series: {
-      ...mockSeriesFixture.firstIssue.series,
-      publisher: { ...mockSeriesFixture.firstIssue.series.publisher, us },
-    },
-  },
-  lastIssue: {
-    ...mockSeriesFixture.lastIssue,
-    series: {
-      ...mockSeriesFixture.lastIssue.series,
-      publisher: { ...mockSeriesFixture.lastIssue.series.publisher, us },
-    },
-  },
 });
