@@ -214,7 +214,7 @@ export interface Context {
   storyReprintsLoader: DataLoader<number, Story[]>;
   issueStoriesLoader: DataLoader<number, Story[]>;
   issueCoverLoader: DataLoader<number, Cover | null>;
-  issueVariantsLoader: DataLoader<string, Issue[]>;
+  issueVariantsLoader: DataLoader<number, Issue[]>;
 }
 
 const canRunProtectedMutation = rule({ cache: 'contextual' })(async (_, __, context: Context) => {
@@ -415,7 +415,7 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
             storyReprintsLoader: {} as DataLoader<number, Story[]>,
             issueStoriesLoader: {} as DataLoader<number, Story[]>,
             issueCoverLoader: {} as DataLoader<number, Cover | null>,
-            issueVariantsLoader: {} as DataLoader<string, Issue[]>,
+            issueVariantsLoader: {} as DataLoader<number, Issue[]>,
           };
         }
 
@@ -475,9 +475,8 @@ export const startServer = async (port = parseInt(process.env.PORT || '4000', 10
         const issueCoverLoader = new DataLoader<number, Cover | null>((ids) =>
           issueService.getPrimaryCoversByIssueIds(ids),
         );
-        const issueVariantsLoader = new DataLoader<string, Issue[]>(
-          (keys) => issueService.getVariantsBySeriesAndNumberKeys(keys),
-          { cacheKeyFn: (key) => key },
+        const issueVariantsLoader = new DataLoader<number, Issue[]>((ids) =>
+          issueService.getVariantsByIssueIds(ids),
         );
 
         const contextBase = {

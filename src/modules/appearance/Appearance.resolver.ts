@@ -7,6 +7,7 @@ type AppearanceParent = {
   name: string;
   type: string;
   Stories?: Array<{ id: number }>;
+  Story_Appearance?: { role?: string | null };
 };
 
 export const resolvers: AppearanceResolvers = {
@@ -72,6 +73,9 @@ export const resolvers: AppearanceResolvers = {
     },
     role: async (parent, _, { models }) => {
       const appearanceParent = parent as AppearanceParent;
+      if (appearanceParent.Story_Appearance) {
+        return appearanceParent.Story_Appearance.role || '';
+      }
       if (!appearanceParent.Stories || appearanceParent.Stories.length === 0) return '';
       let relation = await models.Story_Appearance.findOne({
         where: {

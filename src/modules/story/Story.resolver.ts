@@ -18,7 +18,7 @@ type StoryParent = {
   onlyapp?: boolean;
   firstapp?: boolean;
   getIndividuals?: () => Promise<unknown[]>;
-  getAppearances?: () => Promise<unknown[]>;
+  getAppearances?: (options?: { joinTableAttributes?: string[] }) => Promise<unknown[]>;
 };
 
 type LoaderLike<K, V> = {
@@ -85,7 +85,9 @@ export const resolvers: StoryResolvers = {
         : [],
     appearances: async (parent) =>
       (parent as StoryParent).getAppearances
-        ? await (parent as StoryParent).getAppearances?.()
+        ? await (parent as StoryParent).getAppearances?.({
+            joinTableAttributes: ['role'],
+          })
         : [],
     exclusive: (parent) => {
       const storyParent = parent as StoryParent;

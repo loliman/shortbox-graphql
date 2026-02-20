@@ -231,10 +231,8 @@ export const resolvers: IssueResolvers = {
       type IssueSibling = { id?: unknown; variant?: unknown };
       let siblings: IssueSibling[] = [];
 
-      if (hasLoad<string, unknown[]>(issueVariantsLoader)) {
-        const loadedSiblings = await issueVariantsLoader.load(
-          `${issueParent.fk_series}::${issueParent.number}`,
-        );
+      if (hasLoad<number, unknown[]>(issueVariantsLoader)) {
+        const loadedSiblings = await issueVariantsLoader.load(issueParent.id);
         if (Array.isArray(loadedSiblings)) siblings = loadedSiblings as IssueSibling[];
       }
 
@@ -296,8 +294,8 @@ export const resolvers: IssueResolvers = {
     variants: async (parent, _, { issueVariantsLoader }) => {
       const issueParent = parent as IssueParent;
       if (Array.isArray(issueParent.variants)) return issueParent.variants;
-      if (!hasLoad<string, unknown[]>(issueVariantsLoader)) return [];
-      return await issueVariantsLoader.load(`${issueParent.fk_series}::${issueParent.number}`);
+      if (!hasLoad<number, unknown[]>(issueVariantsLoader)) return [];
+      return await issueVariantsLoader.load(issueParent.id);
     },
   },
 };

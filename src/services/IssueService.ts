@@ -462,4 +462,61 @@ export class IssueService {
       variants.filter((variant) => variant.fk_series === fkSeries && variant.number === number),
     );
   }
+
+  async getVariantsByIssueIds(issueIds: readonly number[]) {
+    if (issueIds.length === 0) return [];
+
+    const uniqueIssueIds = [...new Set(issueIds)];
+    const baseIssues = await this.models.Issue.findAll({
+      where: { id: { [Op.in]: uniqueIssueIds } },
+      attributes: ['id', 'fk_series', 'number'],
+    });
+
+    const byIssueId = new Map<number, { fk_series: number | null; number: string }>();
+    for (const issue of baseIssues) {
+      byIssueId.set(issue.id, {
+        fk_series: issue.fk_series,
+        number: String(issue.number ?? '').trim(),
+      });
+    }
+
+    const siblingKeys = new Map<string, { fkSeries: number; number: string }>();
+    for (const issue of baseIssues) {
+      const fkSeries = issue.fk_series;
+      const number = String(issue.number ?? '').trim();
+      if (fkSeries == null || number === '') continue;
+      siblingKeys.set(`${fkSeries}::${number}`, { fkSeries, number });
+    }
+
+    const whereOr = [...siblingKeys.values()].map(({ fkSeries, number }) => ({
+      fk_series: fkSeries,
+      number,
+    }));
+
+    const siblings =
+      whereOr.length > 0
+        ? await this.models.Issue.findAll({
+            where: { [Op.or]: whereOr },
+            order: [
+              ['format', 'ASC'],
+              ['variant', 'ASC'],
+              ['id', 'ASC'],
+            ],
+          })
+        : [];
+
+    const siblingsByKey = new Map<string, typeof siblings>();
+    for (const sibling of siblings) {
+      const key = `${sibling.fk_series}::${String(sibling.number ?? '').trim()}`;
+      const grouped = siblingsByKey.get(key);
+      if (grouped) grouped.push(sibling);
+      else siblingsByKey.set(key, [sibling]);
+    }
+
+    return issueIds.map((issueId) => {
+      const base = byIssueId.get(issueId);
+      if (!base || base.fk_series == null || base.number === '') return [];
+      return siblingsByKey.get(`${base.fk_series}::${base.number}`) || [];
+    });
+  }
 }
