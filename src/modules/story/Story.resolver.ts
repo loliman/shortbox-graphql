@@ -21,12 +21,51 @@ type StoryParent = {
   getAppearances?: (options?: { joinTableAttributes?: string[] }) => Promise<unknown[]>;
 };
 
+type IssueSortMeta = {
+  id?: unknown;
+  releasedate?: unknown;
+  number?: unknown;
+};
+
 type LoaderLike<K, V> = {
   load: (key: K) => Promise<V>;
 };
 
 const hasLoad = <K, V>(loader: unknown): loader is LoaderLike<K, V> =>
   Boolean(loader) && typeof (loader as { load?: unknown }).load === 'function';
+
+const toNumericId = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  }
+  return null;
+};
+
+const toDateTimestamp = (value: unknown): number => {
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value.trim());
+    if (!Number.isNaN(parsed)) return parsed;
+  } else if (value instanceof Date) {
+    const parsed = value.getTime();
+    if (!Number.isNaN(parsed)) return parsed;
+  } else if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return Number.POSITIVE_INFINITY;
+};
+
+const toNumberSortValue = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return Number.POSITIVE_INFINITY;
+    const numeric = Number(trimmed.replace(',', '.'));
+    if (!Number.isNaN(numeric)) return numeric;
+  }
+  return Number.POSITIVE_INFINITY;
+};
 
 export const resolvers: StoryResolvers = {
   Story: {
@@ -46,7 +85,7 @@ export const resolvers: StoryResolvers = {
       }
       return null;
     },
-    children: async (parent, _, { storyChildrenLoader, storyReprintsLoader }) => {
+    children: async (parent, _, { storyChildrenLoader, storyReprintsLoader, issueLoader }) => {
       const storyParent = parent as StoryParent;
       const preloadedChildren = Array.isArray(storyParent.Children)
         ? storyParent.Children
@@ -120,7 +159,42 @@ export const resolvers: StoryResolvers = {
         pushUniqueChildren(relatedChildren);
       }
 
-      return mergedChildren;
+      const withSortMeta = await Promise.all(
+        mergedChildren.map(async (child) => {
+          const childObject = child as {
+            issue?: IssueSortMeta;
+            Issue?: IssueSortMeta;
+            fk_issue?: unknown;
+            id?: unknown;
+            number?: unknown;
+          };
+
+          let childIssue = childObject.Issue ?? childObject.issue ?? null;
+          if (!childIssue && hasLoad<number, unknown | null>(issueLoader)) {
+            const fkIssueId = toNumericId(childObject.fk_issue);
+            if (fkIssueId != null) {
+              childIssue = (await issueLoader.load(fkIssueId)) as IssueSortMeta | null;
+            }
+          }
+
+          return {
+            child,
+            releasedateTs: toDateTimestamp(childIssue?.releasedate),
+            issueNumber: toNumberSortValue(childIssue?.number),
+            storyNumber: toNumberSortValue(childObject.number),
+            storyId: toNumericId(childObject.id) ?? Number.POSITIVE_INFINITY,
+          };
+        }),
+      );
+
+      withSortMeta.sort((a, b) => {
+        if (a.releasedateTs !== b.releasedateTs) return a.releasedateTs - b.releasedateTs;
+        if (a.issueNumber !== b.issueNumber) return a.issueNumber - b.issueNumber;
+        if (a.storyNumber !== b.storyNumber) return a.storyNumber - b.storyNumber;
+        return a.storyId - b.storyId;
+      });
+
+      return withSortMeta.map((entry) => entry.child);
     },
     reprintOf: async (parent, _, { storyLoader }) => {
       const storyParent = parent as StoryParent;
