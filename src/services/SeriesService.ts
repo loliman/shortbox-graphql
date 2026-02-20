@@ -91,22 +91,46 @@ export class SeriesService {
       return buildConnectionFromNodes(results, results.length, undefined);
     } else {
       const { FilterService } = require('./FilterService');
-      const filterService = new FilterService(this.models);
+      const filterService = new FilterService(this.models, this.requestId);
       const options = filterService.getFilterOptions(loggedIn, filter);
-      options.group = ['fk_series'];
+      options.attributes = ['id', 'fk_series'];
+      const where = options.where as Record<string | symbol, unknown>;
+      const publisherName = typeof publisher?.name === 'string' ? publisher.name.trim() : '';
+      const shouldFilterPublisherName = publisherName !== '' && publisherName !== '*';
+      const shouldFilterPublisherUs = typeof publisher?.us === 'boolean';
+
+      if (shouldFilterPublisherName) {
+        where['$Series.Publisher.name$'] = publisherName;
+      }
+      if (shouldFilterPublisherUs) {
+        where['$Series.Publisher.original$'] = Boolean(publisher.us);
+      }
+
+      const includeList = options.include as Array<{ attributes?: string[]; include?: unknown[] }>;
+      const seriesInclude = includeList[0];
+      if (seriesInclude) {
+        seriesInclude.attributes = ['id', 'title', 'volume', 'startyear', 'endyear', 'fk_publisher'];
+      }
 
       const res = await this.models.Issue.findAll(options);
-      const nodes = res.map((issue) => {
+      const uniqueNodes = new Map<number, IssueWithSeries>();
+      res.forEach((issue) => {
         const issueNode = issue as unknown as IssueWithSeries;
-        return {
+        uniqueNodes.set(issueNode.Series.id, issueNode);
+      });
+
+      const nodes = [...uniqueNodes.values()]
+        .map((issueNode) => ({
           id: issueNode.Series.id,
           title: issueNode.Series.title,
           volume: issueNode.Series.volume,
           startyear: issueNode.Series.startyear,
           endyear: issueNode.Series.endyear,
           fk_publisher: issueNode.Series.fk_publisher,
-        };
-      });
+        }))
+        .sort(
+          (left, right) => left.title.localeCompare(right.title) || left.volume - right.volume,
+        );
       return buildConnectionFromNodes(nodes, nodes.length, undefined);
     }
   }

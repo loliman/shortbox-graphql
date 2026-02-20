@@ -728,6 +728,23 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       issueResolvers.Issue.stories({ ...parent, stories: [{ id: 811 }] } as any, {} as any, {} as any),
     ).resolves.toEqual([{ id: 811 }]);
     await expect(
+      issueResolvers.Issue.stories(
+        { ...parent, stories: [] } as any,
+        {} as any,
+        {
+          issueStoriesLoader: {
+            load: jest
+              .fn()
+              .mockResolvedValueOnce([])
+              .mockResolvedValueOnce([{ id: 812 }]),
+          },
+          issueVariantsLoader: {
+            load: jest.fn().mockResolvedValue([{ id: 99, variant: '' }]),
+          },
+        } as any,
+      ),
+    ).resolves.toEqual([{ id: 812 }]);
+    await expect(
       issueResolvers.Issue.stories(parent, {} as any, {} as any),
     ).resolves.toEqual([]);
     await expect(
@@ -755,6 +772,13 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     await expect(
       issueResolvers.Issue.variants({ ...parent, variants: [{ id: 851 }] } as any, {} as any, {} as any),
     ).resolves.toEqual([{ id: 851 }]);
+    await expect(
+      issueResolvers.Issue.variants(
+        { ...parent, variants: [] } as any,
+        {} as any,
+        { issueVariantsLoader: { load: jest.fn().mockResolvedValue([{ id: 852 }]) } } as any,
+      ),
+    ).resolves.toEqual([{ id: 852 }]);
     await expect(
       issueResolvers.Issue.variants(parent, {} as any, {} as any),
     ).resolves.toEqual([]);
@@ -787,6 +811,130 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     ).toBeNull();
   });
 
+  it('falls back to first variant in issueDetails when parent variant is missing', async () => {
+    const models = {
+      Issue: {
+        findOne: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 2, variant: 'A' }),
+      },
+      Series: {},
+      Publisher: {},
+    } as any;
+
+    const result = await issueResolvers.Query.issueDetails(
+      {},
+      {
+        issue: {
+          number: '1',
+          variant: '',
+          series: { title: 'SM', volume: 1, publisher: { name: 'Marvel' } },
+        },
+      } as any,
+      { models } as any,
+    );
+
+    expect(result).toEqual({ id: 2, variant: 'A' });
+    expect(models.Issue.findOne).toHaveBeenCalledTimes(2);
+    expect(models.Issue.findOne.mock.calls[0][0].where).toEqual({
+      number: '1',
+      variant: '',
+    });
+    expect(models.Issue.findOne.mock.calls[1][0].where).toEqual({
+      number: '1',
+      variant: { [Op.ne]: '' },
+    });
+  });
+
+  it('filters issueDetails by format to avoid wrong edition matches', async () => {
+    const models = {
+      Issue: {
+        findOne: jest.fn().mockResolvedValue({ id: 7, format: 'Hardcover', variant: '' }),
+      },
+      Series: {},
+      Publisher: {},
+    } as any;
+
+    await issueResolvers.Query.issueDetails(
+      {},
+      {
+        issue: {
+          number: '1',
+          format: 'Hardcover',
+          variant: '',
+          series: { title: 'Silver Surfer - Requiem', volume: 1, publisher: { name: 'Panini' } },
+        },
+      } as any,
+      { models } as any,
+    );
+
+    expect(models.Issue.findOne).toHaveBeenCalledTimes(1);
+    expect(models.Issue.findOne.mock.calls[0][0].where).toEqual({
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+    });
+  });
+
+  it('inherits stories bidirectionally between parent and variants', async () => {
+    const storyMap: Record<number, unknown[]> = {
+      1: [{ id: 100 }],
+      2: [],
+      3: [{ id: 300 }],
+    };
+    const issueStoriesLoader = {
+      load: jest.fn(async (id: number) => storyMap[id] ?? []),
+    };
+    const issueVariantsLoader = {
+      load: jest.fn().mockResolvedValue([
+        { id: 1, variant: '' },
+        { id: 2, variant: 'A' },
+        { id: 3, variant: 'B' },
+      ]),
+    };
+
+    await expect(
+      issueResolvers.Issue.stories(
+        { id: 2, fk_series: 8, number: '1' } as any,
+        {} as any,
+        { issueStoriesLoader, issueVariantsLoader } as any,
+      ),
+    ).resolves.toEqual([{ id: 100 }]);
+
+    storyMap[1] = [];
+    await expect(
+      issueResolvers.Issue.stories(
+        { id: 1, fk_series: 8, number: '1' } as any,
+        {} as any,
+        { issueStoriesLoader, issueVariantsLoader } as any,
+      ),
+    ).resolves.toEqual([{ id: 300 }]);
+  });
+
+  it('normalizes string issue ids for story inheritance loaders', async () => {
+    const issueStoriesLoader = {
+      load: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 1000 }]),
+    };
+    const issueVariantsLoader = {
+      load: jest.fn().mockResolvedValue([
+        { id: '9', variant: '' },
+        { id: '10', variant: 'A' },
+      ]),
+    };
+
+    await expect(
+      issueResolvers.Issue.stories(
+        { id: '9', fk_series: 8, number: '1' } as any,
+        {} as any,
+        { issueStoriesLoader, issueVariantsLoader } as any,
+      ),
+    ).resolves.toEqual([{ id: 1000 }]);
+
+    expect(issueStoriesLoader.load).toHaveBeenNthCalledWith(1, 9);
+    expect(issueVariantsLoader.load).toHaveBeenCalledWith(9);
+  });
+
   it('covers additional issue resolver fallback and parsing branches', async () => {
     const parent = { id: 4, fk_series: 8, number: '1' } as any;
 
@@ -809,7 +957,7 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
         issueVariantsLoader,
       } as any),
     ).resolves.toEqual([{ id: 910 }]);
-    expect(issueVariantsLoader.load).toHaveBeenCalledWith('8::1');
+    expect(issueVariantsLoader.load).toHaveBeenCalledWith(4);
     expect(issueStoriesLoader.load).toHaveBeenNthCalledWith(1, 4);
     expect(issueStoriesLoader.load).toHaveBeenNthCalledWith(2, 11);
 

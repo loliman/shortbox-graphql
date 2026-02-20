@@ -77,17 +77,33 @@ export class PublisherService {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models, this.requestId);
       const options = filterService.getFilterOptions(loggedIn, filter);
-      options.group = ['Series.fk_publisher'];
+      options.attributes = ['id'];
+
+      const includeList = options.include as Array<{ attributes?: string[]; include?: unknown[] }>;
+      const seriesInclude = includeList[0];
+      if (seriesInclude) {
+        seriesInclude.attributes = ['id', 'fk_publisher'];
+        const nestedInclude = seriesInclude.include as Array<{ attributes?: string[] }> | undefined;
+        const publisherInclude = nestedInclude?.[0];
+        if (publisherInclude) {
+          publisherInclude.attributes = ['id', 'name'];
+        }
+      }
 
       const res = await this.models.Issue.findAll(options);
-      const nodes: PublisherNode[] = res.map((issue) => {
+      const uniqueNodes = new Map<number, PublisherNode>();
+      res.forEach((issue) => {
         const issueNode = issue as unknown as IssueWithSeriesPublisher;
-        return {
+        uniqueNodes.set(issueNode.Series.Publisher.id, {
           id: issueNode.Series.Publisher.id,
           name: issueNode.Series.Publisher.name,
           original: us,
-        };
+        });
       });
+
+      const nodes = [...uniqueNodes.values()].sort((left, right) =>
+        left.name.localeCompare(right.name),
+      );
       return buildConnectionFromNodes(nodes, nodes.length, undefined);
     }
   }

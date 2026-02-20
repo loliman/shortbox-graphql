@@ -29,6 +29,7 @@ const normalizeSortDirection = (direction: string | undefined): 'ASC' | 'DESC' =
 };
 
 const ROMAN_NUMBER_PATTERN = /^(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))$/i;
+const PARENT_FORMATS = new Set(['HEFT', 'SC', 'HC']);
 
 const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
   const left = String(leftRaw ?? '').trim();
@@ -45,10 +46,39 @@ const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
   return naturalCompare(left, right);
 };
 
-const dedupeIssueList = <T extends { id: number; fk_series?: number | null; number: string }>(
+const isParentCandidate = (issue: { format?: string | null; variant?: string | null }): boolean =>
+  PARENT_FORMATS.has(String(issue.format ?? '').trim().toUpperCase()) &&
+  String(issue.variant ?? '').trim() === '';
+
+const pickIssueRepresentative = <
+  T extends { id: number; format?: string | null; variant?: string | null },
+>(
+  groupedIssues: T[],
+): T => {
+  const parentCandidates = groupedIssues.filter((issue) => isParentCandidate(issue));
+  if (parentCandidates.length > 0) {
+    return [...parentCandidates].sort((left, right) => left.id - right.id)[0];
+  }
+
+  return [...groupedIssues].sort((left, right) => {
+    const variantSort = naturalCompare(String(left.variant ?? ''), String(right.variant ?? ''));
+    if (variantSort !== 0) return variantSort;
+    return left.id - right.id;
+  })[0];
+};
+
+const dedupeIssueList = <
+  T extends {
+    id: number;
+    fk_series?: number | null;
+    number: string;
+    format?: string | null;
+    variant?: string | null;
+  },
+>(
   sortedIssues: T[],
 ): T[] => {
-  const seen = new Set<string>();
+  const groupedByKey = new Map<string, T[]>();
   const deduped: T[] = [];
 
   for (const issue of sortedIssues) {
@@ -58,13 +88,54 @@ const dedupeIssueList = <T extends { id: number; fk_series?: number | null; numb
     }
 
     const key = `${issue.fk_series}::${String(issue.number ?? '').trim()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(issue);
+    const grouped = groupedByKey.get(key);
+    if (grouped) {
+      grouped.push(issue);
+    } else {
+      groupedByKey.set(key, [issue]);
+    }
+  }
+
+  for (const groupedIssues of groupedByKey.values()) {
+    deduped.push(pickIssueRepresentative(groupedIssues));
   }
 
   return deduped;
 };
+
+const normalizeNavbarIssueVariant = <T extends { variant?: string | null }>(issue: T): T => {
+  if (String(issue.variant ?? '').trim() === '') return issue;
+  return {
+    ...issue,
+    variant: '',
+  };
+};
+
+const appendAndCondition = (
+  where: Record<string | symbol, unknown>,
+  condition: Record<string | symbol, unknown>,
+) => {
+  const current = Array.isArray(where[Op.and]) ? (where[Op.and] as unknown[]) : [];
+  where[Op.and] = [...current, condition];
+};
+
+const toNumericId = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  }
+  return null;
+};
+
+const toIdKey = (value: unknown): string | null => {
+  const numeric = toNumericId(value);
+  if (numeric == null) return null;
+  return String(numeric);
+};
+
+const normalizeDbIds = (ids: readonly unknown[]): number[] =>
+  ids.map((id) => toNumericId(id)).filter((id): id is number => id != null);
 
 export class IssueService {
   constructor(
@@ -137,12 +208,30 @@ export class IssueService {
 
         return a.id - b.id;
       });
-      const dedupedResults = dedupeIssueList(sortedResults);
+      const dedupedResults = dedupeIssueList(sortedResults).map(normalizeNavbarIssueVariant);
       return buildConnectionFromNodes(dedupedResults, dedupedResults.length, undefined);
     } else {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models);
       const options = filterService.getFilterOptions(loggedIn, filter);
+      const where = options.where as Record<string | symbol, unknown>;
+      const seriesTitle = (series.title || '').trim();
+      const seriesPublisherName = (series.publisher?.name || '').trim();
+
+      where['$Series.title$'] = seriesTitle;
+      where['$Series.volume$'] = series.volume;
+      if (seriesPublisherName) {
+        where['$Series.Publisher.name$'] = seriesPublisherName;
+      }
+
+      if (pattern && pattern !== '') {
+        appendAndCondition(where, {
+          [Op.or]: [
+            { number: { [Op.iLike]: pattern + '%' } },
+            { title: { [Op.iLike]: '%' + pattern + '%' } },
+          ],
+        });
+      }
 
       const results = await this.models.Issue.findAll(options);
       const sortedResults = [...results].sort((a, b) => {
@@ -154,7 +243,7 @@ export class IssueService {
 
         return a.id - b.id;
       });
-      const dedupedResults = dedupeIssueList(sortedResults);
+      const dedupedResults = dedupeIssueList(sortedResults).map(normalizeNavbarIssueVariant);
       return buildConnectionFromNodes(dedupedResults, dedupedResults.length, undefined);
     }
   }
@@ -296,6 +385,13 @@ export class IssueService {
     const where: WhereMap = {
       fk_series: { [Op.ne]: null },
     };
+    let include: FindOptions['include'] = [
+      {
+        model: this.models.Series,
+        required: true,
+        include: [{ model: this.models.Publisher }],
+      },
+    ];
     const orderBy =
       sortField === 'series'
         ? ([
@@ -320,17 +416,25 @@ export class IssueService {
               ['id', sortDirection],
             ] as FindOptions['order']);
 
+    if (filter) {
+      const { FilterService } = require('./FilterService');
+      const filterService = new FilterService(this.models, this.requestId);
+      const filterOptions = filterService.getFilterOptions(loggedIn, filter);
+
+      const filterWhere = (filterOptions.where || {}) as WhereMap;
+      Object.assign(where, filterWhere);
+      where.fk_series = { [Op.ne]: null };
+
+      if (filterOptions.include) {
+        include = filterOptions.include;
+      }
+    }
+
     let options: FindOptions = {
       order: orderBy,
       limit: limit + 1,
       where,
-      include: [
-        {
-          model: this.models.Series,
-          required: true,
-          include: [{ model: this.models.Publisher }],
-        },
-      ],
+      include,
     };
 
     if (decodedCursor) {
@@ -368,57 +472,38 @@ export class IssueService {
       }
     }
 
-    if (filter) {
-      const includeList = options.include as Array<{
-        where?: Record<string, unknown>;
-        include?: Array<{ where?: Record<string, unknown> }>;
-      }>;
-      const seriesInclude = includeList[0];
-      const publisherInclude = seriesInclude.include?.[0];
-
-      if (publisherInclude && filter.us !== undefined && filter.us !== null) {
-        publisherInclude.where = { ...publisherInclude.where, original: Boolean(filter.us) };
-      }
-      if (
-        publisherInclude &&
-        filter.publishers &&
-        filter.publishers.length > 0 &&
-        filter.publishers[0]
-      ) {
-        publisherInclude.where = {
-          ...publisherInclude.where,
-          name: filter.publishers[0].name,
-        };
-      }
-      if (filter.series && filter.series.length > 0 && filter.series[0]) {
-        seriesInclude.where = {
-          ...seriesInclude.where,
-          title: filter.series[0].title,
-          volume: filter.series[0].volume,
-        };
-      }
-    }
-
     const results = await this.models.Issue.findAll(options);
     return buildConnectionFromNodes(results, limit, after || undefined);
   }
 
   async getIssuesByIds(ids: readonly number[]) {
+    const dbIds = normalizeDbIds(ids as unknown as readonly unknown[]);
+    if (dbIds.length === 0) return ids.map(() => null);
     const issues = await this.models.Issue.findAll({
-      where: { id: { [Op.in]: [...ids] } },
+      where: { id: { [Op.in]: dbIds } },
     });
-    return ids.map((id) => issues.find((i) => i.id === id) || null);
+    return ids.map((id) => {
+      const idKey = toIdKey(id);
+      if (!idKey) return null;
+      return issues.find((i) => toIdKey(i.id) === idKey) || null;
+    });
   }
 
   async getStoriesByIssueIds(issueIds: readonly number[]) {
+    const dbIssueIds = normalizeDbIds(issueIds as unknown as readonly unknown[]);
+    if (dbIssueIds.length === 0) return issueIds.map(() => []);
     const stories = await this.models.Story.findAll({
-      where: { fk_issue: { [Op.in]: [...issueIds] } },
+      where: { fk_issue: { [Op.in]: dbIssueIds } },
       order: [
         ['number', 'ASC'],
         ['id', 'ASC'],
       ],
     });
-    return issueIds.map((issueId) => stories.filter((story) => story.fk_issue === issueId));
+    return issueIds.map((issueId) => {
+      const issueIdKey = toIdKey(issueId);
+      if (!issueIdKey) return [];
+      return stories.filter((story) => toIdKey(story.fk_issue) === issueIdKey);
+    });
   }
 
   async getPrimaryCoversByIssueIds(issueIds: readonly number[]) {
@@ -464,28 +549,32 @@ export class IssueService {
   }
 
   async getVariantsByIssueIds(issueIds: readonly number[]) {
-    if (issueIds.length === 0) return [];
+    const dbIssueIds = normalizeDbIds(issueIds as unknown as readonly unknown[]);
+    if (dbIssueIds.length === 0) return issueIds.map(() => []);
 
-    const uniqueIssueIds = [...new Set(issueIds)];
+    const uniqueIssueIds = [...new Set(dbIssueIds)];
     const baseIssues = await this.models.Issue.findAll({
       where: { id: { [Op.in]: uniqueIssueIds } },
       attributes: ['id', 'fk_series', 'number'],
     });
 
-    const byIssueId = new Map<number, { fk_series: number | null; number: string }>();
+    const byIssueId = new Map<string, { fk_series: unknown; number: string }>();
     for (const issue of baseIssues) {
-      byIssueId.set(issue.id, {
+      const issueIdKey = toIdKey(issue.id);
+      if (!issueIdKey) continue;
+      byIssueId.set(issueIdKey, {
         fk_series: issue.fk_series,
         number: String(issue.number ?? '').trim(),
       });
     }
 
-    const siblingKeys = new Map<string, { fkSeries: number; number: string }>();
+    const siblingKeys = new Map<string, { fkSeries: unknown; number: string }>();
     for (const issue of baseIssues) {
       const fkSeries = issue.fk_series;
       const number = String(issue.number ?? '').trim();
-      if (fkSeries == null || number === '') continue;
-      siblingKeys.set(`${fkSeries}::${number}`, { fkSeries, number });
+      const fkSeriesKey = toIdKey(fkSeries);
+      if (!fkSeriesKey || number === '') continue;
+      siblingKeys.set(`${fkSeriesKey}::${number}`, { fkSeries, number });
     }
 
     const whereOr = [...siblingKeys.values()].map(({ fkSeries, number }) => ({
@@ -507,16 +596,21 @@ export class IssueService {
 
     const siblingsByKey = new Map<string, typeof siblings>();
     for (const sibling of siblings) {
-      const key = `${sibling.fk_series}::${String(sibling.number ?? '').trim()}`;
+      const siblingSeriesKey = toIdKey(sibling.fk_series);
+      if (!siblingSeriesKey) continue;
+      const key = `${siblingSeriesKey}::${String(sibling.number ?? '').trim()}`;
       const grouped = siblingsByKey.get(key);
       if (grouped) grouped.push(sibling);
       else siblingsByKey.set(key, [sibling]);
     }
 
     return issueIds.map((issueId) => {
-      const base = byIssueId.get(issueId);
-      if (!base || base.fk_series == null || base.number === '') return [];
-      return siblingsByKey.get(`${base.fk_series}::${base.number}`) || [];
+      const issueIdKey = toIdKey(issueId);
+      if (!issueIdKey) return [];
+      const base = byIssueId.get(issueIdKey);
+      const fkSeriesKey = toIdKey(base?.fk_series);
+      if (!base || !fkSeriesKey || base.number === '') return [];
+      return siblingsByKey.get(`${fkSeriesKey}::${base.number}`) || [];
     });
   }
 }

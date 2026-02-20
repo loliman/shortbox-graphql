@@ -89,6 +89,26 @@ describe('IssueService additional coverage', () => {
     expect(ids).toEqual([1, 3, 2]);
   });
 
+  it('keeps series context in filtered findIssues path', async () => {
+    mockGetFilterOptions.mockReturnValue({ where: {}, order: [['id', 'ASC']] });
+    mockModels.Issue.findAll.mockResolvedValue([]);
+
+    await issueService.findIssues('12', baseItem.series, undefined, undefined, true, {
+      us: true,
+      publishers: [{ name: 'Marvel' }],
+    } as any);
+
+    const options = mockModels.Issue.findAll.mock.calls[0][0];
+    expect(options.where['$Series.title$']).toBe('Series');
+    expect(options.where['$Series.volume$']).toBe(1);
+    expect(options.where['$Series.Publisher.name$']).toBe('Pub');
+
+    const andKey = Object.getOwnPropertySymbols(options.where).find((k) =>
+      String(k).includes('and'),
+    );
+    expect(andKey).toBeDefined();
+  });
+
   it('deduplicates filtered findIssues results by series and number', async () => {
     mockGetFilterOptions.mockReturnValue({ where: {}, order: [['id', 'ASC']] });
     mockModels.Issue.findAll.mockResolvedValue([
@@ -156,6 +176,19 @@ describe('IssueService additional coverage', () => {
 
   it('applies lastEdited filter mapping and cursor fallback for null cursor value', async () => {
     const cursor = Buffer.from('88').toString('base64');
+    mockGetFilterOptions.mockReturnValue({
+      where: {
+        [Op.or]: [
+          { '$Series.Publisher.name$': { [Op.in]: ['Marvel'] } },
+          { '$Series.title$': 'Spider-Man', '$Series.volume$': 2 },
+        ],
+      },
+      include: [
+        {
+          include: [{ where: { original: false } }],
+        },
+      ],
+    });
     mockModels.Issue.findByPk.mockResolvedValue({ get: jest.fn().mockReturnValue(null) });
     mockModels.Issue.findAll.mockResolvedValue([]);
 
@@ -187,8 +220,14 @@ describe('IssueService additional coverage', () => {
 
     const seriesInclude = options.include[0];
     const publisherInclude = seriesInclude.include[0];
-    expect(publisherInclude.where).toEqual({ original: false, name: 'Marvel' });
-    expect(seriesInclude.where).toEqual({ title: 'Spider-Man', volume: 2 });
+    expect(publisherInclude.where).toEqual({ original: false });
+
+    const orKey = Object.getOwnPropertySymbols(options.where).find((k) => String(k).includes('or'));
+    expect(orKey).toBeDefined();
+    expect(options.where[orKey!]).toEqual([
+      { '$Series.Publisher.name$': { [Op.in]: ['Marvel'] } },
+      { '$Series.title$': 'Spider-Man', '$Series.volume$': 2 },
+    ]);
   });
 
   it('maps ids in getIssuesByIds and returns empty variants for empty keys', async () => {

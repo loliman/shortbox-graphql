@@ -80,10 +80,12 @@ describe('PublisherService additional coverage', () => {
     );
 
     expect(result.edges).toHaveLength(2);
-    expect(result.edges[0]?.node).toMatchObject({ id: 11, name: 'Marvel', original: false });
+    expect(result.edges.map((edge: any) => edge.node.name)).toEqual(['DC', 'Marvel']);
+    expect(result.edges.map((edge: any) => edge.node.id)).toEqual([12, 11]);
 
     const options = mockModels.Issue.findAll.mock.calls[0][0];
-    expect(options.group).toEqual(['Series.fk_publisher']);
+    expect(options.group).toBeUndefined();
+    expect(options.attributes).toEqual(['id']);
   });
 
   it('throws when deleting unknown publisher', async () => {

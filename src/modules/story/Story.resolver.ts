@@ -128,8 +128,8 @@ export const resolvers: StoryResolvers = {
       if (storyParent.reprintOf) return storyParent.reprintOf;
 
       const fkReprint = storyParent.fk_reprint;
-      if (typeof fkReprint === 'string') {
-        if (!hasLoad<number, unknown | null>(storyLoader)) return null;
+      if (fkReprint != null) {
+        if (!hasLoad<unknown, unknown | null>(storyLoader)) return null;
         return await storyLoader.load(fkReprint);
       }
       return null;

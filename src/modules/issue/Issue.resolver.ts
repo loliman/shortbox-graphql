@@ -2,6 +2,7 @@ import { IssueService } from '../../services/IssueService';
 import { GraphQLError } from 'graphql';
 import { IssueResolvers } from '../../types/graphql';
 import { IssueInputSchema } from '../../types/schemas';
+import { Op } from 'sequelize';
 
 type IssueParent = {
   id: number;
@@ -35,6 +36,25 @@ type LoaderLike<K, V> = {
 
 const hasLoad = <K, V>(loader: unknown): loader is LoaderLike<K, V> =>
   Boolean(loader) && typeof (loader as { load?: unknown }).load === 'function';
+
+const toLoaderId = (value: unknown): number | string | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+};
+
+const toNumericLoaderId = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  }
+  return null;
+};
 
 const resolveComicguideId = (value: unknown): string | null => {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
@@ -110,19 +130,50 @@ export const resolvers: IssueResolvers = {
     },
     issueDetails: async (_, { issue }, { models }) => {
       IssueInputSchema.parse(issue);
-      return await models.Issue.findOne({
-        where: { number: issue?.number || '', variant: issue?.variant || '' },
+      const requestedNumber = issue?.number || '';
+      const requestedVariant = issue?.variant || '';
+      const requestedFormat = typeof issue?.format === 'string' ? issue.format.trim() : '';
+      const seriesInclude = {
+        model: models.Series,
+        where: { title: issue?.series?.title, volume: issue?.series?.volume },
         include: [
           {
-            model: models.Series,
-            where: { title: issue?.series?.title, volume: issue?.series?.volume },
-            include: [
-              {
-                model: models.Publisher,
-                where: { name: issue?.series?.publisher?.name },
-              },
-            ],
+            model: models.Publisher,
+            where: { name: issue?.series?.publisher?.name },
           },
+        ],
+      };
+
+      const exactWhere: Record<string, unknown> = {
+        number: requestedNumber,
+        variant: requestedVariant,
+      };
+      if (requestedFormat !== '') {
+        exactWhere.format = requestedFormat;
+      }
+
+      const exactMatch = await models.Issue.findOne({
+        where: exactWhere,
+        include: [seriesInclude],
+      });
+
+      if (exactMatch) return exactMatch;
+      if (requestedVariant.trim() !== '') return null;
+
+      const variantFallbackWhere: Record<string, unknown> = {
+        number: requestedNumber,
+        variant: { [Op.ne]: '' },
+      };
+      if (requestedFormat !== '') {
+        variantFallbackWhere.format = requestedFormat;
+      }
+
+      return await models.Issue.findOne({
+        where: variantFallbackWhere,
+        include: [seriesInclude],
+        order: [
+          ['variant', 'ASC'],
+          ['id', 'ASC'],
         ],
       });
     },
@@ -219,11 +270,13 @@ export const resolvers: IssueResolvers = {
     },
     stories: async (parent, _, { issueStoriesLoader, issueVariantsLoader, models }) => {
       const issueParent = parent as IssueParent;
-      if (Array.isArray(issueParent.Stories)) return issueParent.Stories;
-      if (Array.isArray(issueParent.stories)) return issueParent.stories;
+      if (Array.isArray(issueParent.Stories) && issueParent.Stories.length > 0) return issueParent.Stories;
+      if (Array.isArray(issueParent.stories) && issueParent.stories.length > 0) return issueParent.stories;
       if (!hasLoad<number, unknown[]>(issueStoriesLoader)) return [];
+      const issueId = toLoaderId(issueParent.id);
+      if (issueId == null) return [];
 
-      const ownStories = await issueStoriesLoader.load(issueParent.id);
+      const ownStories = await issueStoriesLoader.load(issueId as number);
       if (Array.isArray(ownStories) && ownStories.length > 0) return ownStories;
 
       if (issueParent.fk_series == null || !issueParent.number) return ownStories ?? [];
@@ -232,7 +285,7 @@ export const resolvers: IssueResolvers = {
       let siblings: IssueSibling[] = [];
 
       if (hasLoad<number, unknown[]>(issueVariantsLoader)) {
-        const loadedSiblings = await issueVariantsLoader.load(issueParent.id);
+        const loadedSiblings = await issueVariantsLoader.load(issueId as number);
         if (Array.isArray(loadedSiblings)) siblings = loadedSiblings as IssueSibling[];
       }
 
@@ -249,17 +302,19 @@ export const resolvers: IssueResolvers = {
       }
 
       const siblingIds = siblings
-        .map((sibling) => (typeof sibling.id === 'number' ? sibling.id : null))
+        .map((sibling) => toNumericLoaderId(sibling.id))
         .filter((id): id is number => id != null);
       const uniqueSiblingIds = [...new Set(siblingIds)].sort((a, b) => a - b);
       const primarySibling = siblings.find(
-        (sibling) => typeof sibling.id === 'number' && String(sibling.variant ?? '').trim() === '',
+        (sibling) => toNumericLoaderId(sibling.id) != null && String(sibling.variant ?? '').trim() === '',
       ) as { id: number } | undefined;
 
       const fallbackCandidateIds = [
-        ...(primarySibling ? [primarySibling.id] : []),
+        ...(primarySibling ? [toNumericLoaderId(primarySibling.id)] : []),
         ...uniqueSiblingIds,
-      ].filter((id, index, arr) => arr.indexOf(id) === index && id !== issueParent.id);
+      ]
+        .filter((id): id is number => id != null)
+        .filter((id, index, arr) => arr.indexOf(id) === index && String(id) !== String(issueId));
 
       for (const fallbackIssueId of fallbackCandidateIds) {
         const inheritedStories = await issueStoriesLoader.load(fallbackIssueId);
@@ -273,14 +328,16 @@ export const resolvers: IssueResolvers = {
       if (issueParent.Cover) return issueParent.Cover;
       if (issueParent.cover) return issueParent.cover;
       if (!hasLoad<number, unknown | null>(issueCoverLoader)) return null;
-      const loadedCover = await issueCoverLoader.load(issueParent.id);
+      const issueId = toLoaderId(issueParent.id);
+      if (issueId == null) return null;
+      const loadedCover = await issueCoverLoader.load(issueId as number);
       if (loadedCover) return loadedCover;
 
       const comicguideId = resolveComicguideId(issueParent.comicguideid);
       if (!comicguideId) return null;
 
       return {
-        fk_issue: issueParent.id,
+        fk_issue: Number(issueId),
         issue: issueParent,
         url: `https://www.comicguide.de/pics/large/${comicguideId}.jpg`,
       };
@@ -293,9 +350,12 @@ export const resolvers: IssueResolvers = {
       (parent as IssueParent).getArcs ? await (parent as IssueParent).getArcs?.() : [],
     variants: async (parent, _, { issueVariantsLoader }) => {
       const issueParent = parent as IssueParent;
-      if (Array.isArray(issueParent.variants)) return issueParent.variants;
+      if (Array.isArray(issueParent.variants) && issueParent.variants.length > 0)
+        return issueParent.variants;
       if (!hasLoad<number, unknown[]>(issueVariantsLoader)) return [];
-      return await issueVariantsLoader.load(issueParent.id);
+      const issueId = toLoaderId(issueParent.id);
+      if (issueId == null) return [];
+      return await issueVariantsLoader.load(issueId as number);
     },
   },
 };

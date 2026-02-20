@@ -174,7 +174,27 @@ describe('SeriesService additional coverage', () => {
     expect(result.edges[0]?.node).toMatchObject({ id: 5, title: 'X-Men', volume: 2 });
 
     const options = mockModels.Issue.findAll.mock.calls[0][0];
-    expect(options.group).toEqual(['fk_series']);
+    expect(options.group).toBeUndefined();
+    expect(options.attributes).toEqual(['id', 'fk_series']);
+    expect(options.where['$Series.Publisher.name$']).toBeUndefined();
+    expect(options.where['$Series.Publisher.original$']).toBeUndefined();
+  });
+
+  it('keeps publisher context in filter-based series lookup when publisher is specific', async () => {
+    mockModels.Issue.findAll.mockResolvedValue([]);
+
+    await service.findSeries(
+      undefined,
+      { name: 'Marvel', us: true } as any,
+      3,
+      undefined,
+      true,
+      { us: true, and: true } as any,
+    );
+
+    const options = mockModels.Issue.findAll.mock.calls[0][0];
+    expect(options.where['$Series.Publisher.name$']).toBe('Marvel');
+    expect(options.where['$Series.Publisher.original$']).toBe(true);
   });
 
   it('throws on delete when publisher is missing', async () => {

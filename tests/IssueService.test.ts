@@ -78,9 +78,25 @@ describe('IssueService', () => {
 
     expect(result.edges.map((edge: any) => `${edge.node.number}::${edge.node.variant}`)).toEqual([
       '7::',
-      '8::A',
+      '8::',
     ]);
+    expect(result.edges.map((edge: any) => edge.node.id)).toEqual([100, 102]);
     expect(result.edges).toHaveLength(2);
+  });
+
+  it('should prefer parent formats (HEFT/SC/HC) without variant as navbar representative', async () => {
+    const seriesInput = { title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } };
+    mockModels.Issue.findAll.mockResolvedValue([
+      { id: 201, fk_series: 1, number: '9', format: 'Digital', variant: '' },
+      { id: 202, fk_series: 1, number: '9', format: 'HC', variant: '' },
+      { id: 203, fk_series: 1, number: '9', format: 'HEFT', variant: 'B' },
+    ]);
+
+    const result = await issueService.findIssues(undefined, seriesInput, undefined, undefined, false, undefined);
+
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].node.id).toBe(202);
+    expect(result.edges[0].node.variant).toBe('');
   });
 
   it('should ignore after cursor in findIssues', async () => {
