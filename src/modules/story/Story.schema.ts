@@ -9,12 +9,6 @@ export const typeDef = gql`
     issue: IssueInput
     individuals: [IndividualInput]
     appearances: [AppearanceInput]
-    onlyapp: Boolean
-    firstapp: Boolean
-    onlytb: Boolean
-    otheronlytb: Boolean
-    onlyoneprint: Boolean
-    collected: Boolean
     addinfo: String
     part: String
     exclusive: Boolean

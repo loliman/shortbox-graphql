@@ -438,12 +438,6 @@ export class IssueService {
       title?: string;
       addinfo?: string;
       part?: string;
-      onlyapp?: boolean;
-      firstapp?: boolean;
-      onlytb?: boolean;
-      otheronlytb?: boolean;
-      onlyoneprint?: boolean;
-      collected?: boolean;
       parent?: StoryParentRef;
     };
 
@@ -503,12 +497,6 @@ export class IssueService {
             title: String(story.title || ''),
             addinfo: String(story.addinfo || ''),
             part: String(story.part || ''),
-            onlyapp: Boolean(story.onlyapp),
-            firstapp: Boolean(story.firstapp),
-            onlytb: Boolean(story.onlytb),
-            otheronlytb: Boolean(story.otheronlytb),
-            onlyoneprint: Boolean(story.onlyoneprint),
-            collected: Boolean(story.collected),
           },
           { transaction },
         );
