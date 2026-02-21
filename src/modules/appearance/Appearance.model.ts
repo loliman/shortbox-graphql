@@ -8,6 +8,7 @@ export class Appearance extends Model {
 
   public static associate(models: DbModels) {
     Appearance.belongsToMany(models.Story, {
+      as: 'stories',
       through: models.Story_Appearance,
       foreignKey: 'fk_appearance',
     });

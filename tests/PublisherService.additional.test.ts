@@ -60,14 +60,16 @@ describe('PublisherService additional coverage', () => {
     );
 
     const options = mockModels.Publisher.findAll.mock.calls[0][0];
-    const andSymbol = Object.getOwnPropertySymbols(options.where).find((s) => String(s).includes('and'));
+    const andSymbol = Object.getOwnPropertySymbols(options.where).find((s) =>
+      String(s).includes('and'),
+    );
     expect(andSymbol).toBeUndefined();
   });
 
   it('uses filter-based lookup path and maps issue publishers', async () => {
     mockModels.Issue.findAll.mockResolvedValue([
-      { Series: { Publisher: { id: 11, name: 'Marvel' } } },
-      { Series: { Publisher: { id: 12, name: 'DC' } } },
+      { series: { publisher: { id: 11, name: 'Marvel' } } },
+      { series: { publisher: { id: 12, name: 'DC' } } },
     ]);
 
     const result = await service.findPublishers(
@@ -91,9 +93,9 @@ describe('PublisherService additional coverage', () => {
   it('throws when deleting unknown publisher', async () => {
     mockModels.Publisher.findOne.mockResolvedValue(null);
 
-    await expect(
-      service.deletePublisher({ name: 'Unknown' } as any, {} as any),
-    ).rejects.toThrow('Publisher not found');
+    await expect(service.deletePublisher({ name: 'Unknown' } as any, {} as any)).rejects.toThrow(
+      'Publisher not found',
+    );
   });
 
   it('deletes publisher and child series', async () => {
@@ -155,10 +157,6 @@ describe('PublisherService additional coverage', () => {
     ]);
 
     const result = await service.getPublishersByIds([1, 3, 2]);
-    expect(result).toEqual([
-      { id: 1, name: 'Marvel' },
-      null,
-      { id: 2, name: 'DC' },
-    ]);
+    expect(result).toEqual([{ id: 1, name: 'Marvel' }, null, { id: 2, name: 'DC' }]);
   });
 });

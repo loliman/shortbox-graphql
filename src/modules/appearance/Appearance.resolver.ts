@@ -6,8 +6,8 @@ type AppearanceParent = {
   id: number;
   name: string;
   type: string;
-  Stories?: Array<{ id: number }>;
-  Story_Appearance?: { role?: string | null };
+  stories?: Array<{ id: number }>;
+  story_appearance?: { role?: string | null };
 };
 
 export const resolvers: AppearanceResolvers = {
@@ -73,13 +73,13 @@ export const resolvers: AppearanceResolvers = {
     },
     role: async (parent, _, { models }) => {
       const appearanceParent = parent as AppearanceParent;
-      if (appearanceParent.Story_Appearance) {
-        return appearanceParent.Story_Appearance.role || '';
+      if (appearanceParent.story_appearance) {
+        return appearanceParent.story_appearance.role || '';
       }
-      if (!appearanceParent.Stories || appearanceParent.Stories.length === 0) return '';
+      if (!appearanceParent.stories || appearanceParent.stories.length === 0) return '';
       let relation = await models.Story_Appearance.findOne({
         where: {
-          fk_story: appearanceParent.Stories[0].id,
+          fk_story: appearanceParent.stories[0].id,
           fk_appearance: appearanceParent.id,
         },
       });

@@ -28,6 +28,7 @@ export default (sequelize: Sequelize) => {
     {
       sequelize,
       tableName: 'issue_individual',
+      modelName: 'issue_individual',
     },
   );
 

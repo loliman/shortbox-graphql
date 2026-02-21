@@ -21,7 +21,7 @@ type SeriesWithPublisher = {
   volume: number;
   startyear: number;
   endyear: number | null;
-  Publisher: { name: string };
+  publisher: { name: string };
 };
 
 type IssueWithSeries = {
@@ -29,7 +29,7 @@ type IssueWithSeries = {
   number: string;
   format: string;
   variant: string;
-  Series: SeriesWithPublisher;
+  series: SeriesWithPublisher;
 };
 
 export const resolvers: NodeResolvers = {
@@ -53,6 +53,7 @@ export const resolvers: NodeResolvers = {
         include: [
           {
             model: models.Publisher,
+            as: 'publisher',
             required: true,
             where: { original: us },
           },
@@ -68,10 +69,12 @@ export const resolvers: NodeResolvers = {
         include: [
           {
             model: models.Series,
+            as: 'series',
             required: true,
             include: [
               {
                 model: models.Publisher,
+                as: 'publisher',
                 required: true,
                 where: { original: us },
               },
@@ -97,7 +100,7 @@ export const resolvers: NodeResolvers = {
           const seriesNode = s as unknown as SeriesWithPublisher;
           const label = createNodeSeriesLabel(
             seriesNode.title,
-            seriesNode.Publisher.name,
+            seriesNode.publisher.name,
             seriesNode.volume,
             seriesNode.startyear,
             seriesNode.endyear,
@@ -108,7 +111,7 @@ export const resolvers: NodeResolvers = {
             url: createNodeUrl(
               'series',
               us,
-              seriesNode.Publisher.name,
+              seriesNode.publisher.name,
               seriesNode.title,
               seriesNode.volume,
               '',
@@ -119,10 +122,10 @@ export const resolvers: NodeResolvers = {
         }),
         ...issues.map((i) => {
           const issueNode = i as unknown as IssueWithSeries;
-          const issueSeries = issueNode.Series;
+          const issueSeries = issueNode.series;
           const seriesLabel = createNodeSeriesLabel(
             issueSeries.title,
-            issueSeries.Publisher.name,
+            issueSeries.publisher.name,
             issueSeries.volume,
             issueSeries.startyear,
             issueSeries.endyear,
@@ -140,7 +143,7 @@ export const resolvers: NodeResolvers = {
             url: createNodeUrl(
               'issue',
               us,
-              issueSeries.Publisher.name,
+              issueSeries.publisher.name,
               issueSeries.title,
               issueSeries.volume,
               issueNode.number,

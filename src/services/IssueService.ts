@@ -36,7 +36,8 @@ const hasPublisherNameFilter = (filter: Filter): boolean =>
 const hasSeriesIdentityFilter = (filter: Filter): boolean =>
   Array.isArray(filter.series) &&
   filter.series.some(
-    (series) => String(series?.title || '').trim() !== '' && Number.isFinite(Number(series?.volume)),
+    (series) =>
+      String(series?.title || '').trim() !== '' && Number.isFinite(Number(series?.volume)),
   );
 
 const normalizeLastEditedFilter = (filter: Filter | undefined): Filter | undefined => {
@@ -64,8 +65,11 @@ const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
 };
 
 const isParentCandidate = (issue: { format?: string | null; variant?: string | null }): boolean =>
-  PARENT_FORMATS.has(String(issue.format ?? '').trim().toUpperCase()) &&
-  String(issue.variant ?? '').trim() === '';
+  PARENT_FORMATS.has(
+    String(issue.format ?? '')
+      .trim()
+      .toUpperCase(),
+  ) && String(issue.variant ?? '').trim() === '';
 
 const pickIssueRepresentative = <
   T extends { id: number; format?: string | null; variant?: string | null },
@@ -202,10 +206,12 @@ export class IssueService {
         include: [
           {
             model: this.models.Series,
+            as: 'series',
             where: { title: series.title, volume: series.volume },
             include: [
               {
                 model: this.models.Publisher,
+                as: 'publisher',
                 where: { name: series.publisher?.name },
               },
             ],
@@ -244,10 +250,10 @@ export class IssueService {
       const seriesTitle = (series.title || '').trim();
       const seriesPublisherName = (series.publisher?.name || '').trim();
 
-      where['$Series.title$'] = seriesTitle;
-      where['$Series.volume$'] = series.volume;
+      where['$series.title$'] = seriesTitle;
+      where['$series.volume$'] = series.volume;
       if (seriesPublisherName) {
-        where['$Series.Publisher.name$'] = seriesPublisherName;
+        where['$series.publisher.name$'] = seriesPublisherName;
       }
 
       if (pattern && pattern !== '') {
@@ -442,10 +448,10 @@ export class IssueService {
     };
 
     const inputStories = Array.isArray((item as { stories?: unknown[] }).stories)
-      ? (((item as { stories?: unknown[] }).stories as unknown[]) || [])
+      ? ((item as { stories?: unknown[] }).stories as unknown[]) || []
       : [];
 
-    const existingStories = await this.models.Story.findAll({
+    const existingStoriesRaw = await this.models.Story.findAll({
       where: { fk_issue: issueId },
       order: [
         ['number', 'ASC'],
@@ -453,6 +459,7 @@ export class IssueService {
       ],
       transaction,
     });
+    const existingStories = Array.isArray(existingStoriesRaw) ? existingStoriesRaw : [];
 
     const existingParentsByNumber = new Map<number, Array<number | null>>();
     for (const existingStory of existingStories) {
@@ -479,7 +486,7 @@ export class IssueService {
       const fallbackParentCandidates =
         sourceStoryNumber > 0 ? existingParentsByNumber.get(sourceStoryNumber) || [] : [];
       const fallbackParentId =
-        fallbackParentCandidates.length > 0 ? fallbackParentCandidates.shift() ?? null : null;
+        fallbackParentCandidates.length > 0 ? (fallbackParentCandidates.shift() ?? null) : null;
       const parent = story.parent;
       const parentIssue = parent?.issue;
       const parentSeries = parentIssue?.series;
@@ -607,9 +614,7 @@ export class IssueService {
 
     const normalizeTypeList = (raw: unknown): string[] => {
       if (Array.isArray(raw)) {
-        return raw
-          .map((entry) => String(entry || '').trim())
-          .filter((entry) => entry.length > 0);
+        return raw.map((entry) => String(entry || '').trim()).filter((entry) => entry.length > 0);
       }
       const normalized = String(raw || '').trim();
       return normalized ? [normalized] : [];
@@ -771,6 +776,7 @@ export class IssueService {
       include: [
         {
           model: this.models.Publisher,
+          as: 'publisher',
           where: { original: true },
         },
       ],
@@ -813,7 +819,11 @@ export class IssueService {
     });
 
     if (!issue) {
-      const crawledIssue = (await this.crawler.crawlIssue(title, volume, number)) as CrawledIssueLike;
+      const crawledIssue = (await this.crawler.crawlIssue(
+        title,
+        volume,
+        number,
+      )) as CrawledIssueLike;
       issue = await this.models.Issue.create(
         {
           title: '',
@@ -893,7 +903,9 @@ export class IssueService {
             number: variantNumber,
             format: String(crawledVariant.format || issue.format || 'Heft'),
             variant: variantName,
-            releasedate: String(crawledVariant.releasedate || issue.releasedate || crawledIssue.releasedate || ''),
+            releasedate: String(
+              crawledVariant.releasedate || issue.releasedate || crawledIssue.releasedate || '',
+            ),
             pages: 0,
             price: Number(crawledVariant.price || 0),
             currency: String(crawledVariant.currency || crawledIssue.currency || 'USD'),
@@ -957,27 +969,28 @@ export class IssueService {
     let include: FindOptions['include'] = [
       {
         model: this.models.Series,
+        as: 'series',
         required: true,
-        include: [{ model: this.models.Publisher }],
+        include: [{ model: this.models.Publisher, as: 'publisher' }],
       },
     ];
     const orderBy =
       sortField === 'series'
         ? ([
-            [{ model: this.models.Series }, 'title', sortDirection],
-            [{ model: this.models.Series }, 'volume', sortDirection],
+            [{ model: this.models.Series, as: 'series' }, 'title', sortDirection],
+            [{ model: this.models.Series, as: 'series' }, 'volume', sortDirection],
             ['id', sortDirection],
           ] as FindOptions['order'])
         : sortField === 'publisher'
           ? ([
               [
-                { model: this.models.Series },
-                { model: this.models.Publisher },
+                { model: this.models.Series, as: 'series' },
+                { model: this.models.Publisher, as: 'publisher' },
                 'name',
                 sortDirection,
               ],
-              [{ model: this.models.Series }, 'title', sortDirection],
-              [{ model: this.models.Series }, 'volume', sortDirection],
+              [{ model: this.models.Series, as: 'series' }, 'title', sortDirection],
+              [{ model: this.models.Series, as: 'series' }, 'volume', sortDirection],
               ['id', sortDirection],
             ] as FindOptions['order'])
           : ([

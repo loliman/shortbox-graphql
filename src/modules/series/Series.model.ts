@@ -12,8 +12,12 @@ export class Series extends Model {
   public fk_publisher!: number;
 
   public static associate(models: DbModels) {
-    Series.hasMany(models.Issue, { as: 'Issue', foreignKey: 'fk_series', onDelete: 'cascade' });
-    Series.belongsTo(models.Publisher, { foreignKey: 'fk_publisher' });
+    Series.hasMany(models.Issue, {
+      as: { singular: 'issue', plural: 'issues' },
+      foreignKey: 'fk_series',
+      onDelete: 'cascade',
+    });
+    Series.belongsTo(models.Publisher, { as: 'publisher', foreignKey: 'fk_publisher' });
   }
 
   // Die delete Methode wird später in einen Service verschoben,

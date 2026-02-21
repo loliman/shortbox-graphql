@@ -23,17 +23,26 @@ export class Issue extends Model {
 
   public static associate(models: DbModels) {
     Issue.hasMany(models.Story, {
-      as: { singular: 'Issue', plural: 'Stories' },
+      as: { singular: 'story', plural: 'stories' },
       foreignKey: 'fk_issue',
       onDelete: 'cascade',
     });
-    Issue.hasMany(models.Cover, { foreignKey: 'fk_issue', onDelete: 'cascade' });
-    Issue.belongsTo(models.Series, { foreignKey: 'fk_series' });
+    Issue.hasMany(models.Cover, {
+      as: { singular: 'cover', plural: 'covers' },
+      foreignKey: 'fk_issue',
+      onDelete: 'cascade',
+    });
+    Issue.belongsTo(models.Series, { as: 'series', foreignKey: 'fk_series' });
     Issue.belongsToMany(models.Individual, {
+      as: 'individuals',
       through: models.Issue_Individual,
       foreignKey: 'fk_issue',
     });
-    Issue.belongsToMany(models.Arc, { through: models.Issue_Arc, foreignKey: 'fk_issue' });
+    Issue.belongsToMany(models.Arc, {
+      as: 'arcs',
+      through: models.Issue_Arc,
+      foreignKey: 'fk_issue',
+    });
   }
 
   public async deleteInstance(transaction: Transaction, models: DbModels): Promise<void> {

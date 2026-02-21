@@ -32,8 +32,8 @@ export class PublisherService {
   ) {
     type WhereMap = Record<string | symbol, unknown>;
     type IssueWithSeriesPublisher = {
-      Series: {
-        Publisher: {
+      series: {
+        publisher: {
           id: number;
           name: string;
         };
@@ -94,9 +94,9 @@ export class PublisherService {
       const uniqueNodes = new Map<number, PublisherNode>();
       res.forEach((issue) => {
         const issueNode = issue as unknown as IssueWithSeriesPublisher;
-        uniqueNodes.set(issueNode.Series.Publisher.id, {
-          id: issueNode.Series.Publisher.id,
-          name: issueNode.Series.Publisher.name,
+        uniqueNodes.set(issueNode.series.publisher.id, {
+          id: issueNode.series.publisher.id,
+          name: issueNode.series.publisher.name,
           original: us,
         });
       });

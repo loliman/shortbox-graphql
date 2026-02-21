@@ -7,14 +7,17 @@ export class Individual extends Model {
 
   public static associate(models: DbModels) {
     Individual.belongsToMany(models.Cover, {
+      as: 'covers',
       through: models.Cover_Individual,
       foreignKey: 'fk_individual',
     });
     Individual.belongsToMany(models.Story, {
+      as: 'stories',
       through: models.Story_Individual,
       foreignKey: 'fk_individual',
     });
     Individual.belongsToMany(models.Issue, {
+      as: 'issues',
       through: models.Issue_Individual,
       foreignKey: 'fk_individual',
     });

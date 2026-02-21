@@ -66,6 +66,7 @@ export const resolvers: ArcResolvers = {
         include: [
           {
             model: models.Arc,
+            as: 'arcs',
             where: { id: (parent as ArcParent).id },
           },
         ],

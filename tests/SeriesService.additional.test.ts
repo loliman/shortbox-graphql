@@ -61,26 +61,19 @@ describe('SeriesService additional coverage', () => {
 
     expect(result.edges).toHaveLength(1);
     const options = mockModels.Series.findAll.mock.calls[0][0];
-    expect(options.where['$Publisher.name$']).toBe('Marvel');
-    expect(options.where['$Publisher.original$']).toBe(true);
+    expect(options.where['$publisher.name$']).toBe('Marvel');
+    expect(options.where['$publisher.original$']).toBe(true);
     expect(options.where.title[Symbol.for('iLike') as any] || options.where.title).toBeTruthy();
   });
 
   it('treats missing or blank publisher name like wildcard for series search', async () => {
     mockModels.Series.findAll.mockResolvedValue([{ id: 1, title: 'Alpha', volume: 1 }]);
 
-    await service.findSeries(
-      '',
-      { name: '   ', us: true } as any,
-      5,
-      undefined,
-      false,
-      undefined,
-    );
+    await service.findSeries('', { name: '   ', us: true } as any, 5, undefined, false, undefined);
 
     const options = mockModels.Series.findAll.mock.calls[0][0];
-    expect(options.where['$Publisher.name$']).toBeUndefined();
-    expect(options.where['$Publisher.original$']).toBe(true);
+    expect(options.where['$publisher.name$']).toBeUndefined();
+    expect(options.where['$publisher.original$']).toBe(true);
   });
 
   it('retries wildcard search without us filter when first query is empty', async () => {
@@ -99,8 +92,10 @@ describe('SeriesService additional coverage', () => {
 
     expect(result.edges).toHaveLength(1);
     expect(mockModels.Series.findAll).toHaveBeenCalledTimes(2);
-    expect(mockModels.Series.findAll.mock.calls[0][0].where['$Publisher.original$']).toBe(true);
-    expect(mockModels.Series.findAll.mock.calls[1][0].where['$Publisher.original$']).toBeUndefined();
+    expect(mockModels.Series.findAll.mock.calls[0][0].where['$publisher.original$']).toBe(true);
+    expect(
+      mockModels.Series.findAll.mock.calls[1][0].where['$publisher.original$'],
+    ).toBeUndefined();
   });
 
   it('does not apply publisher filters when wildcard has no us constraint', async () => {
@@ -117,8 +112,8 @@ describe('SeriesService additional coverage', () => {
 
     expect(result.edges).toHaveLength(1);
     const options = mockModels.Series.findAll.mock.calls[0][0];
-    expect(options.where['$Publisher.name$']).toBeUndefined();
-    expect(options.where['$Publisher.original$']).toBeUndefined();
+    expect(options.where['$publisher.name$']).toBeUndefined();
+    expect(options.where['$publisher.original$']).toBeUndefined();
     expect(mockModels.Series.findAll).toHaveBeenCalledTimes(1);
   });
 
@@ -152,13 +147,22 @@ describe('SeriesService additional coverage', () => {
 
     expect(result.edges).toHaveLength(1);
     const options = mockModels.Series.findAll.mock.calls[0][0];
-    expect(options.where['$Publisher.name$']).toBeUndefined();
-    expect(options.where['$Publisher.original$']).toBe(false);
+    expect(options.where['$publisher.name$']).toBeUndefined();
+    expect(options.where['$publisher.original$']).toBe(false);
   });
 
   it('uses filter-based lookup path and maps issue series nodes', async () => {
     mockModels.Issue.findAll.mockResolvedValue([
-      { Series: { id: 5, title: 'X-Men', volume: 2, startyear: 1991, endyear: 2001, fk_publisher: 9 } },
+      {
+        series: {
+          id: 5,
+          title: 'X-Men',
+          volume: 2,
+          startyear: 1991,
+          endyear: 2001,
+          fk_publisher: 9,
+        },
+      },
     ]);
 
     const result = await service.findSeries(
@@ -176,25 +180,21 @@ describe('SeriesService additional coverage', () => {
     const options = mockModels.Issue.findAll.mock.calls[0][0];
     expect(options.group).toBeUndefined();
     expect(options.attributes).toEqual(['id', 'fk_series']);
-    expect(options.where['$Series.Publisher.name$']).toBeUndefined();
-    expect(options.where['$Series.Publisher.original$']).toBeUndefined();
+    expect(options.where['$series.publisher.name$']).toBeUndefined();
+    expect(options.where['$series.publisher.original$']).toBeUndefined();
   });
 
   it('keeps publisher context in filter-based series lookup when publisher is specific', async () => {
     mockModels.Issue.findAll.mockResolvedValue([]);
 
-    await service.findSeries(
-      undefined,
-      { name: 'Marvel', us: true } as any,
-      3,
-      undefined,
-      true,
-      { us: true, and: true } as any,
-    );
+    await service.findSeries(undefined, { name: 'Marvel', us: true } as any, 3, undefined, true, {
+      us: true,
+      and: true,
+    } as any);
 
     const options = mockModels.Issue.findAll.mock.calls[0][0];
-    expect(options.where['$Series.Publisher.name$']).toBe('Marvel');
-    expect(options.where['$Series.Publisher.original$']).toBe(true);
+    expect(options.where['$series.publisher.name$']).toBe('Marvel');
+    expect(options.where['$series.publisher.original$']).toBe(true);
   });
 
   it('throws on delete when publisher is missing', async () => {
@@ -209,9 +209,9 @@ describe('SeriesService additional coverage', () => {
     mockModels.Publisher.findOne.mockResolvedValue({ id: 10 });
     mockModels.Series.findOne.mockResolvedValue(null);
 
-    await expect(service.deleteSeries({ title: 'X', volume: 1, publisher: { name: 'M' } } as any, {} as any)).rejects.toThrow(
-      'Series not found',
-    );
+    await expect(
+      service.deleteSeries({ title: 'X', volume: 1, publisher: { name: 'M' } } as any, {} as any),
+    ).rejects.toThrow('Series not found');
   });
 
   it('deletes an existing series', async () => {
@@ -250,7 +250,10 @@ describe('SeriesService additional coverage', () => {
     mockModels.Publisher.findOne.mockResolvedValue(null);
 
     await expect(
-      service.createSeries({ title: 'Y', volume: 1, publisher: { name: 'Unknown' } } as any, {} as any),
+      service.createSeries(
+        { title: 'Y', volume: 1, publisher: { name: 'Unknown' } } as any,
+        {} as any,
+      ),
     ).rejects.toThrow('Publisher not found');
   });
 
@@ -277,7 +280,11 @@ describe('SeriesService additional coverage', () => {
   it('throws on edit when publisher or series is missing', async () => {
     mockModels.Publisher.findOne.mockResolvedValueOnce(null);
     await expect(
-      service.editSeries({ title: 'A', publisher: { name: 'P' } } as any, { title: 'B' } as any, {} as any),
+      service.editSeries(
+        { title: 'A', publisher: { name: 'P' } } as any,
+        { title: 'B' } as any,
+        {} as any,
+      ),
     ).rejects.toThrow('Publisher not found');
 
     mockModels.Publisher.findOne.mockResolvedValueOnce({ id: 1 });
@@ -305,7 +312,10 @@ describe('SeriesService additional coverage', () => {
 
     mockModels.Publisher.findOne.mockResolvedValue({ id: 5 });
     mockModels.Series.findOne.mockResolvedValue(existing);
-    mockModels.Series.findAll.mockResolvedValue([{ id: 7, title: 'B' }, { id: 6, title: 'A' }]);
+    mockModels.Series.findAll.mockResolvedValue([
+      { id: 7, title: 'B' },
+      { id: 6, title: 'A' },
+    ]);
 
     const editResult = await service.editSeries(
       { title: 'Old Title', volume: 1, publisher: { name: 'Marvel' } } as any,
@@ -338,11 +348,7 @@ describe('SeriesService additional coverage', () => {
     mockModels.Publisher.findOne.mockResolvedValue({ id: 7 });
     mockModels.Series.findOne.mockResolvedValue(existing);
 
-    const result = await service.editSeries(
-      { volume: 1 } as any,
-      {} as any,
-      {} as any,
-    );
+    const result = await service.editSeries({ volume: 1 } as any, {} as any, {} as any);
 
     expect(result).toBe('saved-fallbacks');
     expect(mockModels.Publisher.findOne).toHaveBeenCalledWith(

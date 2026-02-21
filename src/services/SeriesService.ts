@@ -32,7 +32,7 @@ export class SeriesService {
   ) {
     type WhereMap = Record<string | symbol, unknown>;
     type IssueWithSeries = {
-      Series: {
+      series: {
         id: number;
         title: string;
         volume: number;
@@ -55,15 +55,15 @@ export class SeriesService {
           ['volume', 'ASC'],
           ['id', 'ASC'],
         ],
-        include: [{ model: this.models.Publisher }],
+        include: [{ model: this.models.Publisher, as: 'publisher' }],
         where,
       };
 
       if (shouldFilterPublisherName)
-        options.where = { ...options.where, '$Publisher.name$': publisherName };
+        options.where = { ...options.where, '$publisher.name$': publisherName };
 
       if (shouldFilterPublisherUs)
-        options.where = { ...options.where, '$Publisher.original$': Boolean(publisher.us) };
+        options.where = { ...options.where, '$publisher.original$': Boolean(publisher.us) };
 
       if (pattern && pattern !== '') {
         options.where = {
@@ -84,7 +84,7 @@ export class SeriesService {
         (!pattern || pattern.trim() === '')
       ) {
         const fallbackWhere = { ...(options.where as WhereMap) };
-        delete fallbackWhere['$Publisher.original$'];
+        delete fallbackWhere['$publisher.original$'];
         results = await loadSeries({ ...options, where: fallbackWhere });
       }
 
@@ -100,37 +100,42 @@ export class SeriesService {
       const shouldFilterPublisherUs = typeof publisher?.us === 'boolean';
 
       if (shouldFilterPublisherName) {
-        where['$Series.Publisher.name$'] = publisherName;
+        where['$series.publisher.name$'] = publisherName;
       }
       if (shouldFilterPublisherUs) {
-        where['$Series.Publisher.original$'] = Boolean(publisher.us);
+        where['$series.publisher.original$'] = Boolean(publisher.us);
       }
 
       const includeList = options.include as Array<{ attributes?: string[]; include?: unknown[] }>;
       const seriesInclude = includeList[0];
       if (seriesInclude) {
-        seriesInclude.attributes = ['id', 'title', 'volume', 'startyear', 'endyear', 'fk_publisher'];
+        seriesInclude.attributes = [
+          'id',
+          'title',
+          'volume',
+          'startyear',
+          'endyear',
+          'fk_publisher',
+        ];
       }
 
       const res = await this.models.Issue.findAll(options);
       const uniqueNodes = new Map<number, IssueWithSeries>();
       res.forEach((issue) => {
         const issueNode = issue as unknown as IssueWithSeries;
-        uniqueNodes.set(issueNode.Series.id, issueNode);
+        uniqueNodes.set(issueNode.series.id, issueNode);
       });
 
       const nodes = [...uniqueNodes.values()]
         .map((issueNode) => ({
-          id: issueNode.Series.id,
-          title: issueNode.Series.title,
-          volume: issueNode.Series.volume,
-          startyear: issueNode.Series.startyear,
-          endyear: issueNode.Series.endyear,
-          fk_publisher: issueNode.Series.fk_publisher,
+          id: issueNode.series.id,
+          title: issueNode.series.title,
+          volume: issueNode.series.volume,
+          startyear: issueNode.series.startyear,
+          endyear: issueNode.series.endyear,
+          fk_publisher: issueNode.series.fk_publisher,
         }))
-        .sort(
-          (left, right) => left.title.localeCompare(right.title) || left.volume - right.volume,
-        );
+        .sort((left, right) => left.title.localeCompare(right.title) || left.volume - right.volume);
       return buildConnectionFromNodes(nodes, nodes.length, undefined);
     }
   }

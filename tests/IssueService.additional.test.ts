@@ -40,7 +40,7 @@ describe('IssueService additional coverage', () => {
       Publisher: { findOne: jest.fn() },
       Series: { findOne: jest.fn() },
       Issue: { findAll: jest.fn(), findOne: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
-      Story: { findAll: jest.fn() },
+      Story: { findAll: jest.fn(), destroy: jest.fn().mockResolvedValue(undefined) },
       Cover: { findAll: jest.fn() },
     };
     issueService = new IssueService(mockModels, 'req-1');
@@ -66,9 +66,7 @@ describe('IssueService additional coverage', () => {
     await issueService.findIssues('12', baseItem.series, undefined, undefined, false, undefined);
 
     const options = mockModels.Issue.findAll.mock.calls[0][0];
-    const orKey = Object.getOwnPropertySymbols(options.where).find((k) =>
-      String(k).includes('or'),
-    );
+    const orKey = Object.getOwnPropertySymbols(options.where).find((k) => String(k).includes('or'));
     expect(orKey).toBeDefined();
     expect(Array.isArray(options.where[orKey!])).toBe(true);
   });
@@ -81,9 +79,16 @@ describe('IssueService additional coverage', () => {
       { id: 1, number: '1', variant: 'A' },
     ]);
 
-    const result = await issueService.findIssues(undefined, baseItem.series, undefined, undefined, true, {
-      us: true,
-    } as any);
+    const result = await issueService.findIssues(
+      undefined,
+      baseItem.series,
+      undefined,
+      undefined,
+      true,
+      {
+        us: true,
+      } as any,
+    );
     const ids = result.edges.map((edge: any) => edge.node.id);
 
     expect(ids).toEqual([1, 3, 2]);
@@ -99,9 +104,9 @@ describe('IssueService additional coverage', () => {
     } as any);
 
     const options = mockModels.Issue.findAll.mock.calls[0][0];
-    expect(options.where['$Series.title$']).toBe('Series');
-    expect(options.where['$Series.volume$']).toBe(1);
-    expect(options.where['$Series.Publisher.name$']).toBe('Pub');
+    expect(options.where['$series.title$']).toBe('Series');
+    expect(options.where['$series.volume$']).toBe(1);
+    expect(options.where['$series.publisher.name$']).toBe('Pub');
 
     const andKey = Object.getOwnPropertySymbols(options.where).find((k) =>
       String(k).includes('and'),
@@ -117,9 +122,16 @@ describe('IssueService additional coverage', () => {
       { id: 12, fk_series: 9, number: '2', variant: '' },
     ]);
 
-    const result = await issueService.findIssues(undefined, baseItem.series, undefined, undefined, true, {
-      us: true,
-    } as any);
+    const result = await issueService.findIssues(
+      undefined,
+      baseItem.series,
+      undefined,
+      undefined,
+      true,
+      {
+        us: true,
+      } as any,
+    );
 
     expect(result.edges.map((edge: any) => edge.node.id)).toEqual([10, 12]);
   });
@@ -156,10 +168,14 @@ describe('IssueService additional coverage', () => {
     );
 
     mockModels.Publisher.findOne.mockResolvedValue(null);
-    await expect(issueService.editIssue(baseItem, baseItem, tx)).rejects.toThrow('Publisher not found');
+    await expect(issueService.editIssue(baseItem, baseItem, tx)).rejects.toThrow(
+      'Publisher not found',
+    );
     mockModels.Publisher.findOne.mockResolvedValue({ id: 4 });
     mockModels.Series.findOne.mockResolvedValue(null);
-    await expect(issueService.editIssue(baseItem, baseItem, tx)).rejects.toThrow('Series not found');
+    await expect(issueService.editIssue(baseItem, baseItem, tx)).rejects.toThrow(
+      'Series not found',
+    );
     mockModels.Series.findOne.mockResolvedValue({ id: 8 });
     mockModels.Issue.findOne.mockResolvedValue(null);
     await expect(issueService.editIssue(baseItem, baseItem, tx)).rejects.toThrow('Issue not found');
@@ -179,8 +195,8 @@ describe('IssueService additional coverage', () => {
     mockGetFilterOptions.mockReturnValue({
       where: {
         [Op.or]: [
-          { '$Series.Publisher.name$': { [Op.in]: ['Marvel'] } },
-          { '$Series.title$': 'Spider-Man', '$Series.volume$': 2 },
+          { '$series.publisher.name$': { [Op.in]: ['Marvel'] } },
+          { '$series.title$': 'Spider-Man', '$series.volume$': 2 },
         ],
       },
       include: [
@@ -225,8 +241,8 @@ describe('IssueService additional coverage', () => {
     const orKey = Object.getOwnPropertySymbols(options.where).find((k) => String(k).includes('or'));
     expect(orKey).toBeDefined();
     expect(options.where[orKey!]).toEqual([
-      { '$Series.Publisher.name$': { [Op.in]: ['Marvel'] } },
-      { '$Series.title$': 'Spider-Man', '$Series.volume$': 2 },
+      { '$series.publisher.name$': { [Op.in]: ['Marvel'] } },
+      { '$series.title$': 'Spider-Man', '$series.volume$': 2 },
     ]);
   });
 

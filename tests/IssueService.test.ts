@@ -68,14 +68,27 @@ describe('IssueService', () => {
     ];
     mockModels.Issue.findAll.mockResolvedValue(mockIssues);
 
-    const result = await issueService.findIssues(undefined, seriesInput, 2, undefined, false, undefined);
+    const result = await issueService.findIssues(
+      undefined,
+      seriesInput,
+      2,
+      undefined,
+      false,
+      undefined,
+    );
 
     expect(result.edges.length).toBe(2);
     expect(result.edges[0].node.number).toBe('1');
     expect(result.pageInfo.hasNextPage).toBe(false);
-    expect(mockModels.Issue.findAll).toHaveBeenCalledWith(expect.objectContaining({
-      order: [['number', 'ASC'], ['variant', 'ASC'], ['id', 'ASC']]
-    }));
+    expect(mockModels.Issue.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order: [
+          ['number', 'ASC'],
+          ['variant', 'ASC'],
+          ['id', 'ASC'],
+        ],
+      }),
+    );
   });
 
   it('should sort issue numbers with roman numerals first and natural numeric ordering', async () => {
@@ -89,7 +102,14 @@ describe('IssueService', () => {
       { id: 6, number: '11', variant: '', fk_series: 1 },
     ]);
 
-    const result = await issueService.findIssues(undefined, seriesInput, undefined, undefined, false, undefined);
+    const result = await issueService.findIssues(
+      undefined,
+      seriesInput,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
     const numbers = result.edges.map((edge: any) => edge.node.number);
 
     expect(numbers).toEqual(['I', 'II', '1', '2', '10', '11']);
@@ -103,7 +123,14 @@ describe('IssueService', () => {
       { id: 102, fk_series: 1, number: '8', variant: 'A' },
     ]);
 
-    const result = await issueService.findIssues(undefined, seriesInput, undefined, undefined, false, undefined);
+    const result = await issueService.findIssues(
+      undefined,
+      seriesInput,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
 
     expect(result.edges.map((edge: any) => `${edge.node.number}::${edge.node.variant}`)).toEqual([
       '7::',
@@ -121,7 +148,14 @@ describe('IssueService', () => {
       { id: 203, fk_series: 1, number: '9', format: 'HEFT', variant: 'B' },
     ]);
 
-    const result = await issueService.findIssues(undefined, seriesInput, undefined, undefined, false, undefined);
+    const result = await issueService.findIssues(
+      undefined,
+      seriesInput,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
 
     expect(result.edges).toHaveLength(1);
     expect(result.edges[0].node.id).toBe(202);
@@ -129,7 +163,11 @@ describe('IssueService', () => {
   });
 
   it('keeps model-like issue fields when only variant issues exist', async () => {
-    const seriesInput = { title: 'Star Wars', volume: 2, publisher: { name: 'Panini - Star Wars & Generation' } };
+    const seriesInput = {
+      title: 'Star Wars',
+      volume: 2,
+      publisher: { name: 'Panini - Star Wars & Generation' },
+    };
     const variantOnlyIssue = createModelLikeIssue({
       id: 12601,
       fk_series: 2,
@@ -139,7 +177,14 @@ describe('IssueService', () => {
     });
     mockModels.Issue.findAll.mockResolvedValue([variantOnlyIssue]);
 
-    const result = await issueService.findIssues(undefined, seriesInput, undefined, undefined, false, undefined);
+    const result = await issueService.findIssues(
+      undefined,
+      seriesInput,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
 
     expect(result.edges).toHaveLength(1);
     expect(result.edges[0].node.number).toBe('126');
@@ -157,7 +202,7 @@ describe('IssueService', () => {
     const options = mockModels.Issue.findAll.mock.calls[0][0];
     expect(options.limit).toBeUndefined();
     const andKey = Object.getOwnPropertySymbols(options.where).find((key) =>
-      String(key).includes('and')
+      String(key).includes('and'),
     );
     expect(andKey).toBeUndefined();
   });
@@ -166,13 +211,25 @@ describe('IssueService', () => {
     mockModels.Issue.findAll.mockResolvedValue([{ id: 100, updatedat: new Date() }]);
     mockModels.Issue.findByPk.mockResolvedValue(null);
 
-    const result = await issueService.getLastEdited(undefined, 1, undefined, undefined, undefined, false);
+    const result = await issueService.getLastEdited(
+      undefined,
+      1,
+      undefined,
+      undefined,
+      undefined,
+      false,
+    );
 
     expect(result.edges.length).toBe(1);
-    expect(mockModels.Issue.findAll).toHaveBeenCalledWith(expect.objectContaining({
-      limit: 2,
-      order: [['updatedat', 'DESC'], ['id', 'DESC']]
-    }));
+    expect(mockModels.Issue.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 2,
+        order: [
+          ['updatedat', 'DESC'],
+          ['id', 'DESC'],
+        ],
+      }),
+    );
   });
 
   it('should sanitize invalid lastEdited order and direction', async () => {
@@ -185,13 +242,16 @@ describe('IssueService', () => {
       undefined,
       'updatedat; DROP TABLE Issue; --',
       'desc; DROP TABLE User; --',
-      false
+      false,
     );
 
     expect(mockModels.Issue.findAll).toHaveBeenCalledWith(
       expect.objectContaining({
-        order: [['updatedat', 'DESC'], ['id', 'DESC']],
-      })
+        order: [
+          ['updatedat', 'DESC'],
+          ['id', 'DESC'],
+        ],
+      }),
     );
   });
 
@@ -203,7 +263,10 @@ describe('IssueService', () => {
 
     expect(mockModels.Issue.findAll).toHaveBeenCalledWith(
       expect.objectContaining({
-        order: [['releasedate', 'ASC'], ['id', 'ASC']],
+        order: [
+          ['releasedate', 'ASC'],
+          ['id', 'ASC'],
+        ],
       }),
     );
   });
@@ -217,16 +280,21 @@ describe('IssueService', () => {
 
     const firstCall = mockModels.Issue.findAll.mock.calls[0][0];
     expect(firstCall.order).toEqual([
-      [{ model: mockModels.Series }, 'title', 'ASC'],
-      [{ model: mockModels.Series }, 'volume', 'ASC'],
+      [{ model: mockModels.Series, as: 'series' }, 'title', 'ASC'],
+      [{ model: mockModels.Series, as: 'series' }, 'volume', 'ASC'],
       ['id', 'ASC'],
     ]);
 
     const secondCall = mockModels.Issue.findAll.mock.calls[1][0];
     expect(secondCall.order).toEqual([
-      [{ model: mockModels.Series }, { model: mockModels.Publisher }, 'name', 'DESC'],
-      [{ model: mockModels.Series }, 'title', 'DESC'],
-      [{ model: mockModels.Series }, 'volume', 'DESC'],
+      [
+        { model: mockModels.Series, as: 'series' },
+        { model: mockModels.Publisher, as: 'publisher' },
+        'name',
+        'DESC',
+      ],
+      [{ model: mockModels.Series, as: 'series' }, 'title', 'DESC'],
+      [{ model: mockModels.Series, as: 'series' }, 'volume', 'DESC'],
       ['id', 'DESC'],
     ]);
   });
@@ -243,10 +311,13 @@ describe('IssueService', () => {
     await issueService.getLastEdited(undefined, 10, cursor, 'updatedat', 'DESC', false);
 
     const callArgs = mockModels.Issue.findAll.mock.calls[0][0];
-    expect(callArgs.order).toEqual([['updatedat', 'DESC'], ['id', 'DESC']]);
+    expect(callArgs.order).toEqual([
+      ['updatedat', 'DESC'],
+      ['id', 'DESC'],
+    ]);
 
     const andKey = Object.getOwnPropertySymbols(callArgs.where).find((key) =>
-      String(key).includes('and')
+      String(key).includes('and'),
     );
     expect(andKey).toBeDefined();
     expect(Array.isArray(callArgs.where[andKey!])).toBe(true);

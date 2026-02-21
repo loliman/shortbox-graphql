@@ -5,8 +5,7 @@ type CoverParent = {
   url?: string | null;
   fk_parent?: number | null;
   fk_issue: number;
-  issue?: { comicguideid?: unknown } | null;
-  Issue?: { comicguideid?: unknown } | null;
+  issue?: { comicguideid?: unknown; series?: { publisher?: { original?: boolean } } } | null;
   getIndividuals?: () => Promise<unknown[]>;
 };
 
@@ -33,6 +32,9 @@ const resolveComicguideId = (value: unknown): string | null => {
 const getComicguideCoverUrl = (comicguideId: string): string =>
   `https://www.comicguide.de/pics/large/${comicguideId}.jpg`;
 
+const isPositiveNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0;
+
 export const resolvers: CoverResolvers = {
   Cover: {
     id: (parent, _, { loggedIn }) => {
@@ -48,9 +50,9 @@ export const resolvers: CoverResolvers = {
       const directUrl = coverParent.url?.trim();
       if (directUrl) return directUrl;
 
+      const preloadedIssue = coverParent.issue;
       const issue =
-        coverParent.Issue ||
-        coverParent.issue ||
+        preloadedIssue ||
         (hasLoad<number, { comicguideid?: unknown } | null>(issueLoader)
           ? await issueLoader.load(coverParent.fk_issue)
           : null);
@@ -70,8 +72,8 @@ export const resolvers: CoverResolvers = {
       await models.Cover.findAll({ where: { fk_parent: (parent as CoverParent).id } }),
     issue: async (parent, _, { issueLoader }) => {
       const coverParent = parent as CoverParent;
-      if (coverParent.Issue) return coverParent.Issue;
-      if (coverParent.issue) return coverParent.issue;
+      const preloadedIssue = coverParent.issue;
+      if (preloadedIssue) return preloadedIssue;
       if (!hasLoad<number, unknown | null>(issueLoader)) return null;
       return await issueLoader.load(coverParent.fk_issue);
     },
@@ -80,17 +82,52 @@ export const resolvers: CoverResolvers = {
         ? await (parent as CoverParent).getIndividuals?.()
         : [],
     onlyapp: async (parent, _, { models, issueLoader }) => {
-      // Logik analog zum Original: Prüfen ob es eine US-Ausgabe ist
       const coverParent = parent as CoverParent;
-      const issue =
-        coverParent.Issue ||
-        coverParent.issue ||
-        (hasLoad<number, unknown | null>(issueLoader)
-          ? await issueLoader.load(coverParent.fk_issue)
-          : null);
+      if (coverParent.issue) {
+        return coverParent.issue.series?.publisher?.original === true;
+      }
+
+      const loadedIssueRaw = hasLoad<
+        number,
+        { fk_series?: unknown; series?: { publisher?: { original?: boolean } } } | null
+      >(issueLoader)
+        ? await issueLoader.load(coverParent.fk_issue)
+        : null;
+      const loadedIssue = loadedIssueRaw as {
+        fk_series?: unknown;
+        series?: { publisher?: { original?: boolean } };
+      } | null;
+      if (loadedIssue?.series?.publisher?.original === true) return true;
+
+      const fkSeriesFromLoader = loadedIssue?.fk_series;
+      const issueModel = (models as { Issue?: { findByPk?: unknown } } | null)?.Issue;
+      const seriesModel = (models as { Series?: { findByPk?: unknown } } | null)?.Series;
+      const publisherModel = (models as { Publisher?: { findByPk?: unknown } } | null)?.Publisher;
+
+      if (
+        !issueModel ||
+        typeof issueModel.findByPk !== 'function' ||
+        !seriesModel ||
+        typeof seriesModel.findByPk !== 'function' ||
+        !publisherModel ||
+        typeof publisherModel.findByPk !== 'function'
+      ) {
+        return false;
+      }
+
+      const fkSeries = isPositiveNumber(fkSeriesFromLoader)
+        ? fkSeriesFromLoader
+        : (await issueModel.findByPk(coverParent.fk_issue, { attributes: ['fk_series'] }))
+            ?.fk_series;
+      if (!isPositiveNumber(fkSeries)) return false;
+
+      const fkPublisher = (await seriesModel.findByPk(fkSeries, { attributes: ['fk_publisher'] }))
+        ?.fk_publisher;
+      if (!isPositiveNumber(fkPublisher)) return false;
+
       return (
-        (issue as { Series?: { Publisher?: { original?: boolean } } } | null)?.Series?.Publisher
-          ?.original === true
+        (await publisherModel.findByPk(fkPublisher, { attributes: ['original'] }))?.original ===
+        true
       );
     },
     exclusive: (parent) => false, // Platzhalter für komplexere Logik falls benötigt

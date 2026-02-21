@@ -6,15 +6,10 @@ type StoryParent = {
   fk_reprint?: number | null;
   fk_issue: number;
   parent?: unknown;
-  Parent?: unknown;
   children?: unknown[];
-  Children?: unknown[];
   reprintOf?: unknown;
-  ReprintOf?: unknown;
   reprints?: unknown[];
-  Reprints?: unknown[];
   issue?: unknown;
-  Issue?: unknown;
   onlyapp?: boolean;
   firstapp?: boolean;
   getIndividuals?: () => Promise<unknown[]>;
@@ -75,7 +70,6 @@ export const resolvers: StoryResolvers = {
     },
     parent: async (parent, _, { storyLoader }) => {
       const storyParent = parent as StoryParent;
-      if (storyParent.Parent) return storyParent.Parent;
       if (storyParent.parent) return storyParent.parent;
 
       const fkParent = storyParent.fk_parent;
@@ -87,11 +81,7 @@ export const resolvers: StoryResolvers = {
     },
     children: async (parent, _, { storyChildrenLoader, storyReprintsLoader, issueLoader }) => {
       const storyParent = parent as StoryParent;
-      const preloadedChildren = Array.isArray(storyParent.Children)
-        ? storyParent.Children
-        : Array.isArray(storyParent.children)
-          ? storyParent.children
-          : null;
+      const preloadedChildren = Array.isArray(storyParent.children) ? storyParent.children : null;
 
       const toIdKey = (value: unknown): string | null => {
         if (typeof value === 'string') {
@@ -133,17 +123,11 @@ export const resolvers: StoryResolvers = {
         if (!relatedStoryIds.has(key)) relatedStoryIds.set(key, value);
       };
 
-      const reprintOfRaw =
-        (storyParent.ReprintOf as { id?: unknown } | undefined)?.id ??
-        (storyParent.reprintOf as { id?: unknown } | undefined)?.id ??
-        storyParent.fk_reprint;
+      const preloadedReprintOf = storyParent.reprintOf as { id?: unknown } | null | undefined;
+      const reprintOfRaw = preloadedReprintOf?.id ?? storyParent.fk_reprint;
       addRelatedStoryId(reprintOfRaw);
 
-      const preloadedReprints = Array.isArray(storyParent.Reprints)
-        ? storyParent.Reprints
-        : Array.isArray(storyParent.reprints)
-          ? storyParent.reprints
-          : null;
+      const preloadedReprints = Array.isArray(storyParent.reprints) ? storyParent.reprints : null;
       const reprints =
         preloadedReprints ??
         (hasLoad<unknown, unknown[]>(storyReprintsLoader)
@@ -163,13 +147,12 @@ export const resolvers: StoryResolvers = {
         mergedChildren.map(async (child) => {
           const childObject = child as {
             issue?: IssueSortMeta;
-            Issue?: IssueSortMeta;
             fk_issue?: unknown;
             id?: unknown;
             number?: unknown;
           };
 
-          let childIssue = childObject.Issue ?? childObject.issue ?? null;
+          let childIssue: IssueSortMeta | null | undefined = childObject.issue;
           if (!childIssue && hasLoad<number, unknown | null>(issueLoader)) {
             const fkIssueId = toNumericId(childObject.fk_issue);
             if (fkIssueId != null) {
@@ -198,7 +181,6 @@ export const resolvers: StoryResolvers = {
     },
     reprintOf: async (parent, _, { storyLoader }) => {
       const storyParent = parent as StoryParent;
-      if (storyParent.ReprintOf) return storyParent.ReprintOf;
       if (storyParent.reprintOf) return storyParent.reprintOf;
 
       const fkReprint = storyParent.fk_reprint;
@@ -210,14 +192,12 @@ export const resolvers: StoryResolvers = {
     },
     reprints: async (parent, _, { storyReprintsLoader }) => {
       const storyParent = parent as StoryParent;
-      if (Array.isArray(storyParent.Reprints)) return storyParent.Reprints;
       if (Array.isArray(storyParent.reprints)) return storyParent.reprints;
       if (!hasLoad<number, unknown[]>(storyReprintsLoader)) return [];
       return await storyReprintsLoader.load(storyParent.id);
     },
     issue: async (parent, _, { issueLoader }) => {
       const storyParent = parent as StoryParent;
-      if (storyParent.Issue) return storyParent.Issue;
       if (storyParent.issue) return storyParent.issue;
       if (!hasLoad<number, unknown | null>(issueLoader)) return null;
       return await issueLoader.load(storyParent.fk_issue);
@@ -234,8 +214,7 @@ export const resolvers: StoryResolvers = {
         : [],
     exclusive: (parent) => {
       const storyParent = parent as StoryParent;
-      const hasOriginalStoryReference =
-        Boolean(storyParent.Parent) || Boolean(storyParent.parent) || storyParent.fk_parent;
+      const hasOriginalStoryReference = Boolean(storyParent.parent) || storyParent.fk_parent;
 
       return !hasOriginalStoryReference;
     },

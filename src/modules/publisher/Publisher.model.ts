@@ -11,7 +11,7 @@ export class Publisher extends Model {
 
   public static associate(models: DbModels) {
     Publisher.hasMany(models.Series, {
-      as: 'Series',
+      as: 'series',
       foreignKey: 'fk_publisher',
       onDelete: 'cascade',
     });

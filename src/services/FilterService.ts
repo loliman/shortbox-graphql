@@ -43,12 +43,12 @@ type ExportIssueRecord = {
   releasedate: string;
   price: number;
   currency: string;
-  Series: {
+  series: {
     title: string;
     volume: number;
     startyear: number;
     endyear: number;
-    Publisher: {
+    publisher: {
       name: string;
     };
   };
@@ -86,8 +86,8 @@ export class FilterService {
     const response: ExportResponse = {};
     await asyncForEach(issues, async (issue) => {
       const issueRecord = issue as unknown as ExportIssueRecord;
-      const p = issueRecord.Series.Publisher;
-      const s = issueRecord.Series;
+      const p = issueRecord.series.publisher;
+      const s = issueRecord.series;
 
       const publisher: ExportPublisher = { name: p.name };
       const series: ExportSeries = {
@@ -163,10 +163,12 @@ export class FilterService {
     const include: Includeable[] = [
       {
         model: this.models.Series,
+        as: 'series',
         required: true,
         include: [
           {
             model: this.models.Publisher,
+            as: 'publisher',
             required: true,
             where: { original: us },
           },
@@ -219,8 +221,8 @@ export class FilterService {
     if (filter.appearances) {
       storyConditions.push({
         [Op.or]: [
-          { '$Stories.Appearances.name$': { [Op.iLike]: `%${filter.appearances}%` } },
-          { '$Stories.Children.Appearances.name$': { [Op.iLike]: `%${filter.appearances}%` } },
+          { '$stories.appearances.name$': { [Op.iLike]: `%${filter.appearances}%` } },
+          { '$stories.children.appearances.name$': { [Op.iLike]: `%${filter.appearances}%` } },
         ],
       });
     }
@@ -231,48 +233,48 @@ export class FilterService {
         .filter((name): name is string => typeof name === 'string');
       storyConditions.push({
         [Op.or]: [
-          { '$Stories.Individuals.name$': { [Op.in]: names } },
-          { '$Stories.Children.Individuals.name$': { [Op.in]: names } },
+          { '$stories.individuals.name$': { [Op.in]: names } },
+          { '$stories.children.individuals.name$': { [Op.in]: names } },
         ],
       });
     }
 
-    if (filter.firstPrint) storyConditions.push({ '$Stories.firstapp$': true });
+    if (filter.firstPrint) storyConditions.push({ '$stories.firstapp$': true });
     if (filter.exclusive)
-      storyConditions.push({ '$Stories.firstapp$': true, '$Stories.onlyapp$': true });
-    if (filter.onlyPrint) storyConditions.push({ '$Stories.onlyapp$': true });
-    if (filter.onlyTb) storyConditions.push({ '$Stories.onlytb$': true });
-    if (filter.reprint) storyConditions.push({ '$Stories.fk_reprint$': { [Op.ne]: null } });
-    if (filter.otherOnlyTb) storyConditions.push({ '$Stories.otheronlytb$': true });
+      storyConditions.push({ '$stories.firstapp$': true, '$stories.onlyapp$': true });
+    if (filter.onlyPrint) storyConditions.push({ '$stories.onlyapp$': true });
+    if (filter.onlyTb) storyConditions.push({ '$stories.onlytb$': true });
+    if (filter.reprint) storyConditions.push({ '$stories.fk_reprint$': { [Op.ne]: null } });
+    if (filter.otherOnlyTb) storyConditions.push({ '$stories.otheronlytb$': true });
     if (filter.noPrint)
-      storyConditions.push({ '$Stories.firstapp$': false, '$Stories.onlyapp$': false });
-    if (filter.onlyOnePrint) storyConditions.push({ '$Stories.onlyoneprint$': true });
+      storyConditions.push({ '$stories.firstapp$': false, '$stories.onlyapp$': false });
+    if (filter.onlyOnePrint) storyConditions.push({ '$stories.onlyoneprint$': true });
 
     if (storyConditions.length > 0) {
       const storyInclude = {
         model: this.models.Story,
-        as: 'Stories',
+        as: 'stories',
         required: true,
         include: [] as Includeable[],
       };
       if (filter.appearances || filter.individuals) {
         storyInclude.include.push({
           model: this.models.Appearance,
-          as: 'Appearances',
+          as: 'appearances',
           required: false,
         });
         storyInclude.include.push({
           model: this.models.Individual,
-          as: 'Individuals',
+          as: 'individuals',
           required: false,
         });
         storyInclude.include.push({
           model: this.models.Story,
-          as: 'Children',
+          as: 'children',
           required: false,
           include: [
-            { model: this.models.Appearance, as: 'Appearances', required: false },
-            { model: this.models.Individual, as: 'Individuals', required: false },
+            { model: this.models.Appearance, as: 'appearances', required: false },
+            { model: this.models.Individual, as: 'individuals', required: false },
           ],
         });
       }
@@ -295,7 +297,7 @@ export class FilterService {
     if (filter.arcs) {
       include.push({
         model: this.models.Arc,
-        as: 'Arcs',
+        as: 'arcs',
         required: true,
         where: { title: { [Op.iLike]: `%${filter.arcs}%` } },
       });
@@ -305,7 +307,7 @@ export class FilterService {
       const names = filter.publishers
         .map((p) => p?.name)
         .filter((name): name is string => typeof name === 'string');
-      const condition = { '$Series.Publisher.name$': { [Op.in]: names } };
+      const condition = { '$series.publisher.name$': { [Op.in]: names } };
       const whereWithSymbols = where as Record<symbol, unknown>;
       if (filter.and) {
         const current = Array.isArray(whereWithSymbols[Op.and])
@@ -324,8 +326,8 @@ export class FilterService {
       const conditions = filter.series
         .filter((s) => !!s)
         .map((s) => ({
-          '$Series.title$': s?.title,
-          '$Series.volume$': s?.volume,
+          '$series.title$': s?.title,
+          '$series.volume$': s?.volume,
         }));
       const whereWithSymbols = where as Record<symbol, unknown>;
       if (filter.and) {
@@ -377,10 +379,10 @@ export class FilterService {
     if (filter.noCover) {
       include.push({
         model: this.models.Cover,
-        as: 'Covers',
+        as: 'covers',
         required: false,
       });
-      const condition = { '$Covers.id$': null };
+      const condition = { '$covers.id$': null };
       const whereWithSymbols = where as Record<symbol, unknown>;
       if (filter.and) {
         const current = Array.isArray(whereWithSymbols[Op.and])
@@ -396,10 +398,10 @@ export class FilterService {
     }
 
     if (filter.noContent) {
-      if (!include.find((inc) => (inc as { as?: string }).as === 'Stories')) {
-        include.push({ model: this.models.Story, as: 'Stories', required: false });
+      if (!include.find((inc) => (inc as { as?: string }).as === 'stories')) {
+        include.push({ model: this.models.Story, as: 'stories', required: false });
       }
-      const condition = { '$Stories.id$': null };
+      const condition = { '$stories.id$': null };
       const whereWithSymbols = where as Record<symbol, unknown>;
       if (filter.and) {
         const current = Array.isArray(whereWithSymbols[Op.and])
@@ -420,13 +422,13 @@ export class FilterService {
     } else if (isExport) {
       order = [
         [
-          { model: this.models.Series, as: 'Series' },
-          { model: this.models.Publisher, as: 'Publisher' },
+          { model: this.models.Series, as: 'series' },
+          { model: this.models.Publisher, as: 'publisher' },
           'name',
           'ASC',
         ],
-        [{ model: this.models.Series, as: 'Series' }, 'title', 'ASC'],
-        [{ model: this.models.Series, as: 'Series' }, 'volume', 'ASC'],
+        [{ model: this.models.Series, as: 'series' }, 'title', 'ASC'],
+        [{ model: this.models.Series, as: 'series' }, 'volume', 'ASC'],
         ['number', 'ASC'],
       ];
     }

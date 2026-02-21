@@ -5,14 +5,11 @@ import { buildConnectionFromNodes, decodeCursorId } from '../../core/cursor';
 type IndividualParent = {
   id: number;
   name: string;
-  Stories?: Array<{ id: number }>;
-  Covers?: Array<{ id: number }>;
-  Issues?: Array<{ id: number }>;
-  Story_Individual?: { type?: unknown } | null;
+  stories?: Array<{ id: number }>;
+  covers?: Array<{ id: number }>;
+  issues?: Array<{ id: number }>;
   story_individual?: { type?: unknown } | null;
-  Cover_Individual?: { type?: unknown } | null;
   cover_individual?: { type?: unknown } | null;
-  Issue_Individual?: { type?: unknown } | null;
   issue_individual?: { type?: unknown } | null;
 };
 
@@ -81,11 +78,8 @@ export const resolvers: IndividualResolvers = {
     type: async (parent, _, { models }) => {
       const individualParent = parent as IndividualParent;
       const directTypes = [
-        ...toTypeArray(individualParent.Story_Individual?.type),
         ...toTypeArray(individualParent.story_individual?.type),
-        ...toTypeArray(individualParent.Cover_Individual?.type),
         ...toTypeArray(individualParent.cover_individual?.type),
-        ...toTypeArray(individualParent.Issue_Individual?.type),
         ...toTypeArray(individualParent.issue_individual?.type),
       ];
       if (directTypes.length > 0) {
@@ -95,14 +89,16 @@ export const resolvers: IndividualResolvers = {
       const where: Record<string, number> = {};
       let table: 'Story_Individual' | 'Cover_Individual' | 'Issue_Individual' | '' = '';
 
-      if (individualParent.Stories && individualParent.Stories.length > 0) {
-        where.fk_story = individualParent.Stories[0].id;
+      const { stories, covers, issues } = individualParent;
+
+      if (stories && stories.length > 0) {
+        where.fk_story = stories[0].id;
         table = 'Story_Individual';
-      } else if (individualParent.Covers && individualParent.Covers.length > 0) {
-        where.fk_cover = individualParent.Covers[0].id;
+      } else if (covers && covers.length > 0) {
+        where.fk_cover = covers[0].id;
         table = 'Cover_Individual';
-      } else if (individualParent.Issues && individualParent.Issues.length > 0) {
-        where.fk_issue = individualParent.Issues[0].id;
+      } else if (issues && issues.length > 0) {
+        where.fk_issue = issues[0].id;
         table = 'Issue_Individual';
       } else {
         return [];

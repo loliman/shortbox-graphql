@@ -124,7 +124,7 @@ describe('FilterService', () => {
     } as any);
 
     const include = options.include as any[];
-    const storyInclude = include.find((item) => item.as === 'Stories');
+    const storyInclude = include.find((item) => item.as === 'stories');
     expect(storyInclude).toBeTruthy();
     expect(storyInclude.required).toBe(true);
     expect(storyInclude.include).toHaveLength(3);
@@ -148,18 +148,19 @@ describe('FilterService', () => {
     expect(Array.isArray(where[Op.and])).toBe(true);
     expect(
       where[Op.and].some(
-        (entry: any) => entry['$Stories.firstapp$'] === true && entry['$Stories.onlyapp$'] === true,
+        (entry: any) => entry['$stories.firstapp$'] === true && entry['$stories.onlyapp$'] === true,
       ),
     ).toBe(true);
     expect(
       where[Op.and].some(
-        (entry: any) => entry['$Stories.firstapp$'] === false && entry['$Stories.onlyapp$'] === false,
+        (entry: any) =>
+          entry['$stories.firstapp$'] === false && entry['$stories.onlyapp$'] === false,
       ),
     ).toBe(true);
-    expect(where[Op.and].some((entry: any) => entry['$Covers.id$'] === null)).toBe(true);
+    expect(where[Op.and].some((entry: any) => entry['$covers.id$'] === null)).toBe(true);
   });
 
-  it('builds AND mode conditions and avoids duplicate Stories include with noContent', () => {
+  it('builds AND mode conditions and avoids duplicate stories include with noContent', () => {
     const { service } = createService();
     const options = service.getFilterOptions(false, {
       us: true,
@@ -169,14 +170,14 @@ describe('FilterService', () => {
     } as any);
 
     const include = options.include as any[];
-    expect(include.filter((item) => item.as === 'Stories')).toHaveLength(1);
+    expect(include.filter((item) => item.as === 'stories')).toHaveLength(1);
 
     const where = options.where as any;
     expect(Array.isArray(where[Op.and])).toBe(true);
     expect(where[Op.and]).toHaveLength(2);
   });
 
-  it('adds Stories include when noContent is set without story filters', () => {
+  it('adds stories include when noContent is set without story filters', () => {
     const { service } = createService();
     const options = service.getFilterOptions(false, {
       us: true,
@@ -184,11 +185,11 @@ describe('FilterService', () => {
     } as any);
 
     const include = options.include as any[];
-    expect(include.filter((item) => item.as === 'Stories')).toHaveLength(1);
+    expect(include.filter((item) => item.as === 'stories')).toHaveLength(1);
 
     const where = options.where as any;
     expect(Array.isArray(where[Op.or])).toBe(true);
-    expect(where[Op.or].some((entry: any) => entry['$Stories.id$'] === null)).toBe(true);
+    expect(where[Op.or].some((entry: any) => entry['$stories.id$'] === null)).toBe(true);
   });
 
   it('adds publisher, series and number filters with compare handling', () => {
@@ -203,11 +204,11 @@ describe('FilterService', () => {
     const where = options.where as any;
     expect(Array.isArray(where[Op.or])).toBe(true);
 
-    const publisherCondition = where[Op.or].find((entry: any) => entry['$Series.Publisher.name$']);
-    expect(publisherCondition['$Series.Publisher.name$'][Op.in]).toEqual(['Marvel', 'DC']);
+    const publisherCondition = where[Op.or].find((entry: any) => entry['$series.publisher.name$']);
+    expect(publisherCondition['$series.publisher.name$'][Op.in]).toEqual(['Marvel', 'DC']);
 
-    const seriesCondition = where[Op.or].find((entry: any) => entry['$Series.title$'] === 'X-Men');
-    expect(seriesCondition['$Series.volume$']).toBe(1);
+    const seriesCondition = where[Op.or].find((entry: any) => entry['$series.title$'] === 'X-Men');
+    expect(seriesCondition['$series.volume$']).toBe(1);
 
     const numberCondition = where[Op.or].find((entry: any) => entry.number);
     expect(numberCondition.number[Op.gte]).toBe('1');
@@ -216,27 +217,42 @@ describe('FilterService', () => {
 
   it('adds arc/noCover filters and export or custom sorting', () => {
     const { service } = createService();
-    const exportOptions = service.getFilterOptions(false, { us: false, arcs: 'Clone Saga', noCover: true } as any, true);
+    const exportOptions = service.getFilterOptions(
+      false,
+      { us: false, arcs: 'Clone Saga', noCover: true } as any,
+      true,
+    );
 
     const include = exportOptions.include as any[];
-    expect(include.some((item) => item.as === 'Arcs' && item.required)).toBe(true);
-    expect(include.some((item) => item.as === 'Covers' && item.required === false)).toBe(true);
+    expect(include.some((item) => item.as === 'arcs' && item.required)).toBe(true);
+    expect(include.some((item) => item.as === 'covers' && item.required === false)).toBe(true);
     const seriesModel = (include.find((item) => item.model?.modelName === 'Series') || {}).model;
     const publisherModel = (include[0]?.include || []).find(
       (item: any) => item.model?.modelName === 'Publisher',
     )?.model;
     expect(exportOptions.order).toEqual([
-      [{ model: seriesModel, as: 'Series' }, { model: publisherModel, as: 'Publisher' }, 'name', 'ASC'],
-      [{ model: seriesModel, as: 'Series' }, 'title', 'ASC'],
-      [{ model: seriesModel, as: 'Series' }, 'volume', 'ASC'],
+      [
+        { model: seriesModel, as: 'series' },
+        { model: publisherModel, as: 'publisher' },
+        'name',
+        'ASC',
+      ],
+      [{ model: seriesModel, as: 'series' }, 'title', 'ASC'],
+      [{ model: seriesModel, as: 'series' }, 'volume', 'ASC'],
       ['number', 'ASC'],
     ]);
 
     const where = exportOptions.where as any;
-    const noCoverCondition = where[Op.or].find((entry: any) => entry['$Covers.id$'] === null);
+    const noCoverCondition = where[Op.or].find((entry: any) => entry['$covers.id$'] === null);
     expect(noCoverCondition).toBeTruthy();
 
-    const customOrderOptions = service.getFilterOptions(false, { us: true } as any, false, 'updatedat', 'DESC');
+    const customOrderOptions = service.getFilterOptions(
+      false,
+      { us: true } as any,
+      false,
+      'updatedat',
+      'DESC',
+    );
     expect(customOrderOptions.order).toEqual([['updatedat', 'DESC']]);
   });
 
@@ -251,12 +267,12 @@ describe('FilterService', () => {
         releasedate: '2020-01-10',
         price: 4.5,
         currency: 'EUR',
-        Series: {
+        series: {
           title: 'Alpha',
           volume: 1,
           startyear: 2020,
           endyear: 2020,
-          Publisher: { name: 'Marvel' },
+          publisher: { name: 'Marvel' },
         },
       },
       {
@@ -267,12 +283,12 @@ describe('FilterService', () => {
         releasedate: '2020-01-02',
         price: 4.5,
         currency: 'EUR',
-        Series: {
+        series: {
           title: 'Alpha',
           volume: 1,
           startyear: 2020,
           endyear: 2020,
-          Publisher: { name: 'Marvel' },
+          publisher: { name: 'Marvel' },
         },
       },
       {
@@ -283,12 +299,12 @@ describe('FilterService', () => {
         releasedate: '2020-01-05',
         price: 5.0,
         currency: 'EUR',
-        Series: {
+        series: {
           title: 'Omega',
           volume: 1,
           startyear: 2020,
           endyear: 2020,
-          Publisher: { name: 'Marvel' },
+          publisher: { name: 'Marvel' },
         },
       },
       {
@@ -299,12 +315,12 @@ describe('FilterService', () => {
         releasedate: '2019-12-01',
         price: 19.99,
         currency: 'USD',
-        Series: {
+        series: {
           title: 'Beta',
           volume: 2,
           startyear: 2019,
           endyear: 2021,
-          Publisher: { name: 'DC' },
+          publisher: { name: 'DC' },
         },
       },
     ]);
@@ -331,12 +347,12 @@ describe('FilterService', () => {
         releasedate: '2024-05-03',
         price: 3.99,
         currency: 'EUR',
-        Series: {
+        series: {
           title: 'Gamma',
           volume: 1,
           startyear: 2024,
           endyear: 0,
-          Publisher: { name: 'Panini' },
+          publisher: { name: 'Panini' },
         },
       },
     ]);

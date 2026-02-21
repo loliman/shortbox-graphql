@@ -7,7 +7,11 @@ export class Arc extends Model {
   public type!: string;
 
   public static associate(models: DbModels) {
-    Arc.belongsToMany(models.Issue, { through: models.Issue_Arc, foreignKey: 'fk_arc' });
+    Arc.belongsToMany(models.Issue, {
+      as: 'issues',
+      through: models.Issue_Arc,
+      foreignKey: 'fk_arc',
+    });
   }
 }
 

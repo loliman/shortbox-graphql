@@ -21,7 +21,12 @@ jest.mock('../src/types/schemas', () => ({
   IssueInputSchema: { parse: jest.fn((value) => value) },
 }));
 
-import { LoginInputSchema, PublisherInputSchema, SeriesInputSchema, IssueInputSchema } from '../src/types/schemas';
+import {
+  LoginInputSchema,
+  PublisherInputSchema,
+  SeriesInputSchema,
+  IssueInputSchema,
+} from '../src/types/schemas';
 import { resolvers as userResolvers } from '../src/modules/user/User.resolver';
 import { resolvers as publisherResolvers } from '../src/modules/publisher/Publisher.resolver';
 import { resolvers as seriesResolvers } from '../src/modules/series/Series.resolver';
@@ -69,7 +74,11 @@ describe('User resolver additional coverage', () => {
     } as any;
 
     await expect(
-      userResolvers.Query.me({}, {}, { loggedIn: false, authenticatedUserId: undefined, models } as any),
+      userResolvers.Query.me({}, {}, {
+        loggedIn: false,
+        authenticatedUserId: undefined,
+        models,
+      } as any),
     ).resolves.toBeNull();
     await expect(
       userResolvers.Query.me({}, {}, { loggedIn: true, authenticatedUserId: 5, models } as any),
@@ -166,23 +175,29 @@ describe('User resolver additional coverage', () => {
     expect(request.session.userId).toBe(9);
     expect(mockIssueCsrfToken).toHaveBeenCalled();
 
-    await expect(
-      userResolvers.Mutation.logout({}, {}, { loggedIn: false } as any),
-    ).rejects.toThrow('Du bist nicht eingeloggt');
+    await expect(userResolvers.Mutation.logout({}, {}, { loggedIn: false } as any)).rejects.toThrow(
+      'Du bist nicht eingeloggt',
+    );
 
     await expect(
-      userResolvers.Mutation.logout(
-        {},
-        {},
-        { loggedIn: true, authenticatedUserId: undefined, models, userService, request, response } as any,
-      ),
+      userResolvers.Mutation.logout({}, {}, {
+        loggedIn: true,
+        authenticatedUserId: undefined,
+        models,
+        userService,
+        request,
+        response,
+      } as any),
     ).rejects.toThrow('Ungültige Session');
 
-    const logoutResult = await userResolvers.Mutation.logout(
-      {},
-      {},
-      { loggedIn: true, authenticatedUserId: 9, models, userService, request, response } as any,
-    );
+    const logoutResult = await userResolvers.Mutation.logout({}, {}, {
+      loggedIn: true,
+      authenticatedUserId: 9,
+      models,
+      userService,
+      request,
+      response,
+    } as any);
     expect(logoutResult).toBe(true);
     expect(response.clearCookie).toHaveBeenCalledTimes(2);
 
@@ -342,12 +357,18 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     ).rejects.toThrow('boom-edit');
 
     const parent = { id: 99, original: true, endyear: 0 };
-    const anonId = publisherResolvers.Publisher.id(parent as any, {} as any, { loggedIn: false } as any);
-    expect(typeof anonId).toBe('string');
-    expect(publisherResolvers.Publisher.id(parent as any, {} as any, { loggedIn: true } as any)).toBe(
-      '99',
+    const anonId = publisherResolvers.Publisher.id(
+      parent as any,
+      {} as any,
+      { loggedIn: false } as any,
     );
-    expect(publisherResolvers.Publisher.us(parent as any, {} as any, {} as any, {} as any)).toBe(true);
+    expect(typeof anonId).toBe('string');
+    expect(
+      publisherResolvers.Publisher.id(parent as any, {} as any, { loggedIn: true } as any),
+    ).toBe('99');
+    expect(publisherResolvers.Publisher.us(parent as any, {} as any, {} as any, {} as any)).toBe(
+      true,
+    );
     await expect(
       publisherResolvers.Publisher.seriesCount(parent as any, {} as any, { models } as any),
     ).resolves.toBe(3);
@@ -355,11 +376,15 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       publisherResolvers.Publisher.issueCount(parent as any, {} as any, { models } as any),
     ).resolves.toBe(2);
     await expect(
-      publisherResolvers.Publisher.lastEdited(parent as any, { limit: 5 } as any, { models } as any),
+      publisherResolvers.Publisher.lastEdited(
+        parent as any,
+        { limit: 5 } as any,
+        { models } as any,
+      ),
     ).resolves.toEqual([{}, {}]);
-    expect(publisherResolvers.Publisher.active(parent as any, {} as any, {} as any, {} as any)).toBe(
-      true,
-    );
+    expect(
+      publisherResolvers.Publisher.active(parent as any, {} as any, {} as any, {} as any),
+    ).toBe(true);
   });
 
   it('covers series resolver query/mutation/fields', async () => {
@@ -513,7 +538,7 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     ).resolves.toEqual({ id: 7 });
     await expect(
       seriesResolvers.Series.publisher(
-        { ...parent, Publisher: { id: 99 } } as any,
+        { ...parent, publisher: { id: 99 } } as any,
         {} as any,
         { publisherLoader } as any,
       ),
@@ -565,7 +590,13 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     );
     await issueResolvers.Query.issueDetails(
       {},
-      { issue: { number: '1', variant: '', series: { title: 'SM', volume: 1, publisher: { name: 'Marvel' } } } } as any,
+      {
+        issue: {
+          number: '1',
+          variant: '',
+          series: { title: 'SM', volume: 1, publisher: { name: 'Marvel' } },
+        },
+      } as any,
       { models } as any,
     );
     expect(IssueInputSchema.parse).toHaveBeenCalled();
@@ -700,19 +731,29 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       issueResolvers.Issue.series(parent, {} as any, { seriesLoader } as any),
     ).resolves.toEqual({ id: 8 });
     await expect(
-      issueResolvers.Issue.series({ ...parent, Series: { id: 99 } } as any, {} as any, { seriesLoader } as any),
+      issueResolvers.Issue.series(
+        { ...parent, series: { id: 99 } } as any,
+        {} as any,
+        { seriesLoader } as any,
+      ),
     ).resolves.toEqual({ id: 99 });
     await expect(
-      issueResolvers.Issue.series({ ...parent, series: { id: 77 } } as any, {} as any, { seriesLoader } as any),
+      issueResolvers.Issue.series(
+        { ...parent, series: { id: 77 } } as any,
+        {} as any,
+        { seriesLoader } as any,
+      ),
     ).resolves.toEqual({ id: 77 });
-    await expect(
-      issueResolvers.Issue.series(parent, {} as any, {} as any),
-    ).resolves.toBeNull();
+    await expect(issueResolvers.Issue.series(parent, {} as any, {} as any)).resolves.toBeNull();
     await expect(
       issueResolvers.Issue.stories(parent, {} as any, { issueStoriesLoader } as any),
     ).resolves.toEqual([{ id: 81 }]);
     await expect(
-      issueResolvers.Issue.stories({ ...parent, stories: [{ id: 811 }] } as any, {} as any, {} as any),
+      issueResolvers.Issue.stories(
+        { ...parent, stories: [{ id: 811 }] } as any,
+        {} as any,
+        {} as any,
+      ),
     ).resolves.toEqual([{ id: 811 }]);
     await expect(
       issueResolvers.Issue.stories(
@@ -731,23 +772,23 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
         } as any,
       ),
     ).resolves.toEqual([{ id: 812 }]);
-    await expect(
-      issueResolvers.Issue.stories(parent, {} as any, {} as any),
-    ).resolves.toEqual([]);
+    await expect(issueResolvers.Issue.stories(parent, {} as any, {} as any)).resolves.toEqual([]);
     await expect(
       issueResolvers.Issue.cover(parent, {} as any, { issueCoverLoader } as any),
     ).resolves.toEqual({ id: 82 });
     await expect(
       issueResolvers.Issue.cover({ ...parent, cover: { id: 821 } } as any, {} as any, {} as any),
     ).resolves.toEqual({ id: 821 });
-    await expect(
-      issueResolvers.Issue.cover(parent, {} as any, {} as any),
-    ).resolves.toBeNull();
+    await expect(issueResolvers.Issue.cover(parent, {} as any, {} as any)).resolves.toBeNull();
     await expect(
       issueResolvers.Issue.individuals({} as any, {} as any, {} as any),
     ).resolves.toEqual([]);
     await expect(
-      issueResolvers.Issue.individuals({ getIndividuals: async () => ['x'] } as any, {} as any, {} as any),
+      issueResolvers.Issue.individuals(
+        { getIndividuals: async () => ['x'] } as any,
+        {} as any,
+        {} as any,
+      ),
     ).resolves.toEqual(['x']);
     await expect(issueResolvers.Issue.arcs({} as any, {} as any, {} as any)).resolves.toEqual([]);
     await expect(
@@ -757,7 +798,11 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       issueResolvers.Issue.variants(parent, {} as any, { issueVariantsLoader } as any),
     ).resolves.toEqual([{ id: 85 }]);
     await expect(
-      issueResolvers.Issue.variants({ ...parent, variants: [{ id: 851 }] } as any, {} as any, {} as any),
+      issueResolvers.Issue.variants(
+        { ...parent, variants: [{ id: 851 }] } as any,
+        {} as any,
+        {} as any,
+      ),
     ).resolves.toEqual([{ id: 851 }]);
     await expect(
       issueResolvers.Issue.variants(
@@ -766,9 +811,7 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
         { issueVariantsLoader: { load: jest.fn().mockResolvedValue([{ id: 852 }]) } } as any,
       ),
     ).resolves.toEqual([{ id: 852 }]);
-    await expect(
-      issueResolvers.Issue.variants(parent, {} as any, {} as any),
-    ).resolves.toEqual([]);
+    await expect(issueResolvers.Issue.variants(parent, {} as any, {} as any)).resolves.toEqual([]);
 
     const createdatLegacy = issueResolvers.Issue.createdat(
       { createdat: '10.02.2026 11:14' } as any,
@@ -817,7 +860,10 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
   it('falls back to first variant in issueDetails when parent variant is missing', async () => {
     const models = {
       Issue: {
-        findOne: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 2, variant: 'A' }),
+        findOne: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ id: 2, variant: 'A' }),
       },
       Series: {},
       Publisher: {},
@@ -955,10 +1001,14 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     };
 
     await expect(
-      issueResolvers.Issue.stories(parent, {} as any, {
-        issueStoriesLoader,
-        issueVariantsLoader,
-      } as any),
+      issueResolvers.Issue.stories(
+        parent,
+        {} as any,
+        {
+          issueStoriesLoader,
+          issueVariantsLoader,
+        } as any,
+      ),
     ).resolves.toEqual([{ id: 910 }]);
     expect(issueVariantsLoader.load).toHaveBeenCalledWith(4);
     expect(issueStoriesLoader.load).toHaveBeenNthCalledWith(1, 4);
@@ -980,11 +1030,15 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       },
     } as any;
     await expect(
-      issueResolvers.Issue.stories(parent, {} as any, {
-        issueStoriesLoader: issueStoriesLoaderWithModelFallback,
-        issueVariantsLoader: { load: jest.fn().mockResolvedValue([]) },
-        models,
-      } as any),
+      issueResolvers.Issue.stories(
+        parent,
+        {} as any,
+        {
+          issueStoriesLoader: issueStoriesLoaderWithModelFallback,
+          issueVariantsLoader: { load: jest.fn().mockResolvedValue([]) },
+          models,
+        } as any,
+      ),
     ).resolves.toEqual([{ id: 920 }]);
     expect(models.Issue.findAll).toHaveBeenCalled();
 
@@ -1107,33 +1161,50 @@ describe('Smaller resolvers additional coverage', () => {
     expect(arcResolvers.Arc.title({ title: ' Arc ' } as any, {} as any, {} as any, {} as any)).toBe(
       'Arc',
     );
-    await expect(arcResolvers.Arc.issues({ id: 1 } as any, {} as any, { models } as any)).resolves.toEqual([
-      { id: 2 },
-    ]);
+    await expect(
+      arcResolvers.Arc.issues({ id: 1 } as any, {} as any, { models } as any),
+    ).resolves.toEqual([{ id: 2 }]);
 
     await individualResolvers.Query.individuals(
       {},
       { pattern: 'spider man', first: 10, after: cursor } as any,
       { models } as any,
     );
-    expect(individualResolvers.Individual.id({ id: 1 } as any, {} as any, { loggedIn: false } as any)).toMatch(
-      /^\d+$/,
-    );
-    expect(individualResolvers.Individual.name({ name: 'Peter' } as any, {} as any, {} as any, {} as any)).toBe(
-      'Peter',
-    );
+    expect(
+      individualResolvers.Individual.id({ id: 1 } as any, {} as any, { loggedIn: false } as any),
+    ).toMatch(/^\d+$/);
+    expect(
+      individualResolvers.Individual.name(
+        { name: 'Peter' } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
+    ).toBe('Peter');
     await expect(
-      individualResolvers.Individual.type({ id: 7, Stories: [{ id: 10 }] } as any, {} as any, { models } as any),
+      individualResolvers.Individual.type(
+        { id: 7, stories: [{ id: 10 }] } as any,
+        {} as any,
+        { models } as any,
+      ),
     ).resolves.toEqual(['WRITER']);
     await expect(
-      individualResolvers.Individual.type({ id: 7, Covers: [{ id: 10 }] } as any, {} as any, { models } as any),
+      individualResolvers.Individual.type(
+        { id: 7, covers: [{ id: 10 }] } as any,
+        {} as any,
+        { models } as any,
+      ),
     ).resolves.toEqual(['ARTIST']);
     await expect(
-      individualResolvers.Individual.type({ id: 7, Issues: [{ id: 10 }] } as any, {} as any, { models } as any),
+      individualResolvers.Individual.type(
+        { id: 7, issues: [{ id: 10 }] } as any,
+        {} as any,
+        { models } as any,
+      ),
     ).resolves.toEqual(['EDITOR']);
-    await expect(individualResolvers.Individual.type({ id: 7 } as any, {} as any, { models } as any)).resolves.toEqual(
-      [],
-    );
+    await expect(
+      individualResolvers.Individual.type({ id: 7 } as any, {} as any, { models } as any),
+    ).resolves.toEqual([]);
 
     await appearanceResolvers.Query.apps(
       {},
@@ -1144,19 +1215,33 @@ describe('Smaller resolvers additional coverage', () => {
       appearanceResolvers.Appearance.id({ id: 12 } as any, {} as any, { loggedIn: false } as any),
     ).toMatch(/^\d+$/);
     expect(
-      appearanceResolvers.Appearance.name({ name: ' Spidey ' } as any, {} as any, {} as any, {} as any),
+      appearanceResolvers.Appearance.name(
+        { name: ' Spidey ' } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
     ).toBe('Spidey');
-    expect(appearanceResolvers.Appearance.type({ type: '' } as any, {} as any, {} as any, {} as any)).toBe(
-      'CHARACTER',
-    );
     expect(
-      appearanceResolvers.Appearance.type({ type: 'GROUP' } as any, {} as any, {} as any, {} as any),
+      appearanceResolvers.Appearance.type({ type: '' } as any, {} as any, {} as any, {} as any),
+    ).toBe('CHARACTER');
+    expect(
+      appearanceResolvers.Appearance.type(
+        { type: 'GROUP' } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
     ).toBe('GROUP');
     await expect(
       appearanceResolvers.Appearance.role({ id: 4 } as any, {} as any, { models } as any),
     ).resolves.toBe('');
     await expect(
-      appearanceResolvers.Appearance.role({ id: 4, Stories: [{ id: 99 }] } as any, {} as any, { models } as any),
+      appearanceResolvers.Appearance.role(
+        { id: 4, stories: [{ id: 99 }] } as any,
+        {} as any,
+        { models } as any,
+      ),
     ).resolves.toBe('FEATURED');
   });
 
@@ -1170,11 +1255,13 @@ describe('Smaller resolvers additional coverage', () => {
     const storyLoader = { load: jest.fn().mockResolvedValue({ id: 3 }) };
     const storyChildrenLoader = { load: jest.fn().mockResolvedValue([{ id: 4 }]) };
     const storyReprintsLoader = { load: jest.fn().mockResolvedValue([{ id: 5 }]) };
-    const issueLoader = { load: jest.fn().mockResolvedValue({ id: 6, Series: { Publisher: { original: true } } }) };
+    const issueLoader = {
+      load: jest.fn().mockResolvedValue({ id: 6, series: { publisher: { original: true } } }),
+    };
 
-    expect(storyResolvers.Story.id({ id: 8 } as any, {} as any, { loggedIn: false } as any)).toMatch(
-      /^\d+$/,
-    );
+    expect(
+      storyResolvers.Story.id({ id: 8 } as any, {} as any, { loggedIn: false } as any),
+    ).toMatch(/^\d+$/);
     await expect(
       storyResolvers.Story.parent({ fk_parent: 2 } as any, {} as any, { storyLoader } as any),
     ).resolves.toEqual({ id: 3 });
@@ -1200,7 +1287,11 @@ describe('Smaller resolvers additional coverage', () => {
       storyResolvers.Story.reprintOf({ fk_reprint: 2 } as any, {} as any, { storyLoader } as any),
     ).resolves.toEqual({ id: 3 });
     await expect(
-      storyResolvers.Story.reprintOf({ reprintOf: { id: 32 } } as any, {} as any, { storyLoader } as any),
+      storyResolvers.Story.reprintOf(
+        { reprintOf: { id: 32 } } as any,
+        {} as any,
+        { storyLoader } as any,
+      ),
     ).resolves.toEqual({ id: 32 });
     await expect(
       storyResolvers.Story.reprintOf({ fk_reprint: 2 } as any, {} as any, {} as any),
@@ -1216,20 +1307,32 @@ describe('Smaller resolvers additional coverage', () => {
     ).resolves.toEqual([]);
     await expect(
       storyResolvers.Story.issue({ fk_issue: 9 } as any, {} as any, { issueLoader } as any),
-    ).resolves.toEqual({ id: 6, Series: { Publisher: { original: true } } });
+    ).resolves.toEqual({ id: 6, series: { publisher: { original: true } } });
     await expect(
       storyResolvers.Story.issue({ issue: { id: 61 } } as any, {} as any, {} as any),
     ).resolves.toEqual({ id: 61 });
     await expect(
       storyResolvers.Story.issue({ fk_issue: 9 } as any, {} as any, {} as any),
     ).resolves.toBeNull();
-    await expect(storyResolvers.Story.individuals({} as any, {} as any, {} as any)).resolves.toEqual([]);
     await expect(
-      storyResolvers.Story.individuals({ getIndividuals: async () => ['a'] } as any, {} as any, {} as any),
+      storyResolvers.Story.individuals({} as any, {} as any, {} as any),
+    ).resolves.toEqual([]);
+    await expect(
+      storyResolvers.Story.individuals(
+        { getIndividuals: async () => ['a'] } as any,
+        {} as any,
+        {} as any,
+      ),
     ).resolves.toEqual(['a']);
-    await expect(storyResolvers.Story.appearances({} as any, {} as any, {} as any)).resolves.toEqual([]);
     await expect(
-      storyResolvers.Story.appearances({ getAppearances: async () => ['x'] } as any, {} as any, {} as any),
+      storyResolvers.Story.appearances({} as any, {} as any, {} as any),
+    ).resolves.toEqual([]);
+    await expect(
+      storyResolvers.Story.appearances(
+        { getAppearances: async () => ['x'] } as any,
+        {} as any,
+        {} as any,
+      ),
     ).resolves.toEqual(['x']);
     expect(
       storyResolvers.Story.exclusive({ fk_parent: null } as any, {} as any, {} as any, {} as any),
@@ -1241,9 +1344,9 @@ describe('Smaller resolvers additional coverage', () => {
       storyResolvers.Story.exclusive({ parent: { id: 7 } } as any, {} as any, {} as any, {} as any),
     ).toBe(false);
 
-    expect(coverResolvers.Cover.id({ id: 1 } as any, {} as any, { loggedIn: false } as any)).toMatch(
-      /^\d+$/,
-    );
+    expect(
+      coverResolvers.Cover.id({ id: 1 } as any, {} as any, { loggedIn: false } as any),
+    ).toMatch(/^\d+$/);
     await expect(
       coverResolvers.Cover.parent({ fk_parent: 10 } as any, {} as any, { models } as any),
     ).resolves.toEqual({ id: 1 });
@@ -1255,23 +1358,33 @@ describe('Smaller resolvers additional coverage', () => {
     ).resolves.toEqual([{ id: 2 }]);
     await expect(
       coverResolvers.Cover.issue({ fk_issue: 1 } as any, {} as any, { issueLoader } as any),
-    ).resolves.toEqual({ id: 6, Series: { Publisher: { original: true } } });
+    ).resolves.toEqual({ id: 6, series: { publisher: { original: true } } });
     await expect(
       coverResolvers.Cover.issue({ issue: { id: 62 } } as any, {} as any, {} as any),
     ).resolves.toEqual({ id: 62 });
     await expect(
       coverResolvers.Cover.issue({ fk_issue: 1 } as any, {} as any, {} as any),
     ).resolves.toBeNull();
-    await expect(coverResolvers.Cover.individuals({} as any, {} as any, {} as any)).resolves.toEqual([]);
     await expect(
-      coverResolvers.Cover.individuals({ getIndividuals: async () => ['i'] } as any, {} as any, {} as any),
+      coverResolvers.Cover.individuals({} as any, {} as any, {} as any),
+    ).resolves.toEqual([]);
+    await expect(
+      coverResolvers.Cover.individuals(
+        { getIndividuals: async () => ['i'] } as any,
+        {} as any,
+        {} as any,
+      ),
     ).resolves.toEqual(['i']);
     await expect(
-      coverResolvers.Cover.onlyapp({ fk_issue: 1 } as any, {} as any, { models, issueLoader } as any),
+      coverResolvers.Cover.onlyapp(
+        { fk_issue: 1 } as any,
+        {} as any,
+        { models, issueLoader } as any,
+      ),
     ).resolves.toBe(true);
     await expect(
       coverResolvers.Cover.onlyapp(
-        { fk_issue: 1, Issue: { Series: { Publisher: { original: false } } } } as any,
+        { fk_issue: 1, issue: { series: { publisher: { original: false } } } } as any,
         {} as any,
         { models, issueLoader } as any,
       ),
@@ -1280,7 +1393,6 @@ describe('Smaller resolvers additional coverage', () => {
       coverResolvers.Cover.onlyapp({ fk_issue: 1 } as any, {} as any, { models } as any),
     ).resolves.toBe(false);
     expect(coverResolvers.Cover.exclusive({} as any, {} as any, {} as any, {} as any)).toBe(false);
-
   });
 
   it('covers additional cover resolver id/url branches', async () => {
@@ -1312,7 +1424,7 @@ describe('Smaller resolvers additional coverage', () => {
 
     await expect(
       coverResolvers.Cover.url(
-        { fk_issue: 1, Issue: { comicguideid: 4711 } } as any,
+        { fk_issue: 1, issue: { comicguideid: 4711 } } as any,
         {} as any,
         { issueLoader } as any,
       ),

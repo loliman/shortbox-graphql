@@ -108,6 +108,7 @@ export const resolvers: PublisherResolvers = {
         include: [
           {
             model: models.Series,
+            as: 'series',
             required: true,
             where: { fk_publisher: (parent as PublisherParent).id },
           },
@@ -118,6 +119,7 @@ export const resolvers: PublisherResolvers = {
         include: [
           {
             model: models.Series,
+            as: 'series',
             where: { fk_publisher: (parent as PublisherParent).id },
           },
         ],

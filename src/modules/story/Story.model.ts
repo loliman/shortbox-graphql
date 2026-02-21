@@ -19,14 +19,16 @@ export class Story extends Model {
   public fk_reprint!: number | null;
 
   public static associate(models: DbModels) {
-    Story.hasMany(models.Story, { as: 'Children', foreignKey: 'fk_parent' });
-    Story.hasMany(models.Story, { as: 'Reprints', foreignKey: 'fk_reprint' });
-    Story.belongsTo(models.Issue, { foreignKey: 'fk_issue' });
+    Story.hasMany(models.Story, { as: 'children', foreignKey: 'fk_parent' });
+    Story.hasMany(models.Story, { as: 'reprints', foreignKey: 'fk_reprint' });
+    Story.belongsTo(models.Issue, { as: 'issue', foreignKey: 'fk_issue' });
     Story.belongsToMany(models.Individual, {
+      as: 'individuals',
       through: models.Story_Individual,
       foreignKey: 'fk_story',
     });
     Story.belongsToMany(models.Appearance, {
+      as: 'appearances',
       through: models.Story_Appearance,
       foreignKey: 'fk_story',
     });

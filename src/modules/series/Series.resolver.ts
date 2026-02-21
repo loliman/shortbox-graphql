@@ -8,7 +8,6 @@ type SeriesParent = {
   fk_publisher: number;
   endyear?: number | null;
   publisher?: unknown;
-  Publisher?: unknown;
 };
 
 type LoaderLike<K, V> = {
@@ -37,9 +36,9 @@ export const resolvers: SeriesResolvers = {
         where: {
           title: series?.title || '',
           volume: series?.volume || 0,
-          '$Publisher.name$': series?.publisher?.name || '',
+          '$publisher.name$': series?.publisher?.name || '',
         },
-        include: [{ model: models.Publisher }],
+        include: [{ model: models.Publisher, as: 'publisher' }],
       });
     },
   },
@@ -107,7 +106,6 @@ export const resolvers: SeriesResolvers = {
   Series: {
     publisher: async (parent, _, { publisherLoader }) => {
       const seriesParent = parent as SeriesParent;
-      if (seriesParent.Publisher) return seriesParent.Publisher;
       if (seriesParent.publisher) return seriesParent.publisher;
       if (!hasLoad<number, unknown | null>(publisherLoader)) return null;
       return await publisherLoader.load(seriesParent.fk_publisher);

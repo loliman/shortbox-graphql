@@ -10,9 +10,10 @@ export class Cover extends Model {
   public fk_parent!: number | null;
 
   public static associate(models: DbModels) {
-    Cover.hasMany(models.Cover, { as: 'Children', foreignKey: 'fk_parent' });
-    Cover.belongsTo(models.Issue, { foreignKey: 'fk_issue' });
+    Cover.hasMany(models.Cover, { as: 'children', foreignKey: 'fk_parent' });
+    Cover.belongsTo(models.Issue, { as: 'issue', foreignKey: 'fk_issue' });
     Cover.belongsToMany(models.Individual, {
+      as: 'individuals',
       through: models.Cover_Individual,
       foreignKey: 'fk_cover',
     });

@@ -17,9 +17,9 @@ describe('Node API resolver additional coverage', () => {
   });
 
   it('returns empty array for blank pattern', async () => {
-    await expect(resolvers.Query.nodes({}, { pattern: '   ', us: true, offset: 0 } as any)).resolves.toEqual(
-      [],
-    );
+    await expect(
+      resolvers.Query.nodes({}, { pattern: '   ', us: true, offset: 0 } as any),
+    ).resolves.toEqual([]);
   });
 
   it('builds publisher/series/issue nodes, sorts and applies offset', async () => {
@@ -30,7 +30,7 @@ describe('Node API resolver additional coverage', () => {
         volume: 2,
         startyear: 2020,
         endyear: 2024,
-        Publisher: { name: 'Marvel Comics' },
+        publisher: { name: 'Marvel Comics' },
       },
     ]);
     mockModels.Issue.findAll.mockResolvedValue([
@@ -39,24 +39,22 @@ describe('Node API resolver additional coverage', () => {
         number: '1',
         format: 'Heft',
         variant: 'B',
-        Series: {
+        series: {
           title: 'Spider-Man',
           volume: 2,
           startyear: 2020,
           endyear: 2024,
-          Publisher: { name: 'Marvel Comics' },
+          publisher: { name: 'Marvel Comics' },
         },
       },
     ]);
 
-    const all = await resolvers.Query.nodes(
-      {},
-      { pattern: 'spider', us: true, offset: 0 } as any,
-    );
-    const sliced = await resolvers.Query.nodes(
-      {},
-      { pattern: 'spider', us: true, offset: 1 } as any,
-    );
+    const all = await resolvers.Query.nodes({}, { pattern: 'spider', us: true, offset: 0 } as any);
+    const sliced = await resolvers.Query.nodes({}, {
+      pattern: 'spider',
+      us: true,
+      offset: 1,
+    } as any);
 
     expect(all).toHaveLength(3);
     expect(all[0].url.startsWith('/us/')).toBe(true);
@@ -77,4 +75,3 @@ describe('Node API resolver additional coverage', () => {
     expect(resolvers.Node.url({} as any, {} as any, {} as any, {} as any)).toBeNull();
   });
 });
-

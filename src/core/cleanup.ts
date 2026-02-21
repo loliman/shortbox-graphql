@@ -21,13 +21,14 @@ export async function run() {
   try {
     const issues = await models.Issue.findAll({
       where: {
-        '$Series->Publisher.original$': true,
+        '$series->publisher.original$': true,
       },
       group: ['fk_series', 'number'],
       include: [
         {
           model: models.Series,
-          include: [models.Publisher],
+          as: 'series',
+          include: [{ model: models.Publisher, as: 'publisher' }],
         },
       ],
       transaction,
@@ -45,7 +46,8 @@ export async function run() {
         include: [
           {
             model: models.Series,
-            include: [models.Publisher],
+            as: 'series',
+            include: [{ model: models.Publisher, as: 'publisher' }],
           },
         ],
         transaction,
@@ -121,7 +123,8 @@ export async function run() {
         include: [
           {
             model: models.Series,
-            include: [models.Publisher],
+            as: 'series',
+            include: [{ model: models.Publisher, as: 'publisher' }],
           },
         ],
         transaction,
@@ -158,9 +161,9 @@ export async function run() {
     //Remove all US Series without issues
     const series = await models.Series.findAll({
       where: {
-        '$Publisher.original$': true,
+        '$publisher.original$': true,
       },
-      include: [models.Publisher],
+      include: [{ model: models.Publisher, as: 'publisher' }],
       transaction,
     });
 
