@@ -11,6 +11,7 @@
     "lint:fix": "eslint 'src/**/*.ts' --fix",
     "format": "prettier --write 'src/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts'",
+    "update:story-filters:all": "ts-node src/scripts/update-all-story-filter-flags.ts",
     "test": "npm run test:unit",
     "test:unit": "jest --config jest.config.js",
     "test:coverage": "jest --config jest.config.js --coverage",

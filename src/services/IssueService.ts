@@ -6,6 +6,7 @@ import { buildConnectionFromNodes, decodeCursorId } from '../core/cursor';
 import { naturalCompare } from '../util/util';
 import { fromRoman } from '../util/dbFunctions';
 import { MarvelCrawlerService } from './MarvelCrawlerService';
+import { updateStoryFilterFlagsForIssue } from '../util/FilterUpdater';
 
 const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
   'updatedat',
@@ -356,6 +357,7 @@ export class IssueService {
     );
 
     await this.syncStoriesFromParentRefs(createdIssue.id, item, transaction);
+    await updateStoryFilterFlagsForIssue(this.models, createdIssue.id, transaction);
     return createdIssue;
   }
 
@@ -416,7 +418,19 @@ export class IssueService {
     //edit issues
 
     const savedIssue = await res.save({ transaction });
-    await this.syncStoriesFromParentRefs(savedIssue.id, item, transaction);
+    const removedUsParentStoryIds = await this.syncStoriesFromParentRefs(
+      savedIssue.id,
+      item,
+      transaction,
+    );
+    await updateStoryFilterFlagsForIssue(this.models, savedIssue.id, transaction);
+    const removedUsIssueIds = await this.resolveIssueIdsFromStoryIds(
+      removedUsParentStoryIds,
+      transaction,
+    );
+    for (const removedUsIssueId of removedUsIssueIds) {
+      await updateStoryFilterFlagsForIssue(this.models, removedUsIssueId, transaction);
+    }
     return savedIssue;
   }
 
@@ -424,7 +438,7 @@ export class IssueService {
     issueId: number,
     item: IssueInput,
     transaction: Transaction,
-  ): Promise<void> {
+  ): Promise<number[]> {
     type StoryParentRef = {
       number?: number;
       issue?: {
@@ -454,6 +468,11 @@ export class IssueService {
       transaction,
     });
     const existingStories = Array.isArray(existingStoriesRaw) ? existingStoriesRaw : [];
+    const oldParentStoryIds = existingStories
+      .map((story) => Number(story.fk_parent || 0))
+      .filter((id) => id > 0);
+    const oldUsParentStoryIds = await this.filterUsParentStoryIds(oldParentStoryIds, transaction);
+    const newlyLinkedParentStoryIds = new Set<number>();
 
     const existingParentsByNumber = new Map<number, Array<number | null>>();
     for (const existingStory of existingStories) {
@@ -468,7 +487,7 @@ export class IssueService {
       transaction,
     });
 
-    if (inputStories.length === 0) return;
+    if (inputStories.length === 0) return Array.from(oldUsParentStoryIds);
 
     let nextStoryNumber = 1;
     const parentIssueCache = new Map<string, number>();
@@ -488,8 +507,11 @@ export class IssueService {
       const parentTitle = String(parentSeries?.title || '').trim();
       const parentVolume = Number(parentSeries?.volume || 0);
       const parentNumber = String(parentIssue?.number || '').trim();
-      const createStoryRow = async (parentStoryId: number | null) =>
-        this.models.Story.create(
+      const createStoryRow = async (parentStoryId: number | null) => {
+        if (typeof parentStoryId === 'number' && parentStoryId > 0) {
+          newlyLinkedParentStoryIds.add(parentStoryId);
+        }
+        return await this.models.Story.create(
           {
             fk_issue: issueId,
             fk_parent: parentStoryId,
@@ -500,6 +522,7 @@ export class IssueService {
           },
           { transaction },
         );
+      };
 
       let hasCreatedStory = false;
 
@@ -547,6 +570,77 @@ export class IssueService {
 
       if (!hasCreatedStory) await createStoryRow(fallbackParentId);
     }
+
+    return Array.from(oldUsParentStoryIds).filter((id) => !newlyLinkedParentStoryIds.has(id));
+  }
+
+  private async filterUsParentStoryIds(
+    storyIds: readonly number[],
+    transaction: Transaction,
+  ): Promise<Set<number>> {
+    const numericStoryIds = normalizeDbIds(storyIds);
+    if (numericStoryIds.length === 0) return new Set<number>();
+
+    const stories = await this.models.Story.findAll({
+      where: { id: { [Op.in]: numericStoryIds } },
+      attributes: ['id'],
+      include: [
+        {
+          model: this.models.Issue,
+          as: 'issue',
+          attributes: ['id'],
+          required: true,
+          include: [
+            {
+              model: this.models.Series,
+              as: 'series',
+              attributes: ['id'],
+              required: true,
+              include: [
+                {
+                  model: this.models.Publisher,
+                  as: 'publisher',
+                  attributes: ['original'],
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      transaction,
+    });
+
+    const usStoryIds = new Set<number>();
+    for (const story of stories as Array<{ id?: number; issue?: { series?: { publisher?: { original?: boolean } } } }>) {
+      if (!story.issue?.series?.publisher?.original) continue;
+      const storyId = Number(story.id || 0);
+      if (storyId > 0) usStoryIds.add(storyId);
+    }
+
+    return usStoryIds;
+  }
+
+  private async resolveIssueIdsFromStoryIds(
+    storyIds: readonly number[],
+    transaction: Transaction,
+  ): Promise<number[]> {
+    const numericStoryIds = normalizeDbIds(storyIds);
+    if (numericStoryIds.length === 0) return [];
+
+    const stories = await this.models.Story.findAll({
+      where: { id: { [Op.in]: numericStoryIds } },
+      attributes: ['fk_issue'],
+      transaction,
+    });
+
+    return Array.from(
+      new Set(
+        stories
+          .map((story) => Number(story.fk_issue || 0))
+          .filter((id) => id > 0),
+      ),
+    );
   }
 
   private async findOrCrawlParentIssue(
