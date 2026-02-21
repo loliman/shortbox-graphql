@@ -63,11 +63,12 @@ describe('FilterService', () => {
     } as any);
 
     const where = options.where as any;
-    expect(where.format[Op.in]).toEqual(['HEFT', 'HC']);
-    expect(where.format[Op.ne]).toBe('Digital');
-    expect(where.releasedate[Op.gte]).toBe('2024-01-01');
-    expect(where.releasedate[Op.lte]).toBe('2024-12-31');
-    expect(where.variant[Op.ne]).toBe('');
+    expect(Array.isArray(where[Op.or])).toBe(true);
+    expect(where[Op.or]).toContainEqual({ format: { [Op.in]: ['HEFT', 'HC'] } });
+    expect(where[Op.or]).toContainEqual({ format: { [Op.ne]: 'Digital' } });
+    expect(where[Op.or]).toContainEqual({ releasedate: { [Op.gte]: '2024-01-01' } });
+    expect(where[Op.or]).toContainEqual({ releasedate: { [Op.lte]: '2024-12-31' } });
+    expect(where[Op.or]).toContainEqual({ variant: { [Op.ne]: '' } });
   });
 
   it('builds all release-date and number comparator branches', () => {
@@ -88,11 +89,13 @@ describe('FilterService', () => {
     } as any);
 
     const where = options.where as any;
-    expect(where.releasedate[Op.gt]).toBe('2024-06-01');
-    expect(where.releasedate[Op.lt]).toBe('2024-06-30');
-    expect(where.releasedate[Op.eq]).toBe('2024-06-15');
+    expect(where[Op.or]).toContainEqual({ releasedate: { [Op.gt]: '2024-06-01' } });
+    expect(where[Op.or]).toContainEqual({ releasedate: { [Op.lt]: '2024-06-30' } });
+    expect(where[Op.or]).toContainEqual({ releasedate: { [Op.eq]: '2024-06-15' } });
 
-    const numberConditions = where[Op.or].filter((entry: any) => entry.number);
+    const groupedNumberCondition = where[Op.or].find((entry: any) => Array.isArray(entry[Op.or]));
+    expect(groupedNumberCondition).toBeTruthy();
+    const numberConditions = groupedNumberCondition[Op.or].filter((entry: any) => entry.number);
     expect(numberConditions).toHaveLength(3);
     expect(numberConditions.find((entry: any) => entry.number[Op.gt] === '10')).toBeTruthy();
     expect(numberConditions.find((entry: any) => entry.number[Op.lt] === '11')).toBeTruthy();
@@ -109,9 +112,10 @@ describe('FilterService', () => {
     } as any);
 
     const where = options.where as any;
-    expect(where.collected).toBe(true);
-    expect(where.variant).toBeUndefined();
-    expect(where.format[Op.ne]).toBe('Digital');
+    expect(Array.isArray(where[Op.or])).toBe(true);
+    expect(where[Op.or]).toContainEqual({ collected: true });
+    expect(where[Op.or].some((entry: any) => entry.variant)).toBe(false);
+    expect(where[Op.or]).toContainEqual({ format: { [Op.ne]: 'Digital' } });
   });
 
   it('builds story conditions and include graph using OR mode', () => {
@@ -132,6 +136,95 @@ describe('FilterService', () => {
     const where = options.where as any;
     expect(Array.isArray(where[Op.or])).toBe(true);
     expect(where[Op.or]).toHaveLength(3);
+  });
+
+  it('adds only appearance joins when filtering only by appearances', () => {
+    const { service } = createService();
+    const options = service.getFilterOptions(false, {
+      us: true,
+      appearances: 'Wolverine',
+    } as any);
+
+    const include = options.include as any[];
+    const storyInclude = include.find((item) => item.as === 'stories');
+    expect(storyInclude).toBeTruthy();
+    expect(storyInclude.include).toHaveLength(2);
+    expect(storyInclude.include.some((item: any) => item.as === 'appearances')).toBe(true);
+    expect(storyInclude.include.some((item: any) => item.as === 'individuals')).toBe(false);
+
+    const childrenInclude = storyInclude.include.find((item: any) => item.as === 'children');
+    expect(childrenInclude).toBeTruthy();
+    expect(childrenInclude.include).toHaveLength(1);
+    expect(childrenInclude.include[0].as).toBe('appearances');
+  });
+
+  it('adds parent appearance joins for de filters', () => {
+    const { service } = createService();
+    const options = service.getFilterOptions(false, {
+      us: false,
+      appearances: 'Spider-Man',
+    } as any);
+
+    const include = options.include as any[];
+    const storyInclude = include.find((item) => item.as === 'stories');
+    expect(storyInclude).toBeTruthy();
+
+    const parentInclude = storyInclude.include.find((item: any) => item.as === 'parent');
+    expect(parentInclude).toBeTruthy();
+    expect(parentInclude.include.some((item: any) => item.as === 'appearances')).toBe(true);
+
+    const where = options.where as any;
+    const appearancesCondition = where[Op.or].find(
+      (entry: any) =>
+        Array.isArray(entry[Op.or]) &&
+        entry[Op.or].some((condition: any) => condition['$stories.parent.appearances.name$']),
+    );
+    expect(appearancesCondition).toBeTruthy();
+  });
+
+  it('adds only individual joins when filtering only by individuals', () => {
+    const { service } = createService();
+    const options = service.getFilterOptions(false, {
+      us: true,
+      individuals: [{ name: 'Logan' }],
+    } as any);
+
+    const include = options.include as any[];
+    const storyInclude = include.find((item) => item.as === 'stories');
+    expect(storyInclude).toBeTruthy();
+    expect(storyInclude.include).toHaveLength(2);
+    expect(storyInclude.include.some((item: any) => item.as === 'individuals')).toBe(true);
+    expect(storyInclude.include.some((item: any) => item.as === 'appearances')).toBe(false);
+
+    const childrenInclude = storyInclude.include.find((item: any) => item.as === 'children');
+    expect(childrenInclude).toBeTruthy();
+    expect(childrenInclude.include).toHaveLength(1);
+    expect(childrenInclude.include[0].as).toBe('individuals');
+  });
+
+  it('maps individual type filters to story individual join conditions', () => {
+    const { service } = createService();
+    const options = service.getFilterOptions(false, {
+      us: false,
+      individuals: [{ name: 'Walter Simonson', type: ['WRITER', 'PENCILER'] }],
+    } as any);
+
+    const where = options.where as any;
+    const individualsCondition = where[Op.or].find((entry: any) =>
+      Array.isArray(entry[Op.or])
+        ? entry[Op.or].some((condition: any) => condition['$stories.individuals.name$'])
+        : false,
+    );
+
+    expect(individualsCondition).toBeTruthy();
+    expect(individualsCondition[Op.or]).toContainEqual({
+      '$stories.individuals.name$': 'Walter Simonson',
+      '$stories.individuals.story_individual.type$': { [Op.in]: ['WRITER', 'PENCILER'] },
+    });
+    expect(individualsCondition[Op.or]).toContainEqual({
+      '$stories.children.individuals.name$': 'Walter Simonson',
+      '$stories.children.individuals.story_individual.type$': { [Op.in]: ['WRITER', 'PENCILER'] },
+    });
   });
 
   it('builds exclusive/noPrint story conditions and noCover in AND mode', () => {
@@ -207,12 +300,26 @@ describe('FilterService', () => {
     const publisherCondition = where[Op.or].find((entry: any) => entry['$series.publisher.name$']);
     expect(publisherCondition['$series.publisher.name$'][Op.in]).toEqual(['Marvel', 'DC']);
 
-    const seriesCondition = where[Op.or].find((entry: any) => entry['$series.title$'] === 'X-Men');
-    expect(seriesCondition['$series.volume$']).toBe(1);
+    const groupedConditions = where[Op.or].filter((entry: any) => Array.isArray(entry[Op.or]));
+    expect(groupedConditions.length).toBeGreaterThanOrEqual(2);
 
-    const numberCondition = where[Op.or].find((entry: any) => entry.number);
-    expect(numberCondition.number[Op.gte]).toBe('1');
-    expect(numberCondition.variant).toBe('A');
+    const seriesGroup = groupedConditions.find((entry: any) =>
+      entry[Op.or].some((item: any) => item['$series.title$'] === 'X-Men'),
+    );
+    expect(seriesGroup).toBeTruthy();
+    expect(seriesGroup[Op.or]).toContainEqual({
+      '$series.title$': 'X-Men',
+      '$series.volume$': 1,
+    });
+
+    const numbersGroup = groupedConditions.find((entry: any) =>
+      entry[Op.or].some((item: any) => Boolean(item.number)),
+    );
+    expect(numbersGroup).toBeTruthy();
+    expect(numbersGroup[Op.or]).toContainEqual({
+      number: { [Op.gte]: '1' },
+      variant: 'A',
+    });
   });
 
   it('adds arc/noCover filters and export or custom sorting', () => {
@@ -224,8 +331,13 @@ describe('FilterService', () => {
     );
 
     const include = exportOptions.include as any[];
-    expect(include.some((item) => item.as === 'arcs' && item.required)).toBe(true);
+    expect(include.some((item) => item.as === 'stories' && item.required)).toBe(true);
     expect(include.some((item) => item.as === 'covers' && item.required === false)).toBe(true);
+    const storiesInclude = include.find((item) => item.as === 'stories');
+    const parentInclude = storiesInclude?.include?.find((item: any) => item.as === 'parent');
+    const issueInclude = parentInclude?.include?.find((item: any) => item.as === 'issue');
+    const arcsInclude = issueInclude?.include?.find((item: any) => item.as === 'arcs');
+    expect(arcsInclude?.required).toBe(true);
     const seriesModel = (include.find((item) => item.model?.modelName === 'Series') || {}).model;
     const publisherModel = (include[0]?.include || []).find(
       (item: any) => item.model?.modelName === 'Publisher',
@@ -254,6 +366,62 @@ describe('FilterService', () => {
       'DESC',
     );
     expect(customOrderOptions.order).toEqual([['updatedat', 'DESC']]);
+  });
+
+  it('supports multi-term arc and appearance filters encoded in one string', () => {
+    const { service } = createService();
+    const options = service.getFilterOptions(false, {
+      us: false,
+      arcs: 'Civil War || Secret Invasion',
+      appearances: 'Venom || Wolverine',
+    } as any);
+
+    const include = options.include as any[];
+    const storiesInclude = include.find((item) => item.as === 'stories');
+    const parentInclude = storiesInclude?.include?.find((item: any) => item.as === 'parent');
+    const issueInclude = parentInclude?.include?.find((item: any) => item.as === 'issue');
+    const arcsInclude = issueInclude?.include?.find((item: any) => item.as === 'arcs');
+    expect(arcsInclude).toBeTruthy();
+
+    const arcOrKey = Object.getOwnPropertySymbols(arcsInclude.where || {}).find((key) =>
+      String(key).includes('or'),
+    );
+    expect(arcOrKey).toBeDefined();
+    expect(arcsInclude.where[arcOrKey!]).toEqual([
+      { title: { [Op.iLike]: '%Civil War%' } },
+      { title: { [Op.iLike]: '%Secret Invasion%' } },
+    ]);
+
+    const where = options.where as any;
+    const appearancesCondition = where[Op.or].find(
+      (entry: any) =>
+        Array.isArray(entry[Op.or]) &&
+        entry[Op.or].some((condition: any) => condition['$stories.appearances.name$']),
+    );
+    expect(appearancesCondition).toBeTruthy();
+    expect(appearancesCondition[Op.or]).toContainEqual({
+      '$stories.appearances.name$': { [Op.iLike]: '%Venom%' },
+    });
+    expect(appearancesCondition[Op.or]).toContainEqual({
+      '$stories.children.appearances.name$': { [Op.iLike]: '%Wolverine%' },
+    });
+  });
+
+  it('uses direct issue arc joins for us filters', () => {
+    const { service } = createService();
+    const options = service.getFilterOptions(false, {
+      us: true,
+      arcs: 'Spider-Verse',
+    } as any);
+
+    const include = options.include as any[];
+    const directArcsInclude = include.find((item) => item.as === 'arcs');
+    expect(directArcsInclude).toBeTruthy();
+    expect(directArcsInclude.required).toBe(true);
+
+    const storiesInclude = include.find((item) => item.as === 'stories');
+    const parentInclude = storiesInclude?.include?.find((item: any) => item.as === 'parent');
+    expect(parentInclude).toBeUndefined();
   });
 
   it('exports csv with sorted publishers, series and natural issue order', async () => {
@@ -325,8 +493,9 @@ describe('FilterService', () => {
       },
     ]);
 
-    const csvJson = await service.export({ us: true } as any, 'csv', true);
-    const csv = JSON.parse(csvJson);
+    const csv = await service.export({ us: true } as any, 'csv', true);
+    const findAllArgs = (models.Issue.findAll as jest.Mock).mock.calls[0][0];
+    expect(findAllArgs.limit).toBeUndefined();
     const lines = csv.trim().split('\n');
 
     expect(lines[0]).toContain('Verlag;Series;Volume');
@@ -357,7 +526,7 @@ describe('FilterService', () => {
       },
     ]);
 
-    const txtJson = await service.export(
+    const txt = await service.export(
       {
         us: false,
         withVariants: true,
@@ -378,7 +547,7 @@ describe('FilterService', () => {
       false,
     );
 
-    const txt = JSON.parse(txtJson);
+    expect(txt).toContain('Anzahl Ergebnisse: 1');
     expect(txt).toContain('Aktive Filter');
     expect(txt).toContain('Deutsche Ausgaben');
     expect(txt).toContain('mit Varianten');
@@ -388,6 +557,35 @@ describe('FilterService', () => {
     expect(txt).toContain('Mitwirkende: Peter Parker');
     expect(txt).toContain('Panini');
     expect(txt).toContain('#3');
+  });
+
+  it('exports txt with series title fallback when generated series label is empty', async () => {
+    const { service, models } = createService();
+    models.Issue.findAll.mockResolvedValue([
+      {
+        number: '1',
+        format: 'HEFT',
+        variant: '',
+        pages: 28,
+        releasedate: '2024-05-03',
+        price: 3.99,
+        currency: 'EUR',
+        series: {
+          title: 'Hawkjet',
+          volume: 0,
+          startyear: 0,
+          endyear: 0,
+          publisher: { name: 'Panini - Marvel & Icon' },
+        },
+      },
+    ]);
+
+    const txt = await service.export({ us: false } as any, 'txt', false);
+
+    expect(txt).toContain('Anzahl Ergebnisse: 1');
+    expect(txt).toContain('Panini - Marvel & Icon');
+    expect(txt).toContain('\tHawkjet\n');
+    expect(txt).toContain('\t\t#1\n');
   });
 
   it('throws GraphQLError for unknown export type', async () => {

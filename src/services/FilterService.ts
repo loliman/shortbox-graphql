@@ -14,6 +14,15 @@ import type { Filter } from '@loliman/shortbox-contract';
 import logger from '../util/logger';
 const dateFormat = require('dateformat');
 const alphaCompare = (a: string, b: string): number => a.localeCompare(b);
+const MULTI_FILTER_SEPARATOR_REGEX = /\s*\|\|\s*/g;
+
+const splitFilterTerms = (value: string | null | undefined): string[] => {
+  if (!value) return [];
+  return value
+    .split(MULTI_FILTER_SEPARATOR_REGEX)
+    .map((entry) => entry.trim())
+    .filter((entry, index, arr) => entry.length > 0 && arr.indexOf(entry) === index);
+};
 
 type ExportPublisher = { name: string };
 type ExportSeries = {
@@ -54,6 +63,28 @@ type ExportIssueRecord = {
   };
 };
 
+const buildSeriesExportLabel = async (series: ExportSeries): Promise<string> => {
+  const generated = await generateLabel(series);
+  if (generated.trim().length > 0) return generated;
+
+  const title = (series.title || '').trim();
+  if (title.length === 0) return 'Unbekannte Serie';
+
+  let label = title;
+  if (series.volume && series.volume > 0) {
+    label += ` (Vol. ${series.volume})`;
+  }
+  if (series.startyear && series.startyear > 0) {
+    const endyear =
+      !series.endyear || series.endyear <= 0 || series.endyear === series.startyear
+        ? `${series.startyear}`
+        : `${series.startyear} - ${series.endyear}`;
+    label += ` (${endyear})`;
+  }
+
+  return label;
+};
+
 export class FilterService {
   constructor(
     private models: typeof import('../models').default,
@@ -80,7 +111,6 @@ export class FilterService {
     }
 
     const options = this.getFilterOptions(loggedIn, filter, true);
-    options.limit = 1000; // Export limit
     const issues = await this.models.Issue.findAll(options);
 
     const response: ExportResponse = {};
@@ -109,7 +139,7 @@ export class FilterService {
       };
 
       const publisherLabel = await generateLabel(publisher);
-      const seriesLabel = await generateLabel(series);
+      const seriesLabel = await buildSeriesExportLabel(series);
 
       if (publisherLabel in response) {
         if (seriesLabel in response[publisherLabel])
@@ -141,12 +171,15 @@ export class FilterService {
       .sort((left, right) => alphaCompare(left[0], right[0]));
 
     if (type === 'txt') {
-      return JSON.stringify(
+      return (
+        'Anzahl Ergebnisse: ' +
+        issues.length +
+        '\n\n' +
         (await this.convertFilterToTxt(filter, loggedIn)) +
-          (await this.resultsToTxt(sortedResponse)),
+        (await this.resultsToTxt(sortedResponse))
       );
     } else if (type === 'csv') {
-      return JSON.stringify(await this.resultsToCsv(sortedResponse, loggedIn));
+      return await this.resultsToCsv(sortedResponse, loggedIn);
     }
   }
 
@@ -157,9 +190,25 @@ export class FilterService {
     orderField: string | boolean = false,
     sortDirection: string | boolean = false,
   ): FindOptions {
+    type IncludeMap = {
+      as?: string;
+      include?: Includeable[];
+      required?: boolean;
+      where?: Record<string | symbol, unknown>;
+    };
+
     const us = Boolean(filter.us);
 
     const where: WhereOptions = {};
+    const conditionOperator = filter.and ? Op.and : Op.or;
+    const appendCondition = (condition: Record<string | symbol, unknown>) => {
+      const whereWithSymbols = where as Record<symbol, unknown>;
+      const current = Array.isArray(whereWithSymbols[conditionOperator])
+        ? (whereWithSymbols[conditionOperator] as unknown[])
+        : [];
+      whereWithSymbols[conditionOperator] = [...current, condition];
+    };
+
     const include: Includeable[] = [
       {
         model: this.models.Series,
@@ -176,8 +225,32 @@ export class FilterService {
       },
     ];
 
+    const ensureInclude = (
+      list: Includeable[],
+      as: string,
+      factory: () => Includeable,
+    ): IncludeMap => {
+      const existing = list.find((entry) => (entry as IncludeMap).as === as) as IncludeMap | undefined;
+      if (existing) {
+        if (!Array.isArray(existing.include)) existing.include = [];
+        return existing;
+      }
+      const created = factory() as IncludeMap;
+      if (!Array.isArray(created.include)) created.include = [];
+      list.push(created as Includeable);
+      return created;
+    };
+
+    const ensureStoriesInclude = () =>
+      ensureInclude(include, 'stories', () => ({
+        model: this.models.Story,
+        as: 'stories',
+        required: true,
+        include: [],
+      }));
+
     if (filter.formats && filter.formats.length > 0) {
-      where.format = { [Op.in]: filter.formats };
+      appendCondition({ format: { [Op.in]: filter.formats } });
     }
 
     if (filter.releasedates && filter.releasedates.length > 0) {
@@ -191,52 +264,80 @@ export class FilterService {
               ? Op.lte
               : rd.compare === '>'
                 ? Op.gt
-                : rd.compare === '<'
+            : rd.compare === '<'
                   ? Op.lt
                   : Op.eq;
-        const releaseDateWhere = (where.releasedate || {}) as Record<string | symbol, unknown>;
-        where.releasedate = { ...releaseDateWhere, [op]: dateStr };
+        appendCondition({ releasedate: { [op]: dateStr } });
       });
     }
 
     if (!filter.onlyCollected && filter.withVariants) {
-      where.variant = { [Op.ne]: '' };
+      appendCondition({ variant: { [Op.ne]: '' } });
     }
 
     if (filter.onlyCollected) {
-      where.collected = true;
+      appendCondition({ collected: true });
     }
 
     if (filter.onlyNotCollected) {
-      where.collected = false;
+      appendCondition({ collected: false });
     }
 
     if (filter.sellable) {
-      const formatWhere = (where.format || {}) as Record<string | symbol, unknown>;
-      where.format = { ...formatWhere, [Op.ne]: 'Digital' };
+      appendCondition({ format: { [Op.ne]: 'Digital' } });
     }
 
     // Story-based filters
     const storyConditions: Array<Record<string, unknown>> = [];
-    if (filter.appearances) {
+    const appearanceTerms = splitFilterTerms(filter.appearances);
+    if (appearanceTerms.length > 0) {
       storyConditions.push({
-        [Op.or]: [
-          { '$stories.appearances.name$': { [Op.iLike]: `%${filter.appearances}%` } },
-          { '$stories.children.appearances.name$': { [Op.iLike]: `%${filter.appearances}%` } },
-        ],
+        [Op.or]: appearanceTerms.flatMap((term) => {
+          const conditions: Array<Record<string, unknown>> = [
+            { '$stories.appearances.name$': { [Op.iLike]: `%${term}%` } },
+            { '$stories.children.appearances.name$': { [Op.iLike]: `%${term}%` } },
+          ];
+          if (!us) {
+            conditions.push({ '$stories.parent.appearances.name$': { [Op.iLike]: `%${term}%` } });
+          }
+          return conditions;
+        }),
       });
     }
 
     if (filter.individuals && filter.individuals.length > 0) {
-      const names = filter.individuals
-        .map((ind) => ind?.name)
-        .filter((name): name is string => typeof name === 'string');
-      storyConditions.push({
-        [Op.or]: [
-          { '$stories.individuals.name$': { [Op.in]: names } },
-          { '$stories.children.individuals.name$': { [Op.in]: names } },
-        ],
-      });
+      const individualConditions = filter.individuals
+        .flatMap((ind) => {
+          const name = typeof ind?.name === 'string' ? ind.name : '';
+          if (!name) return [];
+
+          const rawTypes = Array.isArray(ind?.type) ? ind.type : [];
+          const types = rawTypes.filter((type): type is string => typeof type === 'string' && !!type);
+
+          const storyIndividualCondition: Record<string, unknown> = {
+            '$stories.individuals.name$': name,
+          };
+          const childStoryIndividualCondition: Record<string, unknown> = {
+            '$stories.children.individuals.name$': name,
+          };
+
+          if (types.length > 0) {
+            storyIndividualCondition['$stories.individuals.story_individual.type$'] = {
+              [Op.in]: types,
+            };
+            childStoryIndividualCondition['$stories.children.individuals.story_individual.type$'] =
+              { [Op.in]: types };
+          }
+
+          return [storyIndividualCondition, childStoryIndividualCondition];
+        })
+        .filter((condition) => Object.keys(condition).length > 0);
+
+      if (individualConditions.length > 0) {
+        storyConditions.push({
+          [Op.or]: individualConditions,
+        });
+      }
     }
 
     if (filter.firstPrint) storyConditions.push({ '$stories.firstapp$': true });
@@ -251,56 +352,120 @@ export class FilterService {
     if (filter.onlyOnePrint) storyConditions.push({ '$stories.onlyoneprint$': true });
 
     if (storyConditions.length > 0) {
-      const storyInclude = {
-        model: this.models.Story,
-        as: 'stories',
-        required: true,
-        include: [] as Includeable[],
-      };
-      if (filter.appearances || filter.individuals) {
-        storyInclude.include.push({
+      const storyInclude = ensureStoriesInclude();
+      storyInclude.required = true;
+      const needsAppearanceJoin = Boolean(filter.appearances);
+      const needsIndividualJoin = Boolean(filter.individuals && filter.individuals.length > 0);
+
+      if (needsAppearanceJoin) {
+        ensureInclude(storyInclude.include || [], 'appearances', () => ({
           model: this.models.Appearance,
           as: 'appearances',
           required: false,
-        });
-        storyInclude.include.push({
+        }));
+
+        if (!us) {
+          const parentInclude = ensureInclude(storyInclude.include || [], 'parent', () => ({
+            model: this.models.Story,
+            as: 'parent',
+            required: false,
+            include: [],
+          }));
+          const parentNested = parentInclude.include || [];
+          ensureInclude(parentNested, 'appearances', () => ({
+            model: this.models.Appearance,
+            as: 'appearances',
+            required: false,
+          }));
+        }
+      }
+
+      if (needsIndividualJoin) {
+        ensureInclude(storyInclude.include || [], 'individuals', () => ({
           model: this.models.Individual,
           as: 'individuals',
           required: false,
-        });
-        storyInclude.include.push({
+        }));
+      }
+
+      if (needsAppearanceJoin || needsIndividualJoin) {
+        const childrenInclude = ensureInclude(storyInclude.include || [], 'children', () => ({
           model: this.models.Story,
           as: 'children',
           required: false,
-          include: [
-            { model: this.models.Appearance, as: 'appearances', required: false },
-            { model: this.models.Individual, as: 'individuals', required: false },
-          ],
-        });
+          include: [],
+        }));
+        childrenInclude.required = false;
+        const childInclude = childrenInclude.include || [];
+        if (needsAppearanceJoin) {
+          ensureInclude(childInclude, 'appearances', () => ({
+            model: this.models.Appearance,
+            as: 'appearances',
+            required: false,
+          }));
+        }
+        if (needsIndividualJoin) {
+          ensureInclude(childInclude, 'individuals', () => ({
+            model: this.models.Individual,
+            as: 'individuals',
+            required: false,
+          }));
+        }
       }
-      include.push(storyInclude);
 
-      const whereWithSymbols = where as Record<symbol, unknown>;
-      if (filter.and) {
-        const current = Array.isArray(whereWithSymbols[Op.and])
-          ? (whereWithSymbols[Op.and] as unknown[])
-          : [];
-        whereWithSymbols[Op.and] = [...current, ...storyConditions];
-      } else {
-        const current = Array.isArray(whereWithSymbols[Op.or])
-          ? (whereWithSymbols[Op.or] as unknown[])
-          : [];
-        whereWithSymbols[Op.or] = [...current, ...storyConditions];
-      }
+      storyConditions.forEach((condition) => appendCondition(condition));
     }
 
-    if (filter.arcs) {
-      include.push({
-        model: this.models.Arc,
-        as: 'arcs',
-        required: true,
-        where: { title: { [Op.iLike]: `%${filter.arcs}%` } },
-      });
+    const arcTerms = splitFilterTerms(filter.arcs);
+    if (arcTerms.length > 0) {
+      const arcWhere =
+        arcTerms.length === 1
+          ? { title: { [Op.iLike]: `%${arcTerms[0]}%` } }
+          : {
+              [Op.or]: arcTerms.map((term) => ({
+                title: { [Op.iLike]: `%${term}%` },
+              })),
+            };
+
+      if (us) {
+        const arcsInclude = ensureInclude(include, 'arcs', () => ({
+          model: this.models.Arc,
+          as: 'arcs',
+          required: true,
+          where: arcWhere,
+          include: [],
+        }));
+        arcsInclude.required = true;
+        arcsInclude.where = arcWhere;
+      } else {
+        const storiesInclude = ensureStoriesInclude();
+        storiesInclude.required = true;
+        const parentInclude = ensureInclude(storiesInclude.include || [], 'parent', () => ({
+          model: this.models.Story,
+          as: 'parent',
+          required: true,
+          include: [],
+        }));
+        parentInclude.required = true;
+
+        const parentIssueInclude = ensureInclude(parentInclude.include || [], 'issue', () => ({
+          model: this.models.Issue,
+          as: 'issue',
+          required: true,
+          include: [],
+        }));
+        parentIssueInclude.required = true;
+
+        const parentArcsInclude = ensureInclude(parentIssueInclude.include || [], 'arcs', () => ({
+          model: this.models.Arc,
+          as: 'arcs',
+          required: true,
+          where: arcWhere,
+          include: [],
+        }));
+        parentArcsInclude.required = true;
+        parentArcsInclude.where = arcWhere;
+      }
     }
 
     if (filter.publishers && filter.publishers.length > 0) {
@@ -308,18 +473,7 @@ export class FilterService {
         .map((p) => p?.name)
         .filter((name): name is string => typeof name === 'string');
       const condition = { '$series.publisher.name$': { [Op.in]: names } };
-      const whereWithSymbols = where as Record<symbol, unknown>;
-      if (filter.and) {
-        const current = Array.isArray(whereWithSymbols[Op.and])
-          ? (whereWithSymbols[Op.and] as unknown[])
-          : [];
-        whereWithSymbols[Op.and] = [...current, condition];
-      } else {
-        const current = Array.isArray(whereWithSymbols[Op.or])
-          ? (whereWithSymbols[Op.or] as unknown[])
-          : [];
-        whereWithSymbols[Op.or] = [...current, condition];
-      }
+      appendCondition(condition);
     }
 
     if (filter.series && filter.series.length > 0) {
@@ -329,18 +483,7 @@ export class FilterService {
           '$series.title$': s?.title,
           '$series.volume$': s?.volume,
         }));
-      const whereWithSymbols = where as Record<symbol, unknown>;
-      if (filter.and) {
-        const current = Array.isArray(whereWithSymbols[Op.and])
-          ? (whereWithSymbols[Op.and] as unknown[])
-          : [];
-        whereWithSymbols[Op.and] = [...current, { [Op.or]: conditions }];
-      } else {
-        const current = Array.isArray(whereWithSymbols[Op.or])
-          ? (whereWithSymbols[Op.or] as unknown[])
-          : [];
-        whereWithSymbols[Op.or] = [...current, ...conditions];
-      }
+      appendCondition({ [Op.or]: conditions });
     }
 
     if (filter.numbers && filter.numbers.length > 0) {
@@ -362,18 +505,7 @@ export class FilterService {
           return cond;
         })
         .filter((cond): cond is Record<string, unknown> => cond !== null);
-      const whereWithSymbols = where as Record<symbol, unknown>;
-      if (filter.and) {
-        const current = Array.isArray(whereWithSymbols[Op.and])
-          ? (whereWithSymbols[Op.and] as unknown[])
-          : [];
-        whereWithSymbols[Op.and] = [...current, { [Op.or]: conditions }];
-      } else {
-        const current = Array.isArray(whereWithSymbols[Op.or])
-          ? (whereWithSymbols[Op.or] as unknown[])
-          : [];
-        whereWithSymbols[Op.or] = [...current, ...conditions];
-      }
+      appendCondition({ [Op.or]: conditions });
     }
 
     if (filter.noCover) {
@@ -383,18 +515,7 @@ export class FilterService {
         required: false,
       });
       const condition = { '$covers.id$': null };
-      const whereWithSymbols = where as Record<symbol, unknown>;
-      if (filter.and) {
-        const current = Array.isArray(whereWithSymbols[Op.and])
-          ? (whereWithSymbols[Op.and] as unknown[])
-          : [];
-        whereWithSymbols[Op.and] = [...current, condition];
-      } else {
-        const current = Array.isArray(whereWithSymbols[Op.or])
-          ? (whereWithSymbols[Op.or] as unknown[])
-          : [];
-        whereWithSymbols[Op.or] = [...current, condition];
-      }
+      appendCondition(condition);
     }
 
     if (filter.noContent) {
@@ -402,18 +523,7 @@ export class FilterService {
         include.push({ model: this.models.Story, as: 'stories', required: false });
       }
       const condition = { '$stories.id$': null };
-      const whereWithSymbols = where as Record<symbol, unknown>;
-      if (filter.and) {
-        const current = Array.isArray(whereWithSymbols[Op.and])
-          ? (whereWithSymbols[Op.and] as unknown[])
-          : [];
-        whereWithSymbols[Op.and] = [...current, condition];
-      } else {
-        const current = Array.isArray(whereWithSymbols[Op.or])
-          ? (whereWithSymbols[Op.or] as unknown[])
-          : [];
-        whereWithSymbols[Op.or] = [...current, condition];
-      }
+      appendCondition(condition);
     }
 
     let order: Order = [];
