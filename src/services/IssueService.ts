@@ -29,6 +29,22 @@ const normalizeSortDirection = (direction: string | undefined): 'ASC' | 'DESC' =
   return normalized === 'ASC' || normalized === 'DESC' ? normalized : 'DESC';
 };
 
+const hasPublisherNameFilter = (filter: Filter): boolean =>
+  Array.isArray(filter.publishers) &&
+  filter.publishers.some((publisher) => String(publisher?.name || '').trim() !== '');
+
+const hasSeriesIdentityFilter = (filter: Filter): boolean =>
+  Array.isArray(filter.series) &&
+  filter.series.some(
+    (series) => String(series?.title || '').trim() !== '' && Number.isFinite(Number(series?.volume)),
+  );
+
+const normalizeLastEditedFilter = (filter: Filter | undefined): Filter | undefined => {
+  if (!filter || filter.and) return filter;
+  if (!hasSeriesIdentityFilter(filter) || !hasPublisherNameFilter(filter)) return filter;
+  return { ...filter, and: true };
+};
+
 const ROMAN_NUMBER_PATTERN = /^(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))$/i;
 const PARENT_FORMATS = new Set(['HEFT', 'SC', 'HC']);
 
@@ -106,10 +122,8 @@ const dedupeIssueList = <
 
 const normalizeNavbarIssueVariant = <T extends { variant?: string | null }>(issue: T): T => {
   if (String(issue.variant ?? '').trim() === '') return issue;
-  return {
-    ...issue,
-    variant: '',
-  };
+  issue.variant = '';
+  return issue;
 };
 
 const appendAndCondition = (
@@ -971,10 +985,12 @@ export class IssueService {
               ['id', sortDirection],
             ] as FindOptions['order']);
 
-    if (filter) {
+    const normalizedFilter = normalizeLastEditedFilter(filter);
+
+    if (normalizedFilter) {
       const { FilterService } = require('./FilterService');
       const filterService = new FilterService(this.models, this.requestId);
-      const filterOptions = filterService.getFilterOptions(loggedIn, filter);
+      const filterOptions = filterService.getFilterOptions(loggedIn, normalizedFilter);
 
       const filterWhere = (filterOptions.where || {}) as WhereMap;
       Object.assign(where, filterWhere);

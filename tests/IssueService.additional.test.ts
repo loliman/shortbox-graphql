@@ -230,6 +230,33 @@ describe('IssueService additional coverage', () => {
     ]);
   });
 
+  it('forces AND semantics for lastEdited when series and publishers are both present', async () => {
+    mockGetFilterOptions.mockReturnValue({ where: {}, include: [] });
+    mockModels.Issue.findAll.mockResolvedValue([]);
+
+    await issueService.getLastEdited(
+      {
+        us: false,
+        publishers: [{ name: 'Marvel' }],
+        series: [{ title: 'Spider-Man', volume: 2 }],
+      } as any,
+      10,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    expect(mockGetFilterOptions).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({
+        and: true,
+        publishers: [{ name: 'Marvel' }],
+        series: [{ title: 'Spider-Man', volume: 2 }],
+      }),
+    );
+  });
+
   it('maps ids in getIssuesByIds and returns empty variants for empty keys', async () => {
     mockModels.Issue.findAll.mockResolvedValue([{ id: 1 }, { id: 3 }]);
     await expect(issueService.getIssuesByIds([1, 2, 3])).resolves.toEqual([

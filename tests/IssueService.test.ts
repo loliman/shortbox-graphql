@@ -1,6 +1,35 @@
 import { IssueService } from '../src/services/IssueService';
 import { Op } from 'sequelize';
 
+function createModelLikeIssue(seed: {
+  id: number;
+  fk_series: number;
+  number: string;
+  format?: string;
+  variant: string;
+}) {
+  const data = {
+    id: seed.id,
+    fk_series: seed.fk_series,
+    number: seed.number,
+    format: seed.format || '',
+    variant: seed.variant,
+  };
+  const modelLikeIssue: Record<string, unknown> = { dataValues: data };
+  (['id', 'fk_series', 'number', 'format', 'variant'] as const).forEach((key) => {
+    Object.defineProperty(modelLikeIssue, key, {
+      configurable: true,
+      enumerable: false,
+      get: () => data[key],
+      set: (value) => {
+        (data as Record<string, unknown>)[key] = value;
+      },
+    });
+  });
+
+  return modelLikeIssue;
+}
+
 describe('IssueService', () => {
   let issueService: IssueService;
   let mockModels: any;
@@ -96,6 +125,25 @@ describe('IssueService', () => {
 
     expect(result.edges).toHaveLength(1);
     expect(result.edges[0].node.id).toBe(202);
+    expect(result.edges[0].node.variant).toBe('');
+  });
+
+  it('keeps model-like issue fields when only variant issues exist', async () => {
+    const seriesInput = { title: 'Star Wars', volume: 2, publisher: { name: 'Panini - Star Wars & Generation' } };
+    const variantOnlyIssue = createModelLikeIssue({
+      id: 12601,
+      fk_series: 2,
+      number: '126',
+      format: 'Heft',
+      variant: 'Kiosk Ausgabe',
+    });
+    mockModels.Issue.findAll.mockResolvedValue([variantOnlyIssue]);
+
+    const result = await issueService.findIssues(undefined, seriesInput, undefined, undefined, false, undefined);
+
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].node.number).toBe('126');
+    expect(result.edges[0].node.format).toBe('Heft');
     expect(result.edges[0].node.variant).toBe('');
   });
 
