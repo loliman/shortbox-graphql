@@ -37,6 +37,10 @@ describe('schemas', () => {
     expect(IndividualInputSchema.parse({ name: 'Peter Parker' })).toEqual({
       name: 'Peter Parker',
     });
+    expect(IndividualInputSchema.parse({ name: 'Walter Simonson', type: ['WRITER'] })).toEqual({
+      name: 'Walter Simonson',
+      type: ['WRITER'],
+    });
     expect(LoginInputSchema.parse({ name: 'alice', password: 'secret' })).toEqual({
       name: 'alice',
       password: 'secret',

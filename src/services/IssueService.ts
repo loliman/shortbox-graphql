@@ -1039,6 +1039,7 @@ export class IssueService {
     loggedIn: boolean,
   ) {
     type WhereMap = Record<string | symbol, unknown>;
+    type IssueIdRow = { id: number | string };
     const limit = first || 25;
     const decodedCursor = decodeCursorId(after || undefined);
 
@@ -1096,11 +1097,12 @@ export class IssueService {
       }
     }
 
-    let options: FindOptions = {
+    const options: FindOptions = {
       order: orderBy,
       limit: limit + 1,
       where,
       include,
+      subQuery: false,
     };
 
     if (decodedCursor) {
@@ -1138,8 +1140,52 @@ export class IssueService {
       }
     }
 
-    const results = await this.models.Issue.findAll(options);
-    return buildConnectionFromNodes(results, limit, after || undefined);
+    // Phase 1: fetch only ids with full filter/sort/cursor logic to avoid wide row payload.
+    const idScanLimit = Math.min((limit + 1) * 5, 250);
+    const idRows = (await this.models.Issue.findAll({
+      ...options,
+      attributes: ['id'],
+      limit: idScanLimit,
+    })) as unknown as IssueIdRow[];
+
+    const orderedUniqueIds: number[] = [];
+    const seenIds = new Set<string>();
+    idRows.forEach((row) => {
+      const idKey = toIdKey((row as { id?: unknown })?.id);
+      if (!idKey || seenIds.has(idKey)) return;
+      seenIds.add(idKey);
+      orderedUniqueIds.push(Number(idKey));
+    });
+
+    const pageIds = orderedUniqueIds.slice(0, limit + 1);
+    if (pageIds.length === 0) {
+      return buildConnectionFromNodes([], limit, after || undefined);
+    }
+
+    // Phase 2: hydrate selected issues with lightweight base include.
+    const hydratedIssues = await this.models.Issue.findAll({
+      where: { id: { [Op.in]: pageIds } },
+      include: [
+        {
+          model: this.models.Series,
+          as: 'series',
+          required: true,
+          include: [{ model: this.models.Publisher, as: 'publisher' }],
+        },
+      ],
+    });
+
+    const issuesById = new Map<string, (typeof hydratedIssues)[number]>();
+    hydratedIssues.forEach((issue) => {
+      const idKey = toIdKey(issue.id);
+      if (idKey) issuesById.set(idKey, issue);
+    });
+
+    const orderedResults = pageIds
+      .map((id) => issuesById.get(String(id)))
+      .filter((issue): issue is (typeof hydratedIssues)[number] => Boolean(issue));
+
+    return buildConnectionFromNodes(orderedResults, limit, after || undefined);
   }
 
   async getIssuesByIds(ids: readonly number[]) {

@@ -52,6 +52,7 @@ export const IssueInputSchema = z.object({
 export const IndividualInputSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, 'Name ist erforderlich'),
+  type: z.array(z.string()).optional(),
 });
 
 export const LoginInputSchema = z.object({

@@ -221,15 +221,25 @@ describe('IssueService', () => {
     );
 
     expect(result.edges.length).toBe(1);
-    expect(mockModels.Issue.findAll).toHaveBeenCalledWith(
+    expect(mockModels.Issue.findAll).toHaveBeenCalledTimes(2);
+
+    const idScanCall = mockModels.Issue.findAll.mock.calls[0][0];
+    expect(idScanCall).toEqual(
       expect.objectContaining({
-        limit: 2,
+        attributes: ['id'],
         order: [
           ['updatedat', 'DESC'],
           ['id', 'DESC'],
         ],
       }),
     );
+
+    const hydrateCall = mockModels.Issue.findAll.mock.calls[1][0];
+    const inKey = Object.getOwnPropertySymbols(hydrateCall.where.id).find((key) =>
+      String(key).includes('in'),
+    );
+    expect(inKey).toBeDefined();
+    expect(hydrateCall.where.id[inKey!]).toEqual([100]);
   });
 
   it('should sanitize invalid lastEdited order and direction', async () => {

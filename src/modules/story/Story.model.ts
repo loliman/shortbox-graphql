@@ -20,6 +20,7 @@ export class Story extends Model {
 
   public static associate(models: DbModels) {
     Story.hasMany(models.Story, { as: 'children', foreignKey: 'fk_parent' });
+    Story.belongsTo(models.Story, { as: 'parent', foreignKey: 'fk_parent' });
     Story.hasMany(models.Story, { as: 'reprints', foreignKey: 'fk_reprint' });
     Story.belongsTo(models.Issue, { as: 'issue', foreignKey: 'fk_issue' });
     Story.belongsToMany(models.Individual, {
