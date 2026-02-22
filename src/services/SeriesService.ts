@@ -77,17 +77,6 @@ export class SeriesService {
         await this.models.Series.findAll(currentOptions);
       let results = await loadSeries(options);
 
-      if (
-        results.length === 0 &&
-        shouldFilterPublisherUs &&
-        !shouldFilterPublisherName &&
-        (!pattern || pattern.trim() === '')
-      ) {
-        const fallbackWhere = { ...(options.where as WhereMap) };
-        delete fallbackWhere['$publisher.original$'];
-        results = await loadSeries({ ...options, where: fallbackWhere });
-      }
-
       return buildConnectionFromNodes(results, results.length, undefined);
     } else {
       const { FilterService } = require('./FilterService');

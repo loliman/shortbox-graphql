@@ -78,6 +78,8 @@ export class PublisherService {
       const filterService = new FilterService(this.models, this.requestId);
       const options = filterService.getFilterOptions(loggedIn, filter);
       options.attributes = ['id'];
+      const where = options.where as Record<string | symbol, unknown>;
+      where['$series.publisher.original$'] = us;
 
       const includeList = options.include as Array<{ attributes?: string[]; include?: unknown[] }>;
       const seriesInclude = includeList[0];
