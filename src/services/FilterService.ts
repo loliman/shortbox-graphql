@@ -202,6 +202,17 @@ export class FilterService {
     }
   }
 
+  public async count(filter: Filter, loggedIn: boolean): Promise<number> {
+    const options = this.getFilterOptions(loggedIn, filter);
+    const count = await this.models.Issue.count({
+      where: options.where,
+      include: options.include,
+      distinct: true,
+      col: 'id',
+    });
+    return typeof count === 'number' ? count : 0;
+  }
+
   public getFilterOptions(
     loggedIn: boolean,
     filter: Filter,
