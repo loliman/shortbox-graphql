@@ -1,7 +1,7 @@
 import { PublisherService } from '../../services/PublisherService';
 import { GraphQLError } from 'graphql';
 import { PublisherResolvers } from '../../types/graphql';
-import { PublisherInputSchema } from '../../types/schemas';
+import { FilterSchema, PublisherInputSchema } from '../../types/schemas';
 
 type PublisherParent = {
   id: number;
@@ -13,13 +13,14 @@ export const resolvers: PublisherResolvers = {
   Query: {
     publisherList: async (_, { pattern, us, first, after, filter }, context) => {
       const { loggedIn, publisherService } = context;
+      const validatedFilter = filter ? FilterSchema.parse(filter) : undefined;
       return await publisherService.findPublishers(
         pattern || undefined,
         us,
         first || undefined,
         after || undefined,
         loggedIn,
-        filter || undefined,
+        validatedFilter as any,
       );
     },
     publisherDetails: (_, { publisher }, { models }) => {

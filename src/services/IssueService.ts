@@ -30,21 +30,8 @@ const normalizeSortDirection = (direction: string | undefined): 'ASC' | 'DESC' =
   return normalized === 'ASC' || normalized === 'DESC' ? normalized : 'DESC';
 };
 
-const hasPublisherNameFilter = (filter: Filter): boolean =>
-  Array.isArray(filter.publishers) &&
-  filter.publishers.some((publisher) => String(publisher?.name || '').trim() !== '');
-
-const hasSeriesIdentityFilter = (filter: Filter): boolean =>
-  Array.isArray(filter.series) &&
-  filter.series.some(
-    (series) =>
-      String(series?.title || '').trim() !== '' && Number.isFinite(Number(series?.volume)),
-  );
-
 const normalizeLastEditedFilter = (filter: Filter | undefined): Filter | undefined => {
-  if (!filter || filter.and) return filter;
-  if (!hasSeriesIdentityFilter(filter) || !hasPublisherNameFilter(filter)) return filter;
-  return { ...filter, and: true };
+  return filter;
 };
 
 const ROMAN_NUMBER_PATTERN = /^(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))$/i;

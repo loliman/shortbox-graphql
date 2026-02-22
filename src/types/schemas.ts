@@ -107,21 +107,59 @@ export const FilterSchema = z.object({
   publishers: z.array(PublisherInputSchema).optional(),
   series: z.array(SeriesInputSchema).optional(),
   numbers: z.array(NumberFilterSchema).optional(),
-  arcs: z.string().optional(),
+  arcs: z.array(ArcInputSchema).optional(),
   individuals: z.array(IndividualInputSchema).optional(),
-  appearances: z.string().optional(),
+  appearances: z.array(AppearanceInputSchema).optional(),
   firstPrint: z.boolean().optional(),
+  notFirstPrint: z.boolean().optional(),
   onlyPrint: z.boolean().optional(),
+  notOnlyPrint: z.boolean().optional(),
   onlyTb: z.boolean().optional(),
+  notOnlyTb: z.boolean().optional(),
   exclusive: z.boolean().optional(),
+  notExclusive: z.boolean().optional(),
   reprint: z.boolean().optional(),
+  notReprint: z.boolean().optional(),
   otherOnlyTb: z.boolean().optional(),
+  notOtherOnlyTb: z.boolean().optional(),
   noPrint: z.boolean().optional(),
+  notNoPrint: z.boolean().optional(),
   onlyOnePrint: z.boolean().optional(),
+  notOnlyOnePrint: z.boolean().optional(),
   onlyCollected: z.boolean().optional(),
   onlyNotCollected: z.boolean().optional(),
-  sellable: z.boolean().optional(),
-  noCover: z.boolean().optional(),
+  onlyNotCollectedNoOwnedVariants: z.boolean().optional(),
+  noComicguideId: z.boolean().optional(),
   noContent: z.boolean().optional(),
-  and: z.boolean().optional(),
+}).refine(
+  (value) =>
+    [value.onlyCollected, value.onlyNotCollected, value.onlyNotCollectedNoOwnedVariants].filter(
+      Boolean,
+    ).length <= 1,
+  {
+    message:
+      'onlyCollected, onlyNotCollected und onlyNotCollectedNoOwnedVariants schließen sich aus',
+    path: ['onlyNotCollectedNoOwnedVariants'],
+  },
+).superRefine((value, ctx) => {
+  const pairs: Array<[boolean | undefined, boolean | undefined, string, string]> = [
+    [value.firstPrint, value.notFirstPrint, 'firstPrint', 'notFirstPrint'],
+    [value.onlyPrint, value.notOnlyPrint, 'onlyPrint', 'notOnlyPrint'],
+    [value.onlyTb, value.notOnlyTb, 'onlyTb', 'notOnlyTb'],
+    [value.exclusive, value.notExclusive, 'exclusive', 'notExclusive'],
+    [value.reprint, value.notReprint, 'reprint', 'notReprint'],
+    [value.otherOnlyTb, value.notOtherOnlyTb, 'otherOnlyTb', 'notOtherOnlyTb'],
+    [value.noPrint, value.notNoPrint, 'noPrint', 'notNoPrint'],
+    [value.onlyOnePrint, value.notOnlyOnePrint, 'onlyOnePrint', 'notOnlyOnePrint'],
+  ];
+
+  pairs.forEach(([a, b, aName, bName]) => {
+    if (a && b) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${aName} und ${bName} schließen sich aus`,
+        path: [bName],
+      });
+    }
+  });
 });

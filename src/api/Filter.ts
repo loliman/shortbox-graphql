@@ -23,23 +23,30 @@ export const typeDef = gql`
     publishers: [PublisherInput]
     series: [SeriesInput]
     numbers: [NumberFilter]
-    arcs: String
+    arcs: [ArcInput]
     individuals: [IndividualInput]
-    appearances: String
+    appearances: [AppearanceInput]
     firstPrint: Boolean
+    notFirstPrint: Boolean
     onlyPrint: Boolean
+    notOnlyPrint: Boolean
     onlyTb: Boolean
+    notOnlyTb: Boolean
     exclusive: Boolean
+    notExclusive: Boolean
     reprint: Boolean
+    notReprint: Boolean
     otherOnlyTb: Boolean
+    notOtherOnlyTb: Boolean
     noPrint: Boolean
+    notNoPrint: Boolean
     onlyOnePrint: Boolean
+    notOnlyOnePrint: Boolean
     onlyCollected: Boolean
     onlyNotCollected: Boolean
-    sellable: Boolean
-    noCover: Boolean
+    onlyNotCollectedNoOwnedVariants: Boolean
+    noComicguideId: Boolean
     noContent: Boolean
-    and: Boolean
   }
 
   extend type Query {

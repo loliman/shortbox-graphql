@@ -1,7 +1,7 @@
 import { IssueService } from '../../services/IssueService';
 import { GraphQLError } from 'graphql';
 import { IssueResolvers } from '../../types/graphql';
-import { IssueInputSchema } from '../../types/schemas';
+import { FilterSchema, IssueInputSchema } from '../../types/schemas';
 import { Op } from 'sequelize';
 
 type IssueParent = {
@@ -265,13 +265,14 @@ export const resolvers: IssueResolvers = {
   Query: {
     issueList: async (_, { pattern, series, first, after, filter }, context) => {
       const { loggedIn, issueService } = context;
+      const validatedFilter = filter ? FilterSchema.parse(filter) : undefined;
       return await issueService.findIssues(
         pattern || undefined,
         series,
         first || undefined,
         after || undefined,
         loggedIn,
-        filter || undefined,
+        validatedFilter as any,
       );
     },
     issueDetails: async (_, { issue, edit }, { models }) => {
@@ -332,8 +333,9 @@ export const resolvers: IssueResolvers = {
     },
     lastEdited: async (_, { filter, first, after, order, direction }, context) => {
       const { issueService, loggedIn } = context;
+      const validatedFilter = filter ? FilterSchema.parse(filter) : undefined;
       return await issueService.getLastEdited(
-        filter || undefined,
+        validatedFilter as any,
         first || undefined,
         after || undefined,
         order || undefined,

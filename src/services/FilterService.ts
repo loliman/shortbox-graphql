@@ -16,13 +16,17 @@ const dateFormat = require('dateformat');
 const alphaCompare = (a: string, b: string): number => a.localeCompare(b);
 const MULTI_FILTER_SEPARATOR_REGEX = /\s*\|\|\s*/g;
 
+const dedupeTerms = (values: string[]): string[] =>
+  values
+    .map((value) => value.trim())
+    .filter((value, index, arr) => value.length > 0 && arr.indexOf(value) === index);
+
 const splitFilterTerms = (value: string | null | undefined): string[] => {
   if (!value) return [];
-  return value
-    .split(MULTI_FILTER_SEPARATOR_REGEX)
-    .map((entry) => entry.trim())
-    .filter((entry, index, arr) => entry.length > 0 && arr.indexOf(entry) === index);
+  return dedupeTerms(value.split(MULTI_FILTER_SEPARATOR_REGEX));
 };
+
+const isNumericFilterValue = (value: string): boolean => /^\d+(\.\d+)?$/.test(value.trim());
 
 type ExportPublisher = { name: string };
 type ExportSeries = {
@@ -61,6 +65,21 @@ type ExportIssueRecord = {
       name: string;
     };
   };
+};
+
+type RuntimeFilter = Filter & {
+  noComicguideId?: boolean;
+  onlyNotCollectedNoOwnedVariants?: boolean;
+  notFirstPrint?: boolean;
+  notOnlyPrint?: boolean;
+  notOnlyTb?: boolean;
+  notExclusive?: boolean;
+  notReprint?: boolean;
+  notOtherOnlyTb?: boolean;
+  notNoPrint?: boolean;
+  notOnlyOnePrint?: boolean;
+  arcs?: Array<{ title?: string | null }> | string | null;
+  appearances?: Array<{ name?: string | null }> | string | null;
 };
 
 const buildSeriesExportLabel = async (series: ExportSeries): Promise<string> => {
@@ -197,16 +216,13 @@ export class FilterService {
       where?: Record<string | symbol, unknown>;
     };
 
-    const us = Boolean(filter.us);
+    const runtimeFilter = filter as RuntimeFilter;
+    const us = Boolean(runtimeFilter.us);
 
     const where: WhereOptions = {};
-    const conditionOperator = filter.and ? Op.and : Op.or;
-    const appendCondition = (condition: Record<string | symbol, unknown>) => {
-      const whereWithSymbols = where as Record<symbol, unknown>;
-      const current = Array.isArray(whereWithSymbols[conditionOperator])
-        ? (whereWithSymbols[conditionOperator] as unknown[])
-        : [];
-      whereWithSymbols[conditionOperator] = [...current, condition];
+    const andConditions: unknown[] = [];
+    const appendAndCondition = (condition: unknown) => {
+      andConditions.push(condition);
     };
 
     const include: Includeable[] = [
@@ -249,12 +265,12 @@ export class FilterService {
         include: [],
       }));
 
-    if (filter.formats && filter.formats.length > 0) {
-      appendCondition({ format: { [Op.in]: filter.formats } });
+    if (runtimeFilter.formats && runtimeFilter.formats.length > 0) {
+      appendAndCondition({ format: { [Op.in]: runtimeFilter.formats } });
     }
 
-    if (filter.releasedates && filter.releasedates.length > 0) {
-      filter.releasedates.forEach((rd) => {
+    if (runtimeFilter.releasedates && runtimeFilter.releasedates.length > 0) {
+      runtimeFilter.releasedates.forEach((rd) => {
         if (!rd || !rd.date) return;
         const dateStr = dateFormat(new Date(rd.date), 'yyyy-mm-dd');
         const op =
@@ -267,31 +283,42 @@ export class FilterService {
             : rd.compare === '<'
                   ? Op.lt
                   : Op.eq;
-        appendCondition({ releasedate: { [op]: dateStr } });
+        appendAndCondition({ releasedate: { [op]: dateStr } });
       });
     }
 
-    if (!filter.onlyCollected && filter.withVariants) {
-      appendCondition({ variant: { [Op.ne]: '' } });
+    if (!runtimeFilter.onlyCollected && runtimeFilter.withVariants) {
+      appendAndCondition({ variant: { [Op.ne]: '' } });
     }
 
-    if (filter.onlyCollected) {
-      appendCondition({ collected: true });
+    if (runtimeFilter.onlyCollected) {
+      appendAndCondition({ collected: true });
     }
 
-    if (filter.onlyNotCollected) {
-      appendCondition({ collected: false });
+    if (runtimeFilter.onlyNotCollected) {
+      appendAndCondition({ collected: false });
     }
 
-    if (filter.sellable) {
-      appendCondition({ format: { [Op.ne]: 'Digital' } });
+    if (runtimeFilter.onlyNotCollectedNoOwnedVariants) {
+      const hasNoCollectedSiblingVariants = Sequelize.literal(
+        'NOT EXISTS (SELECT 1 FROM "issue" AS i2 WHERE i2."fk_series" = "issue"."fk_series" AND i2."number" = "issue"."number" AND i2."collected" = TRUE)',
+      );
+      appendAndCondition({ [Op.and]: [{ collected: false }, hasNoCollectedSiblingVariants] });
     }
 
     // Story-based filters
-    const storyConditions: Array<Record<string, unknown>> = [];
-    const appearanceTerms = splitFilterTerms(filter.appearances);
+    const storySwitchOrConditions: Array<Record<string, unknown>> = [];
+
+    const appearanceTerms = Array.isArray(runtimeFilter.appearances)
+      ? dedupeTerms(
+          runtimeFilter.appearances
+            .map((entry) => String(entry?.name || '').trim())
+            .filter((entry) => entry.length > 0),
+        )
+      : splitFilterTerms(runtimeFilter.appearances as string | null | undefined);
+
     if (appearanceTerms.length > 0) {
-      storyConditions.push({
+      appendAndCondition({
         [Op.or]: appearanceTerms.flatMap((term) => {
           const conditions: Array<Record<string, unknown>> = [
             { '$stories.appearances.name$': { [Op.iLike]: `%${term}%` } },
@@ -305,8 +332,8 @@ export class FilterService {
       });
     }
 
-    if (filter.individuals && filter.individuals.length > 0) {
-      const individualConditions = filter.individuals
+    if (runtimeFilter.individuals && runtimeFilter.individuals.length > 0) {
+      const individualConditions = runtimeFilter.individuals
         .flatMap((ind) => {
           const name = typeof ind?.name === 'string' ? ind.name : '';
           if (!name) return [];
@@ -333,29 +360,70 @@ export class FilterService {
         })
         .filter((condition) => Object.keys(condition).length > 0);
 
-      if (individualConditions.length > 0) {
-        storyConditions.push({
-          [Op.or]: individualConditions,
-        });
-      }
+      if (individualConditions.length > 0) appendAndCondition({ [Op.or]: individualConditions });
     }
 
-    if (filter.firstPrint) storyConditions.push({ '$stories.firstapp$': true });
-    if (filter.exclusive)
-      storyConditions.push({ '$stories.firstapp$': true, '$stories.onlyapp$': true });
-    if (filter.onlyPrint) storyConditions.push({ '$stories.onlyapp$': true });
-    if (filter.onlyTb) storyConditions.push({ '$stories.onlytb$': true });
-    if (filter.reprint) storyConditions.push({ '$stories.fk_reprint$': { [Op.ne]: null } });
-    if (filter.otherOnlyTb) storyConditions.push({ '$stories.otheronlytb$': true });
-    if (filter.noPrint)
-      storyConditions.push({ '$stories.firstapp$': false, '$stories.onlyapp$': false });
-    if (filter.onlyOnePrint) storyConditions.push({ '$stories.onlyoneprint$': true });
+    if (runtimeFilter.firstPrint) storySwitchOrConditions.push({ '$stories.firstapp$': true });
+    if (runtimeFilter.notFirstPrint) storySwitchOrConditions.push({ '$stories.firstapp$': false });
+    if (runtimeFilter.exclusive) {
+      if (us) {
+        storySwitchOrConditions.push({ '$stories.exclusive$': true });
+      } else {
+        storySwitchOrConditions.push({ '$stories.parent.id$': null });
+      }
+    }
+    if (runtimeFilter.notExclusive) {
+      if (us) {
+        storySwitchOrConditions.push({ '$stories.exclusive$': false });
+      } else {
+        storySwitchOrConditions.push({ '$stories.parent.id$': { [Op.ne]: null } });
+      }
+    }
+    if (runtimeFilter.onlyPrint) storySwitchOrConditions.push({ '$stories.onlyapp$': true });
+    if (runtimeFilter.notOnlyPrint) storySwitchOrConditions.push({ '$stories.onlyapp$': false });
+    if (runtimeFilter.onlyTb) storySwitchOrConditions.push({ '$stories.onlytb$': true });
+    if (runtimeFilter.notOnlyTb) storySwitchOrConditions.push({ '$stories.onlytb$': false });
+    if (runtimeFilter.reprint) {
+      const hasAnyStory = Sequelize.literal(
+        'EXISTS (SELECT 1 FROM "story" AS s WHERE s."fk_issue" = "issue"."id")',
+      );
+      const hasNoFirstPrintStory = Sequelize.literal(
+        'NOT EXISTS (SELECT 1 FROM "story" AS s WHERE s."fk_issue" = "issue"."id" AND s."firstapp" = TRUE)',
+      );
+      storySwitchOrConditions.push({ [Op.and]: [hasAnyStory, hasNoFirstPrintStory] });
+    }
+    if (runtimeFilter.notReprint) {
+      const hasNoStories = Sequelize.literal(
+        'NOT EXISTS (SELECT 1 FROM "story" AS s WHERE s."fk_issue" = "issue"."id")',
+      );
+      const hasAnyFirstPrintStory = Sequelize.literal(
+        'EXISTS (SELECT 1 FROM "story" AS s WHERE s."fk_issue" = "issue"."id" AND s."firstapp" = TRUE)',
+      );
+      storySwitchOrConditions.push({ [Op.or]: [hasNoStories, hasAnyFirstPrintStory] });
+    }
+    if (runtimeFilter.otherOnlyTb) storySwitchOrConditions.push({ '$stories.otheronlytb$': true });
+    if (runtimeFilter.notOtherOnlyTb)
+      storySwitchOrConditions.push({ '$stories.otheronlytb$': false });
+    if (runtimeFilter.noPrint)
+      storySwitchOrConditions.push({ '$stories.firstapp$': false, '$stories.onlyapp$': false });
+    if (runtimeFilter.notNoPrint)
+      storySwitchOrConditions.push({
+        [Op.or]: [{ '$stories.firstapp$': true }, { '$stories.onlyapp$': true }],
+      });
+    if (runtimeFilter.onlyOnePrint) storySwitchOrConditions.push({ '$stories.onlyoneprint$': true });
+    if (runtimeFilter.notOnlyOnePrint)
+      storySwitchOrConditions.push({ '$stories.onlyoneprint$': false });
 
-    if (storyConditions.length > 0) {
+    const needsStorySwitches = storySwitchOrConditions.length > 0;
+    const needsAppearanceJoin = appearanceTerms.length > 0;
+    const needsIndividualJoin = Boolean(
+      runtimeFilter.individuals && runtimeFilter.individuals.length > 0,
+    );
+    const needsParentJoinForExclusive = Boolean((runtimeFilter.exclusive || runtimeFilter.notExclusive) && !us);
+
+    if (needsStorySwitches || needsAppearanceJoin || needsIndividualJoin || needsParentJoinForExclusive) {
       const storyInclude = ensureStoriesInclude();
       storyInclude.required = true;
-      const needsAppearanceJoin = Boolean(filter.appearances);
-      const needsIndividualJoin = Boolean(filter.individuals && filter.individuals.length > 0);
 
       if (needsAppearanceJoin) {
         ensureInclude(storyInclude.include || [], 'appearances', () => ({
@@ -388,6 +456,16 @@ export class FilterService {
         }));
       }
 
+      if (needsParentJoinForExclusive) {
+        const parentInclude = ensureInclude(storyInclude.include || [], 'parent', () => ({
+          model: this.models.Story,
+          as: 'parent',
+          required: false,
+          include: [],
+        }));
+        parentInclude.required = false;
+      }
+
       if (needsAppearanceJoin || needsIndividualJoin) {
         const childrenInclude = ensureInclude(storyInclude.include || [], 'children', () => ({
           model: this.models.Story,
@@ -413,10 +491,17 @@ export class FilterService {
         }
       }
 
-      storyConditions.forEach((condition) => appendCondition(condition));
+      if (needsStorySwitches) appendAndCondition({ [Op.or]: storySwitchOrConditions });
     }
 
-    const arcTerms = splitFilterTerms(filter.arcs);
+    const arcTerms = Array.isArray(runtimeFilter.arcs)
+      ? dedupeTerms(
+          runtimeFilter.arcs
+            .map((entry) => String(entry?.title || '').trim())
+            .filter((entry) => entry.length > 0),
+        )
+      : splitFilterTerms(runtimeFilter.arcs as string | null | undefined);
+
     if (arcTerms.length > 0) {
       const arcWhere =
         arcTerms.length === 1
@@ -468,62 +553,84 @@ export class FilterService {
       }
     }
 
-    if (filter.publishers && filter.publishers.length > 0) {
-      const names = filter.publishers
+    if (runtimeFilter.publishers && runtimeFilter.publishers.length > 0) {
+      const names = runtimeFilter.publishers
         .map((p) => p?.name)
         .filter((name): name is string => typeof name === 'string');
       const condition = { '$series.publisher.name$': { [Op.in]: names } };
-      appendCondition(condition);
+      appendAndCondition(condition);
     }
 
-    if (filter.series && filter.series.length > 0) {
-      const conditions = filter.series
+    if (runtimeFilter.series && runtimeFilter.series.length > 0) {
+      const conditions = runtimeFilter.series
         .filter((s) => !!s)
         .map((s) => ({
           '$series.title$': s?.title,
           '$series.volume$': s?.volume,
         }));
-      appendCondition({ [Op.or]: conditions });
+      if (conditions.length > 0) appendAndCondition({ [Op.or]: conditions });
     }
 
-    if (filter.numbers && filter.numbers.length > 0) {
-      const conditions = filter.numbers
-        .map((n) => {
-          if (!n) return null;
-          const op =
-            n.compare === '>='
-              ? Op.gte
-              : n.compare === '<='
-                ? Op.lte
-                : n.compare === '>'
-                  ? Op.gt
-                  : n.compare === '<'
-                    ? Op.lt
-                    : Op.eq;
-          const cond: Record<string, unknown> = { number: { [op]: n.number } };
-          if (n.variant) cond.variant = n.variant;
-          return cond;
-        })
-        .filter((cond): cond is Record<string, unknown> => cond !== null);
-      appendCondition({ [Op.or]: conditions });
-    }
+    if (runtimeFilter.numbers && runtimeFilter.numbers.length > 0) {
+      runtimeFilter.numbers.forEach((n) => {
+        if (!n || typeof n.number !== 'string') return;
+        const op =
+          n.compare === '>='
+            ? Op.gte
+            : n.compare === '<='
+              ? Op.lte
+              : n.compare === '>'
+                ? Op.gt
+                : n.compare === '<'
+                  ? Op.lt
+                  : Op.eq;
 
-    if (filter.noCover) {
-      include.push({
-        model: this.models.Cover,
-        as: 'covers',
-        required: false,
+        const hasVariant = typeof n.variant === 'string' && n.variant.length > 0;
+        const rawNumber = n.number.trim();
+
+        if (op === Op.eq) {
+          const equalCondition: Record<string, unknown> = { number: rawNumber };
+          if (hasVariant) equalCondition.variant = n.variant;
+          appendAndCondition(equalCondition);
+          return;
+        }
+
+        let comparisonCondition: unknown;
+        if (isNumericFilterValue(rawNumber)) {
+          const numericIssueNumber = Sequelize.literal(
+            `CASE WHEN "Issue"."number" ~ '^[0-9]+(\\.[0-9]+)?$' THEN CAST("Issue"."number" AS DECIMAL) END`,
+          );
+          comparisonCondition = Sequelize.where(numericIssueNumber, {
+            [op]: Number(rawNumber),
+          });
+        } else {
+          comparisonCondition = { number: { [op]: rawNumber } };
+        }
+
+        if (hasVariant) {
+          appendAndCondition({ [Op.and]: [comparisonCondition, { variant: n.variant }] });
+          return;
+        }
+        appendAndCondition(comparisonCondition);
       });
-      const condition = { '$covers.id$': null };
-      appendCondition(condition);
     }
 
-    if (filter.noContent) {
+    if (runtimeFilter.noComicguideId) {
+      appendAndCondition({
+        [Op.or]: [{ comicguideid: '0' }, { comicguideid: '' }, { comicguideid: null }],
+      });
+    }
+
+    if (runtimeFilter.noContent) {
       if (!include.find((inc) => (inc as { as?: string }).as === 'stories')) {
         include.push({ model: this.models.Story, as: 'stories', required: false });
       }
       const condition = { '$stories.id$': null };
-      appendCondition(condition);
+      appendAndCondition(condition);
+    }
+
+    if (andConditions.length > 0) {
+      (where as Record<symbol, unknown>)[Op.and] = andConditions;
     }
 
     let order: Order = [];
@@ -608,63 +715,73 @@ export class FilterService {
   }
 
   private async convertFilterToTxt(filter: Filter, loggedIn: boolean) {
+    const runtimeFilter = filter as RuntimeFilter;
     let s = 'Aktive Filter\n';
-    s += '\t' + (filter.us ? 'Original Ausgaben' : 'Deutsche Ausgaben') + '\n';
+    s += '\t' + (runtimeFilter.us ? 'Original Ausgaben' : 'Deutsche Ausgaben') + '\n';
     s += '\tDetails\n';
 
-    if (filter.formats) {
+    if (runtimeFilter.formats) {
       s += '\t\tFormat: ';
-      filter.formats.forEach((f: string | null) => (s += (f || '') + ', '));
+      runtimeFilter.formats.forEach((f: string | null) => (s += (f || '') + ', '));
       s = s.substr(0, s.length - 2) + '\n';
     }
 
-    if (filter.withVariants) s += '\t\tmit Varianten\n';
+    if (runtimeFilter.withVariants) s += '\t\tmit Varianten\n';
 
-    if (filter.releasedates) {
+    if (runtimeFilter.releasedates) {
       s += '\t\tErscheinungsdatum: ';
-      filter.releasedates.forEach((r) => {
+      runtimeFilter.releasedates.forEach((r) => {
         if (r?.date) s += dateFormat(new Date(r.date), 'dd.mm.yyyy') + ' ' + r.compare + ', ';
       });
       s = s.substr(0, s.length - 2) + '\n';
     }
 
-    if (!filter.formats && !filter.withVariants && !filter.releasedates) s += '\t\t-\n';
-    if (filter.and) s += '\tAlle Kriterien müssen erfüllt sein\n';
-    if (filter.noCover) s += '\tOhne Cover\n';
-    if (filter.noContent) s += '\tOhne Inhalt\n';
+    if (!runtimeFilter.formats && !runtimeFilter.withVariants && !runtimeFilter.releasedates)
+      s += '\t\t-\n';
+    if (runtimeFilter.noComicguideId) s += '\tOhne Comicguide ID\n';
+    if (runtimeFilter.noContent) s += '\tOhne Inhalt\n';
 
     s += '\tEnthält\n';
-    if (filter.firstPrint) s += '\t\tErstausgabe\n';
-    if (filter.onlyPrint) s += '\t\tEinzige Ausgabe\n';
-    if (filter.onlyTb) s += '\t\tNur in TB\n';
-    if (filter.exclusive) s += '\t\tExclusiv\n';
-    if (filter.reprint) s += '\t\tReiner Nachdruck\n';
-    if (filter.otherOnlyTb) s += '\t\tNur in TB\n';
-    if (filter.noPrint) s += '\t\tKeine Ausgabe\n';
-    if (filter.onlyOnePrint) s += '\t\tEinzige Ausgabe\n';
-    if (filter.onlyCollected) s += '\t\tGesammelt\n';
-    if (filter.onlyNotCollected) s += '\t\tNicht gesammelt\n';
-    if (filter.sellable) s += '\t\tVerkaufbar\n';
+    if (runtimeFilter.firstPrint) s += '\t\tErstausgabe\n';
+    if (runtimeFilter.notFirstPrint) s += '\t\tNicht Erstausgabe\n';
+    if (runtimeFilter.onlyPrint) s += '\t\tEinzige Ausgabe\n';
+    if (runtimeFilter.notOnlyPrint) s += '\t\tNicht einzige Ausgabe\n';
+    if (runtimeFilter.onlyTb) s += '\t\tNur in TB\n';
+    if (runtimeFilter.notOnlyTb) s += '\t\tNicht nur in TB\n';
+    if (runtimeFilter.exclusive) s += '\t\tExclusiv\n';
+    if (runtimeFilter.notExclusive) s += '\t\tNicht exklusiv\n';
+    if (runtimeFilter.reprint) s += '\t\tReiner Nachdruck\n';
+    if (runtimeFilter.notReprint) s += '\t\tNicht reiner Nachdruck\n';
+    if (runtimeFilter.otherOnlyTb) s += '\t\tNur in TB\n';
+    if (runtimeFilter.notOtherOnlyTb) s += '\t\tNicht sonst nur in TB\n';
+    if (runtimeFilter.noPrint) s += '\t\tKeine Ausgabe\n';
+    if (runtimeFilter.notNoPrint) s += '\t\tMindestens eine Ausgabe\n';
+    if (runtimeFilter.onlyOnePrint) s += '\t\tEinzige Ausgabe\n';
+    if (runtimeFilter.notOnlyOnePrint) s += '\t\tNicht nur einmal erschienen\n';
+    if (runtimeFilter.onlyCollected) s += '\t\tGesammelt\n';
+    if (runtimeFilter.onlyNotCollected) s += '\t\tNicht gesammelt\n';
+    if (runtimeFilter.onlyNotCollectedNoOwnedVariants)
+      s += '\t\tNicht gesammelt (keine Variante gesammelt)\n';
 
-    if (filter.publishers) {
+    if (runtimeFilter.publishers) {
       s += '\tVerlag: ';
-      filter.publishers.forEach((p) => {
+      runtimeFilter.publishers.forEach((p) => {
         if (p?.name) s += p.name + ', ';
       });
       s = s.substr(0, s.length - 2) + '\n';
     }
 
-    if (filter.series) {
+    if (runtimeFilter.series) {
       s += '\tSerie: ';
-      filter.series.forEach((n) => {
+      runtimeFilter.series.forEach((n) => {
         if (n?.title && n?.volume) s += n.title + ' (Vol. ' + n.volume + '), ';
       });
       s = s.substr(0, s.length - 2) + '\n';
     }
 
-    if (filter.numbers) {
+    if (runtimeFilter.numbers) {
       s += '\tNummer: ';
-      filter.numbers.forEach((n) => {
+      runtimeFilter.numbers.forEach((n) => {
         if (!n) return;
         s += '#' + n.number;
         if (n.variant) s += ' (' + n.variant + ')';
@@ -673,20 +790,28 @@ export class FilterService {
       s = s.substr(0, s.length - 2) + '\n';
     }
 
-    if (filter.arcs) {
-      s += '\tStory Arc: ' + filter.arcs + '\n';
+    if (Array.isArray(runtimeFilter.arcs) && runtimeFilter.arcs.length > 0) {
+      s += '\tStory Arc: ';
+      runtimeFilter.arcs.forEach((arc) => {
+        if (arc?.title) s += arc.title + ', ';
+      });
+      s = s.substr(0, s.length - 2) + '\n';
     }
 
-    if (filter.individuals) {
+    if (runtimeFilter.individuals) {
       s += '\tMitwirkende: ';
-      filter.individuals.forEach((i) => {
+      runtimeFilter.individuals.forEach((i) => {
         if (i?.name) s += i.name + ', ';
       });
       s = s.substr(0, s.length - 2) + '\n';
     }
 
-    if (filter.appearances) {
-      s += '\tAuftritte: ' + filter.appearances + '\n';
+    if (Array.isArray(runtimeFilter.appearances) && runtimeFilter.appearances.length > 0) {
+      s += '\tAuftritte: ';
+      runtimeFilter.appearances.forEach((appearance) => {
+        if (appearance?.name) s += appearance.name + ', ';
+      });
+      s = s.substr(0, s.length - 2) + '\n';
     }
 
     return s;

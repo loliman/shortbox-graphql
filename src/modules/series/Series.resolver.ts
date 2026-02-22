@@ -1,7 +1,7 @@
 import { SeriesService } from '../../services/SeriesService';
 import { GraphQLError } from 'graphql';
 import { SeriesResolvers } from '../../types/graphql';
-import { SeriesInputSchema } from '../../types/schemas';
+import { FilterSchema, SeriesInputSchema } from '../../types/schemas';
 
 type SeriesParent = {
   id: number;
@@ -21,13 +21,14 @@ export const resolvers: SeriesResolvers = {
   Query: {
     seriesList: async (_, { pattern, publisher, first, after, filter }, context) => {
       const { loggedIn, seriesService } = context;
+      const validatedFilter = filter ? FilterSchema.parse(filter) : undefined;
       return await seriesService.findSeries(
         pattern || undefined,
         publisher,
         first || undefined,
         after || undefined,
         loggedIn,
-        filter || undefined,
+        validatedFilter as any,
       );
     },
     seriesDetails: async (_, { series }, { models }) => {
