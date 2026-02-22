@@ -636,7 +636,7 @@ export class FilterService {
         let comparisonCondition: unknown;
         if (isNumericFilterValue(rawNumber)) {
           const numericIssueNumber = Sequelize.literal(
-            `CASE WHEN "Issue"."number" ~ '^[0-9]+(\\.[0-9]+)?$' THEN CAST("Issue"."number" AS DECIMAL) END`,
+            `CASE WHEN "issue"."number" ~ '^[0-9]+(\\.[0-9]+)?$' THEN CAST("issue"."number" AS DECIMAL) END`,
           );
           comparisonCondition = Sequelize.where(numericIssueNumber, {
             [op]: Number(rawNumber),
@@ -655,7 +655,7 @@ export class FilterService {
 
     if (runtimeFilter.noComicguideId) {
       appendAndCondition({
-        [Op.or]: [{ comicguideid: '0' }, { comicguideid: '' }, { comicguideid: null }],
+        [Op.or]: [{ comicguideid: '0' }, { comicguideid: 0 }, { comicguideid: null }],
       });
     }
 
