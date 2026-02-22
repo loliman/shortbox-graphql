@@ -20,6 +20,15 @@ export const PublisherInputSchema = z.object({
   endyear: z.number().optional().nullable(),
 });
 
+const PublisherFilterInputSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  us: z.boolean().optional(),
+  addinfo: z.string().optional(),
+  startyear: z.number().optional(),
+  endyear: z.number().optional().nullable(),
+});
+
 export const SeriesInputSchema = z.object({
   id: z.string().optional(),
   title: z.string().min(1, 'Titel ist erforderlich'),
@@ -28,6 +37,16 @@ export const SeriesInputSchema = z.object({
   volume: z.number().int().min(1, 'Volume muss mindestens 1 sein'),
   addinfo: z.string().optional(),
   publisher: PublisherInputSchema.optional(),
+});
+
+const SeriesFilterInputSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional(),
+  startyear: z.number().optional(),
+  endyear: z.number().optional().nullable(),
+  volume: z.number().int().optional(),
+  addinfo: z.string().optional(),
+  publisher: PublisherFilterInputSchema.optional(),
 });
 
 export const IssueInputSchema = z.object({
@@ -104,8 +123,8 @@ export const FilterSchema = z.object({
   formats: z.array(z.string()).optional(),
   withVariants: z.boolean().optional(),
   releasedates: z.array(DateFilterSchema).optional(),
-  publishers: z.array(PublisherInputSchema).optional(),
-  series: z.array(SeriesInputSchema).optional(),
+  publishers: z.array(PublisherFilterInputSchema).optional(),
+  series: z.array(SeriesFilterInputSchema).optional(),
   numbers: z.array(NumberFilterSchema).optional(),
   arcs: z.array(ArcInputSchema).optional(),
   individuals: z.array(IndividualInputSchema).optional(),

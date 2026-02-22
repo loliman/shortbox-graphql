@@ -350,34 +350,52 @@ export class IssueService {
 
   async editIssue(old: IssueInput, item: IssueInput, transaction: Transaction) {
     this.log(`Editing issue: ${old.series?.title} #${old.number}`);
-    let pub = await this.models.Publisher.findOne({
+    const oldPublisher = await this.models.Publisher.findOne({
       where: { name: (old.series?.publisher?.name || '').trim() },
       transaction,
     });
 
-    if (!pub) throw new Error('Publisher not found');
+    if (!oldPublisher) throw new Error('Publisher not found');
 
-    let series = await this.models.Series.findOne({
+    const oldSeries = await this.models.Series.findOne({
       where: {
         title: (old.series?.title || '').trim(),
         volume: old.series?.volume,
-        fk_publisher: pub.id,
+        fk_publisher: oldPublisher.id,
       },
       transaction,
     });
 
-    if (!series) throw new Error('Series not found');
+    if (!oldSeries) throw new Error('Series not found');
 
     let res = await this.models.Issue.findOne({
       where: {
         number: (old.number || '').trim(),
         variant: (old.variant || '').trim(),
-        fk_series: series.id,
+        fk_series: oldSeries.id,
       },
       transaction,
     });
 
     if (!res) throw new Error('Issue not found');
+
+    const newPublisher = await this.models.Publisher.findOne({
+      where: { name: (item.series?.publisher?.name || '').trim() },
+      transaction,
+    });
+
+    if (!newPublisher) throw new Error('Publisher not found');
+
+    const newSeries = await this.models.Series.findOne({
+      where: {
+        title: (item.series?.title || '').trim(),
+        volume: item.series?.volume,
+        fk_publisher: newPublisher.id,
+      },
+      transaction,
+    });
+
+    if (!newSeries) throw new Error('Series not found');
 
     res.title = (item.title || '').trim();
     res.number = (item.number || '').trim();
@@ -390,6 +408,7 @@ export class IssueService {
     res.isbn = item.isbn || '';
     res.limitation = normalizeLimitationForDb(item.limitation);
     res.addinfo = item.addinfo || '';
+    res.fk_series = newSeries.id;
 
     const statusItem = item as IssueInput & {
       verified?: boolean;

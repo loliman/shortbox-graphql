@@ -185,15 +185,19 @@ export class SeriesService {
 
   async editSeries(old: SeriesInput, item: SeriesInput, transaction: Transaction) {
     this.log(`Editing series: ${old.title} -> ${item.title}`);
-    let pub = await this.models.Publisher.findOne({
+    const oldPublisher = await this.models.Publisher.findOne({
       where: { name: (old.publisher?.name || '').trim() },
       transaction,
     });
 
-    if (!pub) throw new Error('Publisher not found');
+    if (!oldPublisher) throw new Error('Publisher not found');
 
     let res = await this.models.Series.findOne({
-      where: { title: (old.title || '').trim(), volume: old.volume, fk_publisher: pub.id },
+      where: {
+        title: (old.title || '').trim(),
+        volume: old.volume,
+        fk_publisher: oldPublisher.id,
+      },
       transaction,
     });
 
@@ -201,11 +205,19 @@ export class SeriesService {
       throw new Error('Series not found');
     }
 
+    const newPublisher = await this.models.Publisher.findOne({
+      where: { name: (item.publisher?.name || '').trim() },
+      transaction,
+    });
+
+    if (!newPublisher) throw new Error('Publisher not found');
+
     res.title = (item.title || '').trim();
     res.volume = item.volume || 0;
     res.startyear = item.startyear || 0;
     res.endyear = item.endyear || 0;
     res.addinfo = item.addinfo || '';
+    res.fk_publisher = newPublisher.id;
     return await res.save({ transaction });
   }
 

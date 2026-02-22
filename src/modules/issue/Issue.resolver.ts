@@ -333,15 +333,22 @@ export const resolvers: IssueResolvers = {
     },
     lastEdited: async (_, { filter, first, after, order, direction }, context) => {
       const { issueService, loggedIn } = context;
-      const validatedFilter = filter ? FilterSchema.parse(filter) : undefined;
-      return await issueService.getLastEdited(
-        validatedFilter as any,
-        first || undefined,
-        after || undefined,
-        order || undefined,
-        direction || undefined,
-        loggedIn,
-      );
+      try {
+        const validatedFilter = filter ? FilterSchema.parse(filter) : undefined;
+        return await issueService.getLastEdited(
+          validatedFilter as any,
+          first || undefined,
+          after || undefined,
+          order || undefined,
+          direction || undefined,
+          loggedIn,
+        );
+      } catch (e) {
+        if (e instanceof Error && e.name === 'ZodError') {
+          throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw e;
+      }
     },
   },
   Mutation: {

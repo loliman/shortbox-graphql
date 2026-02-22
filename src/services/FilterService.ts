@@ -303,7 +303,38 @@ export class FilterService {
       const hasNoCollectedSiblingVariants = Sequelize.literal(
         'NOT EXISTS (SELECT 1 FROM "issue" AS i2 WHERE i2."fk_series" = "issue"."fk_series" AND i2."number" = "issue"."number" AND i2."collected" = TRUE)',
       );
-      appendAndCondition({ [Op.and]: [{ collected: false }, hasNoCollectedSiblingVariants] });
+      const formatRankSql = (tableAlias: string) =>
+        `CASE LOWER(COALESCE(${tableAlias}."format", ''))
+          WHEN 'heft' THEN 1
+          WHEN 'softcover' THEN 2
+          WHEN 'taschenbuch' THEN 3
+          WHEN 'hardcover' THEN 4
+          ELSE 5
+        END`;
+      const currentFormatRank = formatRankSql('"issue"');
+      const siblingFormatRank = formatRankSql('i2');
+
+      const isPreferredRepresentativeForUnownedGroup = Sequelize.literal(
+        `NOT EXISTS (
+          SELECT 1
+          FROM "issue" AS i2
+          WHERE i2."fk_series" = "issue"."fk_series"
+            AND i2."number" = "issue"."number"
+            AND i2."collected" = FALSE
+            AND (
+              (${siblingFormatRank}) < (${currentFormatRank})
+              OR ((${siblingFormatRank}) = (${currentFormatRank}) AND i2."id" < "issue"."id")
+            )
+        )`,
+      );
+
+      appendAndCondition({
+        [Op.and]: [
+          { collected: false },
+          hasNoCollectedSiblingVariants,
+          isPreferredRepresentativeForUnownedGroup,
+        ],
+      });
     }
 
     // Story-based filters
@@ -564,10 +595,17 @@ export class FilterService {
     if (runtimeFilter.series && runtimeFilter.series.length > 0) {
       const conditions = runtimeFilter.series
         .filter((s) => !!s)
-        .map((s) => ({
-          '$series.title$': s?.title,
-          '$series.volume$': s?.volume,
-        }));
+        .map((s) => {
+          const title = typeof s?.title === 'string' ? s.title.trim() : '';
+          const volume =
+            typeof s?.volume === 'number' && Number.isFinite(s.volume) ? s.volume : undefined;
+          if (!title || volume === undefined) return null;
+          return {
+            '$series.title$': title,
+            '$series.volume$': volume,
+          };
+        })
+        .filter((s): s is { '$series.title$': string; '$series.volume$': number } => Boolean(s));
       if (conditions.length > 0) appendAndCondition({ [Op.or]: conditions });
     }
 
