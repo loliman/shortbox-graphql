@@ -237,6 +237,10 @@ const canRunProtectedMutation = rule({ cache: 'contextual' })(async (_, __, cont
     });
   }
 
+  if (context.operationName === 'Logout') {
+    return true;
+  }
+
   if (!CSRF_PROTECTION_ENABLED) return true;
 
   if (!context.request || !isRequestCsrfValid(context.request)) {
