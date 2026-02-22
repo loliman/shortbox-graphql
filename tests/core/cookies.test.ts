@@ -46,4 +46,16 @@ describe('cookies core', () => {
       domain: 'shortbox.example',
     });
   });
+
+  it('defaults cookie domain to shortbox.de in production when unset', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.SESSION_COOKIE_DOMAIN;
+
+    const cookies = loadCookiesModule();
+
+    expect(cookies.resolveCookieSecurity()).toEqual({
+      secure: true,
+      domain: 'shortbox.de',
+    });
+  });
 });

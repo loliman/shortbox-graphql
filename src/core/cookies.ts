@@ -11,6 +11,12 @@ export const resolveCookieSecurity = (): { secure: boolean; domain?: string } =>
   const secureByEnv =
     process.env.NODE_ENV === 'production' || process.env.SESSION_COOKIE_SECURE === 'true';
   const secure = sessionCookieSameSite === 'none' ? true : secureByEnv;
-  const domain = process.env.SESSION_COOKIE_DOMAIN?.trim() || undefined;
+  const configuredDomain = process.env.SESSION_COOKIE_DOMAIN?.trim();
+  const domain =
+    configuredDomain && configuredDomain.length > 0
+      ? configuredDomain
+      : process.env.NODE_ENV === 'production'
+        ? 'shortbox.de'
+        : undefined;
   return { secure, domain };
 };

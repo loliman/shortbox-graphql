@@ -23,7 +23,9 @@
     "serve": "node dist/app.js",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
-    "start:mock": "MOCK_MODE=true ts-node src/app.ts"
+    "start:mock": "MOCK_MODE=true ts-node src/app.ts",
+    "cleanup:dry-run": "ts-node src/scripts/run-cleanup-dry.ts --dry-run",
+    "cleanup:run": "ts-node src/scripts/run-cleanup-dry.ts"
   },
   "keywords": [],
   "dependencies": {
