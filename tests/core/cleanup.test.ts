@@ -65,14 +65,7 @@ const createModelMocks = () => {
     error: jest.fn(),
   };
 
-  const cronCtor = jest.fn().mockImplementation((cronExpr, onTick) => ({
-    cronExpr,
-    onTick,
-    start: jest.fn(),
-    stop: jest.fn(),
-  }));
-
-  return { models, transaction, logger, cronCtor };
+  return { models, transaction, logger };
 };
 
 const loadCleanupModule = () => {
@@ -85,9 +78,6 @@ const loadCleanupModule = () => {
   jest.doMock('../../src/util/logger', () => ({
     __esModule: true,
     default: mocks.logger,
-  }));
-  jest.doMock('cron', () => ({
-    CronJob: mocks.cronCtor,
   }));
 
   const module = require('../../src/core/cleanup');
@@ -106,14 +96,6 @@ afterEach(() => {
 });
 
 describe('cleanup core', () => {
-  it('creates a cron job with the configured expression', () => {
-    process.env.CLEANUP_CRON = '15 4 * * *';
-    const { cronCtor } = loadCleanupModule();
-
-    expect(cronCtor).toHaveBeenCalledTimes(1);
-    expect(cronCtor).toHaveBeenCalledWith('15 4 * * *', expect.any(Function), null, false);
-  });
-
   it('runs as hard dry-run and returns empty report for empty datasets', async () => {
     process.env.CLEANUP_DRY_RUN = 'true';
     const { run, models, transaction } = loadCleanupModule();

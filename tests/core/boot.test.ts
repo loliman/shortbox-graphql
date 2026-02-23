@@ -1,15 +1,10 @@
 const mockAuthenticate = jest.fn();
-const mockCleanupStart = jest.fn();
 const mockLoggerInfo = jest.fn();
 const mockSync = jest.fn();
 
 jest.mock('../../src/core/database', () => ({
   __esModule: true,
   default: { authenticate: mockAuthenticate },
-}));
-
-jest.mock('../../src/core/cleanup', () => ({
-  cleanup: { start: mockCleanupStart },
 }));
 
 jest.mock('../../src/models', () => ({
@@ -42,7 +37,6 @@ describe('boot', () => {
 
     expect(mockAuthenticate).toHaveBeenCalledTimes(1);
     expect(mockSync).toHaveBeenCalledTimes(0);
-    expect(mockCleanupStart).toHaveBeenCalledTimes(1);
     expect(processFn).toHaveBeenCalledTimes(1);
   });
 });

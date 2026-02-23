@@ -1,9 +1,7 @@
-import { CronJob } from 'cron';
 import { col, Op } from 'sequelize';
 import models from '../models';
 import logger from '../util/logger';
 
-const CLEANUP_CRON = process.env.CLEANUP_CRON || '0 3 * * *';
 const MAX_REPORTED_ITEMS = 100;
 
 type CleanupStageResult = {
@@ -379,16 +377,6 @@ const findUSIssueIdsWithoutDEReference = ({
   };
 };
 
-// Runs daily at 03:00 server time by default.
-export const cleanup = new CronJob(
-  CLEANUP_CRON,
-  async () => {
-    await run();
-  },
-  null,
-  false,
-);
-
 export async function run(options?: CleanupRunOptions): Promise<CleanupDryRunReport | null> {
   const transaction = await models.sequelize.transaction();
   const startedAt = new Date().toISOString();
@@ -594,7 +582,8 @@ export async function run(options?: CleanupRunOptions): Promise<CleanupDryRunRep
     addStage(
       toStageResult('0) US issues without any DE reference chain', step0IssueIds, (id) => {
         const issue = issueById.get(id);
-        const seriesItem = issue && issue.fk_series != null ? seriesById.get(issue.fk_series) : null;
+        const seriesItem =
+          issue && issue.fk_series != null ? seriesById.get(issue.fk_series) : null;
         const publisher =
           seriesItem && seriesItem.fk_publisher != null
             ? publisherById.get(seriesItem.fk_publisher)
@@ -611,8 +600,7 @@ export async function run(options?: CleanupRunOptions): Promise<CleanupDryRunRep
         (publisher) =>
           !series.some(
             (seriesItem) =>
-              activeSeriesIds.has(seriesItem.id) &&
-              toInt(seriesItem.fk_publisher) === publisher.id,
+              activeSeriesIds.has(seriesItem.id) && toInt(seriesItem.fk_publisher) === publisher.id,
           ),
       )
       .map((publisher) => publisher.id);

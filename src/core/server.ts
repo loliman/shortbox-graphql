@@ -37,6 +37,7 @@ import { resolvers as ArcResolvers } from '../modules/arc/Arc.resolver';
 import { resolvers as IndividualResolvers } from '../modules/individual/Individual.resolver';
 import { resolvers as AppearanceResolvers } from '../modules/appearance/Appearance.resolver';
 import { resolvers as UserResolvers } from '../modules/user/User.resolver';
+import { resolvers as AdminResolvers } from '../modules/admin/Admin.resolver';
 
 import { resolvers as NodeResolvers } from '../api/Node';
 import { resolvers as FilterResolvers } from '../api/Filter';
@@ -63,6 +64,7 @@ const resolvers = merge(
   NodeResolvers,
   FilterResolvers,
   UserResolvers,
+  AdminResolvers,
   PublisherResolvers,
   SeriesResolvers,
   IssueResolvers,

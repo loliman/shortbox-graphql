@@ -11,6 +11,7 @@ import ArcFactory from '../modules/arc/Arc.model';
 import IndividualFactory from '../modules/individual/Individual.model';
 import AppearanceFactory from '../modules/appearance/Appearance.model';
 import UserFactory from '../modules/user/User.model';
+import AdminTaskResultFactory from '../modules/admin-task-result/AdminTaskResult.model';
 
 // Import Join Tables
 import Issue_IndividualFactory from '../modules/shared/Issue_Individual.model';
@@ -36,6 +37,7 @@ db.Arc = ArcFactory(sequelize);
 db.Individual = IndividualFactory(sequelize);
 db.Appearance = AppearanceFactory(sequelize);
 db.User = UserFactory(sequelize);
+db.AdminTaskResult = AdminTaskResultFactory(sequelize);
 
 db.Issue_Individual = Issue_IndividualFactory(sequelize);
 db.Issue_Arc = Issue_ArcFactory(sequelize);

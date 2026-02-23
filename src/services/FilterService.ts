@@ -257,7 +257,9 @@ export class FilterService {
       as: string,
       factory: () => Includeable,
     ): IncludeMap => {
-      const existing = list.find((entry) => (entry as IncludeMap).as === as) as IncludeMap | undefined;
+      const existing = list.find((entry) => (entry as IncludeMap).as === as) as
+        | IncludeMap
+        | undefined;
       if (existing) {
         if (!Array.isArray(existing.include)) existing.include = [];
         return existing;
@@ -291,7 +293,7 @@ export class FilterService {
               ? Op.lte
               : rd.compare === '>'
                 ? Op.gt
-            : rd.compare === '<'
+                : rd.compare === '<'
                   ? Op.lt
                   : Op.eq;
         appendAndCondition({ releasedate: { [op]: dateStr } });
@@ -381,7 +383,9 @@ export class FilterService {
           if (!name) return [];
 
           const rawTypes = Array.isArray(ind?.type) ? ind.type : [];
-          const types = rawTypes.filter((type): type is string => typeof type === 'string' && !!type);
+          const types = rawTypes.filter(
+            (type): type is string => typeof type === 'string' && !!type,
+          );
 
           const storyIndividualCondition: Record<string, unknown> = {
             '$stories.individuals.name$': name,
@@ -452,7 +456,8 @@ export class FilterService {
       storySwitchOrConditions.push({
         [Op.or]: [{ '$stories.firstapp$': true }, { '$stories.onlyapp$': true }],
       });
-    if (runtimeFilter.onlyOnePrint) storySwitchOrConditions.push({ '$stories.onlyoneprint$': true });
+    if (runtimeFilter.onlyOnePrint)
+      storySwitchOrConditions.push({ '$stories.onlyoneprint$': true });
     if (runtimeFilter.notOnlyOnePrint)
       storySwitchOrConditions.push({ '$stories.onlyoneprint$': false });
 
@@ -461,9 +466,16 @@ export class FilterService {
     const needsIndividualJoin = Boolean(
       runtimeFilter.individuals && runtimeFilter.individuals.length > 0,
     );
-    const needsParentJoinForExclusive = Boolean((runtimeFilter.exclusive || runtimeFilter.notExclusive) && !us);
+    const needsParentJoinForExclusive = Boolean(
+      (runtimeFilter.exclusive || runtimeFilter.notExclusive) && !us,
+    );
 
-    if (needsStorySwitches || needsAppearanceJoin || needsIndividualJoin || needsParentJoinForExclusive) {
+    if (
+      needsStorySwitches ||
+      needsAppearanceJoin ||
+      needsIndividualJoin ||
+      needsParentJoinForExclusive
+    ) {
       const storyInclude = ensureStoriesInclude();
       storyInclude.required = true;
 
