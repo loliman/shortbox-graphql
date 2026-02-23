@@ -25,7 +25,9 @@
     "docker:up": "docker-compose up -d",
     "start:mock": "MOCK_MODE=true ts-node src/app.ts",
     "cleanup:dry-run": "ts-node src/scripts/run-cleanup-dry.ts --dry-run",
-    "cleanup:run": "ts-node src/scripts/run-cleanup-dry.ts"
+    "cleanup:run": "ts-node src/scripts/run-cleanup-dry.ts",
+    "reimport:us:dry-run": "ts-node src/scripts/run-us-reimport.ts --dry-run",
+    "reimport:us:run": "ts-node src/scripts/run-us-reimport.ts"
   },
   "keywords": [],
   "dependencies": {

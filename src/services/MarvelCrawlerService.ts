@@ -24,6 +24,11 @@ export interface CrawledIssue {
   releasedate: string;
   price: number;
   currency: string;
+  seriesTitle?: string;
+  seriesVolume?: number;
+  seriesPublisherName?: string;
+  seriesStartyear?: number;
+  seriesEndyear?: number;
   coverUrl: string;
   stories: CrawledStory[];
   cover?: CrawledCover;
@@ -1194,6 +1199,12 @@ export class MarvelCrawlerService {
       releasedate: String(issue.releasedate || '').substring(0, 10) || new Date().toISOString().slice(0, 10),
       price: Number(issue.price || 0),
       currency: String(issue.currency || 'USD'),
+      seriesTitle: String(issue.series?.title || title).trim(),
+      seriesVolume: Number(issue.series?.volume || volume || 0),
+      seriesPublisherName:
+        String(issue.series?.publisher?.name || 'Marvel Comics').trim() || 'Marvel Comics',
+      seriesStartyear: Number(issue.series?.startyear || 0),
+      seriesEndyear: Number(issue.series?.endyear || 0),
       coverUrl: String(issue.cover?.url || ''),
       stories: normalizedStories.length > 0 ? normalizedStories : [fallbackStory],
       cover: {

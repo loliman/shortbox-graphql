@@ -44,6 +44,8 @@ Standard-URL: `http://localhost:4000/` (GraphQL via POST/OPTIONS)
 - `npm run serve`: Start aus `dist/app.js`
 - `npm run docker:build`: Docker Image bauen
 - `npm run docker:up`: App + DB via Docker Compose starten
+- `npm run reimport:us:dry-run`: US-Reimport als Dry-Run (Rollback)
+- `npm run reimport:us:run`: US-Reimport mit Commit
 
 ## Projektstruktur
 
