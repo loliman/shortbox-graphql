@@ -30,6 +30,12 @@ export type ReimportIssueReport = {
   warnings: string[];
   conflicts: string[];
   changes: string[];
+  changeBuckets: {
+    dataHygiene: string[];
+    structure: string[];
+    contentSync: string[];
+    other: string[];
+  };
   storyCount?: {
     local: number;
     crawled: number;
@@ -41,14 +47,18 @@ export type ReimportReport = {
   startedAt: string;
   finishedAt: string;
   scope: ReimportScope;
-  summary: {
-    total: number;
-    updated: number;
-    skipped: number;
-    manual: number;
-    failed: number;
+  result: {
+    changedPublishers: number;
+    changedSeries: number;
+    changedIssues: number;
+    normalizedIssues: number;
+    updatedIssues: number;
+    conflictIssues: number;
+    failedIssues: number;
+    conflictSeries: number;
+    failedSeries: number;
+    failedPublishers: number;
   };
-  issues: ReimportIssueReport[];
 };
 
 type SeriesWithPublisher = {
@@ -75,6 +85,27 @@ type IssueWithSeries = {
   format: string;
   fk_series: number;
   series?: SeriesWithPublisher;
+};
+
+type SeriesCandidate = {
+  key: string;
+  title: string;
+  volume: number;
+  publisherName: string;
+  startyear: number;
+  endyear: number;
+};
+
+type PublisherCandidate = {
+  key: string;
+  name: string;
+};
+
+type PrefetchedIssueCrawl = {
+  crawledSeries: CrawledSeries | null;
+  crawledIssue: CrawledIssueWithSeries | null;
+  seriesCrawlError: Error | null;
+  issueCrawlError: Error | null;
 };
 
 type StoryRow = {
@@ -112,6 +143,9 @@ type CrawledIssueWithSeries = CrawledIssue & {
 };
 
 const defaultScope: ReimportScope = { kind: 'all-us' };
+const ISSUE_BATCH_SIZE = 25;
+const ENTITY_BATCH_SIZE = 25;
+const DRY_RUN_ALL_US_LIMIT = 100;
 
 const normalizeDryRun = (options?: ReimportRunOptions): boolean => {
   if (typeof options?.dryRun === 'boolean') return options.dryRun;
@@ -132,6 +166,11 @@ const normalizeTypeList = (raw: unknown): string[] => {
 const toInt = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+};
+
+const toPositiveInt = (value: unknown): number | null => {
+  const normalized = toInt(value);
+  return normalized > 0 ? normalized : null;
 };
 
 const dateOnly = (value: unknown): string => {
@@ -158,6 +197,84 @@ const normalizePrice = (value: unknown): number => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
   return Number(parsed.toFixed(2));
+};
+
+const normalizeLimitationForDb = (value: unknown): string => {
+  if (value === null || value === undefined) return '0';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value));
+  const trimmed = String(value).trim();
+  if (!trimmed) return '0';
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? String(parsed) : '0';
+};
+
+type ChangeBuckets = {
+  dataHygiene: string[];
+  structure: string[];
+  contentSync: string[];
+  other: string[];
+};
+
+const createEmptyChangeBuckets = (): ChangeBuckets => ({
+  dataHygiene: [],
+  structure: [],
+  contentSync: [],
+  other: [],
+});
+
+const classifyChangeBucket = (change: string): keyof ChangeBuckets => {
+  const normalized = normalizeLower(change);
+  if (
+    normalized.includes('normalized ') ||
+    normalized.includes('invalid ') ||
+    normalized.includes('cleanup ') ||
+    normalized.includes('to original=true')
+  ) {
+    return 'dataHygiene';
+  }
+  if (
+    normalized.includes('created publisher') ||
+    normalized.includes('created series') ||
+    normalized.includes('moved issue to series') ||
+    normalized.includes('created variant issue') ||
+    normalized.includes('removed obsolete variant') ||
+    normalized.includes('updated series ')
+  ) {
+    return 'structure';
+  }
+  if (
+    normalized.includes('synchronized ') ||
+    normalized.includes('updated release date') ||
+    normalized.includes('updated price') ||
+    normalized.includes('updated currency')
+  ) {
+    return 'contentSync';
+  }
+  return 'other';
+};
+
+const bucketizeChanges = (changes: string[]): ChangeBuckets => {
+  const buckets = createEmptyChangeBuckets();
+  for (const change of changes) {
+    const bucket = classifyChangeBucket(change);
+    buckets[bucket].push(change);
+  }
+  return buckets;
+};
+
+const countMatchingChanges = (changes: string[], patterns: string[]): number => {
+  return changes.filter((change) => {
+    const normalized = normalizeLower(change);
+    return patterns.some((pattern) => normalized.includes(pattern));
+  }).length;
+};
+
+const chunkBySize = <T>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 };
 
 const listDiff = (current: Set<string>, next: Set<string>): { add: string[]; remove: string[] } => {
@@ -196,12 +313,14 @@ const findOrCreatePublisher = async (publisherName: string, transaction: Transac
     transaction,
   });
 
+  let updatedOriginal = false;
   if (!publisher.original) {
     publisher.original = true;
     await publisher.save({ transaction });
+    updatedOriginal = true;
   }
 
-  return { publisher, created };
+  return { publisher, created, updatedOriginal };
 };
 
 const resolveTargetSeriesData = (
@@ -625,40 +744,47 @@ const reimportIssue = async (
   issue: IssueWithSeries,
   crawler: MarvelCrawlerService,
   transaction: Transaction,
+  prefetched?: PrefetchedIssueCrawl,
 ): Promise<ReimportIssueReport> => {
+  const sourceIssueId = toInt(issue.id);
+  if (!sourceIssueId) {
+    throw new Error('Invalid local issue id for reimport.');
+  }
+
   const report: ReimportIssueReport = {
-    issueId: issue.id,
+    issueId: sourceIssueId,
     status: 'skipped',
     label: buildIssueLabel(issue),
     notes: [],
     warnings: [],
     conflicts: [],
     changes: [],
+    changeBuckets: createEmptyChangeBuckets(),
   };
 
   const localSeriesTitle = normalizeString(issue.series?.title);
   const localSeriesVolume = toInt(issue.series?.volume);
   const localNumber = normalizeString(issue.number);
 
-  let crawledSeries: CrawledSeries | null = null;
-  let crawledIssue: CrawledIssueWithSeries | null = null;
-  let seriesCrawlError: Error | null = null;
-  let issueCrawlError: Error | null = null;
-
-  try {
-    crawledSeries = await crawler.crawlSeries(localSeriesTitle, localSeriesVolume);
-  } catch (error) {
-    seriesCrawlError = error as Error;
-  }
-
-  try {
-    crawledIssue = (await crawler.crawlIssue(
-      localSeriesTitle,
-      localSeriesVolume,
-      localNumber,
-    )) as CrawledIssueWithSeries;
-  } catch (error) {
-    issueCrawlError = error as Error;
+  let crawledSeries: CrawledSeries | null = prefetched?.crawledSeries || null;
+  let crawledIssue: CrawledIssueWithSeries | null = prefetched?.crawledIssue || null;
+  let seriesCrawlError: Error | null = prefetched?.seriesCrawlError || null;
+  let issueCrawlError: Error | null = prefetched?.issueCrawlError || null;
+  if (!prefetched) {
+    try {
+      crawledSeries = await crawler.crawlSeries(localSeriesTitle, localSeriesVolume);
+    } catch (error) {
+      seriesCrawlError = error as Error;
+    }
+    try {
+      crawledIssue = (await crawler.crawlIssue(
+        localSeriesTitle,
+        localSeriesVolume,
+        localNumber,
+      )) as CrawledIssueWithSeries;
+    } catch (error) {
+      issueCrawlError = error as Error;
+    }
   }
 
   if (!crawledIssue && !crawledSeries) {
@@ -676,50 +802,43 @@ const reimportIssue = async (
   }
 
   const targetSeriesData = resolveTargetSeriesData(issue, crawledSeries, crawledIssue);
+  const publisherName = normalizeString(targetSeriesData.publisherName) || 'Marvel Comics';
+  const publisher = await models.Publisher.findOne({
+    where: { name: publisherName },
+    transaction,
+  });
+  if (!publisher) {
+    report.status = 'manual';
+    report.conflicts.push(`Target publisher "${publisherName}" does not exist.`);
+    return report;
+  }
 
-  const { publisher } = await findOrCreatePublisher(targetSeriesData.publisherName, transaction);
-
-  const [targetSeries, createdSeries] = await models.Series.findOrCreate({
+  const targetSeries = await models.Series.findOne({
     where: {
       title: targetSeriesData.title,
       volume: targetSeriesData.volume,
       fk_publisher: publisher.id,
-    },
-    defaults: {
-      title: targetSeriesData.title,
-      volume: targetSeriesData.volume,
-      fk_publisher: publisher.id,
-      startyear: targetSeriesData.startyear,
-      endyear: targetSeriesData.endyear,
-      addinfo: '',
     },
     transaction,
   });
-
-  if (createdSeries) {
-    report.changes.push(
-      `Created series "${targetSeriesData.title}" (Vol. ${targetSeriesData.volume}) for publisher "${publisher.name}".`,
+  if (!targetSeries) {
+    report.status = 'manual';
+    report.conflicts.push(
+      `Target series "${targetSeriesData.title}" (Vol. ${targetSeriesData.volume}) does not exist.`,
     );
+    return report;
   }
 
-  if (targetSeries.startyear !== targetSeriesData.startyear) {
-    targetSeries.startyear = targetSeriesData.startyear;
-    await targetSeries.save({ transaction });
-    report.changes.push(`Updated series startyear -> ${targetSeriesData.startyear}.`);
+  const targetSeriesId = toInt(targetSeries.id);
+  if (!targetSeriesId) {
+    throw new Error('Invalid target series id while reimporting issue.');
   }
-
-  if (toInt(targetSeries.endyear) !== targetSeriesData.endyear) {
-    targetSeries.endyear = targetSeriesData.endyear;
-    await targetSeries.save({ transaction });
-    report.changes.push(`Updated series endyear -> ${targetSeriesData.endyear}.`);
-  }
-
   const conflictingMainIssue = await models.Issue.findOne({
     where: {
-      fk_series: targetSeries.id,
+      fk_series: targetSeriesId,
       number: localNumber,
       variant: '',
-      id: { [Op.ne]: issue.id },
+      id: { [Op.ne]: sourceIssueId },
     },
     transaction,
   });
@@ -731,70 +850,94 @@ const reimportIssue = async (
     );
     return report;
   }
-
-  const mutableIssue = await models.Issue.findByPk(issue.id, { transaction });
+  const mutableIssue = await models.Issue.findByPk(sourceIssueId, { transaction });
   if (!mutableIssue) {
     report.status = 'failed';
     report.warnings.push('Local issue no longer exists during reimport.');
     return report;
   }
 
-  const oldSeriesId = mutableIssue.fk_series;
+  const mutableIssueId = toInt(mutableIssue.id);
+  if (!mutableIssueId) {
+    throw new Error('Invalid mutable issue id while reimporting.');
+  }
+  const oldSeriesId = toInt(mutableIssue.fk_series);
 
-  if (mutableIssue.fk_series !== targetSeries.id) {
-    mutableIssue.fk_series = targetSeries.id;
+  if (toInt(mutableIssue.fk_series) !== targetSeriesId) {
+    mutableIssue.fk_series = targetSeriesId;
     report.changes.push(
       `Moved issue to series "${targetSeries.title}" (Vol. ${targetSeries.volume}) / publisher "${publisher.name}".`,
     );
+  }
+
+  const mutableIssuePatch: Record<string, unknown> = {};
+
+  if (toInt(mutableIssue.fk_series) !== targetSeriesId) {
+    mutableIssuePatch.fk_series = targetSeriesId;
   }
 
   if (crawledIssue) {
     const nextReleaseDate = dateOnly(crawledIssue.releasedate || mutableIssue.releasedate);
     if (nextReleaseDate && dateOnly(mutableIssue.releasedate) !== nextReleaseDate) {
       mutableIssue.releasedate = nextReleaseDate;
+      mutableIssuePatch.releasedate = nextReleaseDate;
       report.changes.push(`Updated release date -> ${nextReleaseDate}.`);
     }
 
     const nextPrice = normalizePrice(crawledIssue.price);
     if (normalizePrice(mutableIssue.price) !== nextPrice) {
       mutableIssue.price = nextPrice;
+      mutableIssuePatch.price = nextPrice;
       report.changes.push(`Updated price -> ${nextPrice}.`);
     }
 
     const nextCurrency = normalizeString(crawledIssue.currency || mutableIssue.currency);
     if (nextCurrency && normalizeString(mutableIssue.currency) !== nextCurrency) {
       mutableIssue.currency = nextCurrency;
+      mutableIssuePatch.currency = nextCurrency;
       report.changes.push(`Updated currency -> ${nextCurrency}.`);
     }
   }
 
-  await mutableIssue.save({ transaction });
+  // Some legacy rows may contain empty comicguide IDs; normalize to zero to avoid numeric DB cast errors.
+  if (!normalizeString(mutableIssue.comicguideid)) {
+    mutableIssue.comicguideid = '0';
+    mutableIssuePatch.comicguideid = '0';
+    report.changes.push('Normalized empty comicguideid -> 0.');
+  }
+  if (Object.keys(mutableIssuePatch).length > 0) {
+    await models.Issue.update(mutableIssuePatch, {
+      where: { id: mutableIssueId },
+      transaction,
+    });
+  }
 
   if (crawledIssue) {
     const issueIndividuals = await syncIssueIndividuals(
-      mutableIssue.id,
+      mutableIssueId,
       (crawledIssue.individuals || []) as Array<{ name?: string; type?: string | string[] }>,
       transaction,
     );
     if (issueIndividuals.changed) report.changes.push('Synchronized issue individuals.');
-
-    const issueArcs = await syncIssueArcs(mutableIssue.id, crawledIssue.arcs || [], transaction);
+    const issueArcs = await syncIssueArcs(mutableIssueId, crawledIssue.arcs || [], transaction);
     if (issueArcs.changed) report.changes.push('Synchronized issue arcs.');
-
     const mainCoverUrl = normalizeString(crawledIssue.cover?.url) || normalizeString(crawledIssue.coverUrl);
     const mainCoverNumber = toInt(crawledIssue.cover?.number);
-    const mainCover = await ensureMainCover(mutableIssue.id, mainCoverUrl, mainCoverNumber, transaction);
+    const mainCover = await ensureMainCover(mutableIssueId, mainCoverUrl, mainCoverNumber, transaction);
     if (mainCover.changed) report.changes.push('Synchronized main cover metadata.');
 
+    const mainCoverId = toPositiveInt(mainCover.cover.id);
+    if (!mainCoverId) {
+      throw new Error('Invalid main cover id while reimporting issue.');
+    }
     const coverIndividuals = await syncCoverIndividuals(
-      mainCover.cover.id,
+      mainCoverId,
       (crawledIssue.cover?.individuals || []) as Array<{ name?: string; type?: string | string[] }>,
       transaction,
     );
     if (coverIndividuals.changed) report.changes.push('Synchronized main cover individuals.');
-
     const localStories = (await models.Story.findAll({
-      where: { fk_issue: mutableIssue.id },
+      where: { fk_issue: mutableIssueId },
       order: [
         ['number', 'ASC'],
         ['id', 'ASC'],
@@ -813,41 +956,43 @@ const reimportIssue = async (
       for (let index = 0; index < localStories.length; index += 1) {
         const localStory = localStories[index];
         const crawledStory = crawledStories[index];
-
+        const localStoryId = toPositiveInt(localStory.id);
+        if (!localStoryId) {
+          report.status = 'manual';
+          report.conflicts.push('Encountered story with invalid local id; manual fix required.');
+          continue;
+        }
         const normalizedNumber = toInt(crawledStory.number || index + 1) || index + 1;
         if (localStory.number !== normalizedNumber) {
           await models.Story.update(
             { number: normalizedNumber },
             {
-              where: { id: localStory.id },
+              where: { id: localStoryId },
               transaction,
             },
           );
-          report.changes.push(`Normalized story order for Story#${localStory.id} -> ${normalizedNumber}.`);
+          report.changes.push(`Normalized story order for Story#${localStoryId} -> ${normalizedNumber}.`);
         }
-
         const storyIndividuals = await syncStoryIndividuals(
-          localStory.id,
+          localStoryId,
           (crawledStory.individuals || []) as Array<{ name?: string; type?: string | string[] }>,
           transaction,
         );
         if (storyIndividuals.changed) {
-          report.changes.push(`Synchronized story individuals for Story#${localStory.id}.`);
+          report.changes.push(`Synchronized story individuals for Story#${localStoryId}.`);
         }
-
         const storyAppearances = await syncStoryAppearances(
-          localStory.id,
+          localStoryId,
           crawledStory.appearances || [],
           transaction,
         );
         if (storyAppearances.changed) {
-          report.changes.push(`Synchronized story appearances for Story#${localStory.id}.`);
+          report.changes.push(`Synchronized story appearances for Story#${localStoryId}.`);
         }
       }
     }
 
     report.notes.push('Reprint/ReprintOf links are intentionally not changed by this task.');
-
     const crawledVariants = (crawledIssue.variants || []) as CrawledVariantLike[];
     const desiredVariantNames = new Set<string>();
 
@@ -859,28 +1004,30 @@ const reimportIssue = async (
       const variantNumber = normalizeString(rawVariant.number || mutableIssue.number) || mutableIssue.number;
       const targetVariantConflict = await models.Issue.findOne({
         where: {
-          fk_series: targetSeries.id,
+          fk_series: targetSeriesId,
           number: variantNumber,
           variant: variantName,
-          id: { [Op.ne]: mutableIssue.id },
+          id: { [Op.ne]: mutableIssueId },
         },
         transaction,
       });
 
       let variantIssue = targetVariantConflict;
       if (!variantIssue) {
-        variantIssue = await models.Issue.findOne({
-          where: {
-            fk_series: oldSeriesId,
-            number: variantNumber,
-            variant: variantName,
-            id: { [Op.ne]: mutableIssue.id },
-          },
-          transaction,
-        });
+        if (oldSeriesId) {
+          variantIssue = await models.Issue.findOne({
+            where: {
+              fk_series: oldSeriesId,
+              number: variantNumber,
+              variant: variantName,
+              id: { [Op.ne]: mutableIssueId },
+            },
+            transaction,
+          });
+        }
       }
 
-      if (targetVariantConflict && variantIssue && toInt(variantIssue.fk_series) === targetSeries.id) {
+      if (targetVariantConflict && variantIssue && toInt(variantIssue.fk_series) === targetSeriesId) {
         report.status = 'manual';
         report.conflicts.push(
           `Variant conflict for "${variantName}": target variant Issue#${variantIssue.id} already exists.`,
@@ -901,35 +1048,40 @@ const reimportIssue = async (
             currency: normalizeString(rawVariant.currency) || mutableIssue.currency,
             comicguideid: '0',
             isbn: '',
-            limitation: '',
+            limitation: normalizeLimitationForDb(undefined),
             addinfo: '',
-            fk_series: targetSeries.id,
+            fk_series: targetSeriesId,
           },
           { transaction },
         );
         report.changes.push(`Created variant issue "${variantName}".`);
       } else {
         let variantChanged = false;
-        if (variantIssue.fk_series !== targetSeries.id) {
-          variantIssue.fk_series = targetSeries.id;
+        const variantPatch: Record<string, unknown> = {};
+        if (toInt(variantIssue.fk_series) !== targetSeriesId) {
+          variantIssue.fk_series = targetSeriesId;
+          variantPatch.fk_series = targetSeriesId;
           variantChanged = true;
         }
 
         const nextFormat = normalizeString(rawVariant.format) || normalizeString(variantIssue.format);
         if (nextFormat && normalizeString(variantIssue.format) !== nextFormat) {
           variantIssue.format = nextFormat;
+          variantPatch.format = nextFormat;
           variantChanged = true;
         }
 
         const nextVariantRelease = dateOnly(rawVariant.releasedate || variantIssue.releasedate);
         if (nextVariantRelease && dateOnly(variantIssue.releasedate) !== nextVariantRelease) {
           variantIssue.releasedate = nextVariantRelease;
+          variantPatch.releasedate = nextVariantRelease;
           variantChanged = true;
         }
 
         const nextVariantPrice = normalizePrice(rawVariant.price);
         if (normalizePrice(variantIssue.price) !== nextVariantPrice) {
           variantIssue.price = nextVariantPrice;
+          variantPatch.price = nextVariantPrice;
           variantChanged = true;
         }
 
@@ -937,20 +1089,34 @@ const reimportIssue = async (
           normalizeString(rawVariant.currency) || normalizeString(variantIssue.currency);
         if (nextVariantCurrency && normalizeString(variantIssue.currency) !== nextVariantCurrency) {
           variantIssue.currency = nextVariantCurrency;
+          variantPatch.currency = nextVariantCurrency;
+          variantChanged = true;
+        }
+
+        if (!normalizeString(variantIssue.comicguideid)) {
+          variantIssue.comicguideid = '0';
+          variantPatch.comicguideid = '0';
           variantChanged = true;
         }
 
         if (variantChanged) {
-          await variantIssue.save({ transaction });
+          await models.Issue.update(variantPatch, {
+            where: { id: variantIssue.id },
+            transaction,
+          });
           report.changes.push(`Updated variant issue "${variantName}".`);
         }
       }
-
       const variantCover = rawVariant.cover;
       if (!variantCover) continue;
 
+      const variantIssueId = toPositiveInt(variantIssue.id);
+      if (!variantIssueId) {
+        throw new Error(`Invalid variant issue id for "${variantName}".`);
+      }
+
       const ensuredVariantCover = await ensureMainCover(
-        variantIssue.id,
+        variantIssueId,
         normalizeString(variantCover.url),
         toInt(variantCover.number),
         transaction,
@@ -959,8 +1125,12 @@ const reimportIssue = async (
         report.changes.push(`Synchronized cover metadata for variant "${variantName}".`);
       }
 
+      const ensuredVariantCoverId = toPositiveInt(ensuredVariantCover.cover.id);
+      if (!ensuredVariantCoverId) {
+        throw new Error(`Invalid cover id for variant "${variantName}".`);
+      }
       const variantCoverIndividuals = await syncCoverIndividuals(
-        ensuredVariantCover.cover.id,
+        ensuredVariantCoverId,
         (variantCover.individuals || []) as Array<{ name?: string; type?: string | string[] }>,
         transaction,
       );
@@ -968,10 +1138,9 @@ const reimportIssue = async (
         report.changes.push(`Synchronized cover individuals for variant "${variantName}".`);
       }
     }
-
     const existingTargetVariants = (await models.Issue.findAll({
       where: {
-        fk_series: targetSeries.id,
+        fk_series: targetSeriesId,
         number: mutableIssue.number,
         variant: { [Op.ne]: '' },
       },
@@ -982,8 +1151,15 @@ const reimportIssue = async (
       const variantName = normalizeString(existingVariant.variant);
       if (desiredVariantNames.has(variantName)) continue;
 
+      const existingVariantId = toPositiveInt(existingVariant.id);
+      if (!existingVariantId) {
+        report.status = 'manual';
+        report.conflicts.push(`Variant "${variantName}" has invalid local id; manual fix required.`);
+        continue;
+      }
+
       const storyCount = await models.Story.count({
-        where: { fk_issue: existingVariant.id },
+        where: { fk_issue: existingVariantId },
         transaction,
       });
 
@@ -995,7 +1171,7 @@ const reimportIssue = async (
         continue;
       }
 
-      await models.Issue.destroy({ where: { id: existingVariant.id }, transaction });
+      await models.Issue.destroy({ where: { id: existingVariantId }, transaction });
       report.changes.push(`Removed obsolete variant "${variantName}".`);
     }
   }
@@ -1004,6 +1180,7 @@ const reimportIssue = async (
     if (report.changes.length > 0) report.status = 'updated';
     else report.status = 'skipped';
   }
+  report.changeBuckets = bucketizeChanges(report.changes);
 
   return report;
 };
@@ -1069,6 +1246,71 @@ const loadIssuesForScope = async (
   return issues;
 };
 
+const loadIssuesBatchForScope = async (
+  scope: ReimportScope,
+  offset: number,
+  limit: number,
+  transaction?: Transaction,
+): Promise<IssueWithSeries[]> => {
+  const include = [
+    {
+      model: models.Series,
+      as: 'series',
+      required: true,
+      include: [
+        {
+          model: models.Publisher,
+          as: 'publisher',
+          required: true,
+          ...(scope.kind === 'publisher' ? { where: { id: scope.publisherId } } : {}),
+          ...(scope.kind === 'all-us' ? { where: { original: true } } : {}),
+        },
+      ],
+    },
+  ];
+
+  if (scope.kind === 'issue') {
+    if (offset > 0) return [];
+    const issue = await models.Issue.findByPk(scope.issueId, {
+      include,
+      transaction,
+    });
+    if (!issue) return [];
+
+    const siblings = (await models.Issue.findAll({
+      where: {
+        fk_series: issue.fk_series,
+        number: issue.number,
+      },
+      include,
+      transaction,
+      order: [['id', 'ASC']],
+    })) as unknown as IssueWithSeries[];
+
+    if (siblings.length === 0) return [issue as unknown as IssueWithSeries];
+    return siblings;
+  }
+
+  const where: Record<string, unknown> = {
+    variant: '',
+  };
+
+  if (scope.kind === 'series') {
+    where.fk_series = scope.seriesId;
+  }
+
+  const issues = (await models.Issue.findAll({
+    where,
+    include,
+    transaction,
+    order: [['id', 'ASC']],
+    offset,
+    limit,
+  })) as unknown as IssueWithSeries[];
+
+  return issues;
+};
+
 const dedupeBySeriesNumber = (issues: IssueWithSeries[]): IssueWithSeries[] => {
   const byKey = new Map<string, IssueWithSeries>();
 
@@ -1096,6 +1338,419 @@ const dedupeBySeriesNumber = (issues: IssueWithSeries[]): IssueWithSeries[] => {
   return Array.from(byKey.values());
 };
 
+const collectSeriesCandidates = (issues: IssueWithSeries[]): SeriesCandidate[] => {
+  const byKey = new Map<string, SeriesCandidate>();
+
+  for (const issue of issues) {
+    const title = normalizeString(issue.series?.title);
+    const volume = toInt(issue.series?.volume);
+    if (!title || !volume) continue;
+
+    const key = `${normalizeLower(title)}::${volume}`;
+    if (byKey.has(key)) continue;
+
+    byKey.set(key, {
+      key,
+      title,
+      volume,
+      publisherName: normalizeString(issue.series?.publisher?.name) || 'Marvel Comics',
+      startyear: toInt(issue.series?.startyear),
+      endyear: toInt(issue.series?.endyear),
+    });
+  }
+
+  return Array.from(byKey.values());
+};
+
+const prefetchIssueCrawls = async (
+  issues: IssueWithSeries[],
+  crawler: MarvelCrawlerService,
+): Promise<Map<number, PrefetchedIssueCrawl>> => {
+  const prefetched = new Map<number, PrefetchedIssueCrawl>();
+
+  for (const issue of issues) {
+    const issueId = toInt(issue.id);
+    if (!issueId) continue;
+
+    const localSeriesTitle = normalizeString(issue.series?.title);
+    const localSeriesVolume = toInt(issue.series?.volume);
+    const localNumber = normalizeString(issue.number);
+
+    let crawledSeries: CrawledSeries | null = null;
+    let crawledIssue: CrawledIssueWithSeries | null = null;
+    let seriesCrawlError: Error | null = null;
+    let issueCrawlError: Error | null = null;
+
+    try {
+      crawledSeries = await crawler.crawlSeries(localSeriesTitle, localSeriesVolume);
+    } catch (error) {
+      seriesCrawlError = error as Error;
+    }
+
+    try {
+      crawledIssue = (await crawler.crawlIssue(
+        localSeriesTitle,
+        localSeriesVolume,
+        localNumber,
+      )) as CrawledIssueWithSeries;
+    } catch (error) {
+      issueCrawlError = error as Error;
+    }
+
+    prefetched.set(issueId, {
+      crawledSeries,
+      crawledIssue,
+      seriesCrawlError,
+      issueCrawlError,
+    });
+  }
+
+  return prefetched;
+};
+
+const collectSeriesCandidatesFromPrefetch = (
+  issues: IssueWithSeries[],
+  prefetched: Map<number, PrefetchedIssueCrawl>,
+): SeriesCandidate[] => {
+  const byKey = new Map<string, SeriesCandidate>();
+
+  for (const issue of issues) {
+    const issueId = toInt(issue.id);
+    const crawl = prefetched.get(issueId);
+
+    const targetSeriesData = resolveTargetSeriesData(issue, crawl?.crawledSeries || null, crawl?.crawledIssue || null);
+
+    const title = normalizeString(targetSeriesData.title);
+    const volume = toInt(targetSeriesData.volume);
+    const publisherName = normalizeString(targetSeriesData.publisherName) || 'Marvel Comics';
+    if (!title || !volume) continue;
+
+    const key = `${normalizeLower(title)}::${volume}::${normalizeLower(publisherName)}`;
+    if (byKey.has(key)) continue;
+
+    byKey.set(key, {
+      key,
+      title,
+      volume,
+      publisherName,
+      startyear: toInt(targetSeriesData.startyear),
+      endyear: toInt(targetSeriesData.endyear),
+    });
+  }
+
+  return Array.from(byKey.values());
+};
+
+const collectPublisherCandidates = (seriesCandidates: SeriesCandidate[]): PublisherCandidate[] => {
+  const byKey = new Map<string, PublisherCandidate>();
+
+  for (const candidate of seriesCandidates) {
+    const name = normalizeString(candidate.publisherName) || 'Marvel Comics';
+    const key = normalizeLower(name);
+    if (byKey.has(key)) continue;
+    byKey.set(key, { key, name });
+  }
+
+  return Array.from(byKey.values());
+};
+
+const loadPublisherCandidatesBatchForScope = async (
+  scope: ReimportScope,
+  offset: number,
+  limit: number,
+  transaction?: Transaction,
+): Promise<PublisherCandidate[]> => {
+  if (scope.kind === 'publisher') {
+    if (offset > 0) return [];
+    const publisher = await models.Publisher.findByPk(scope.publisherId, { transaction });
+    if (!publisher) return [];
+    return [{ key: normalizeLower(publisher.name), name: normalizeString(publisher.name) }];
+  }
+
+  if (scope.kind === 'series') {
+    if (offset > 0) return [];
+    const series = (await models.Series.findByPk(scope.seriesId, {
+      include: [{ model: models.Publisher, as: 'publisher', required: true }],
+      transaction,
+    })) as unknown as SeriesWithPublisher | null;
+    const publisher = series?.publisher as SeriesWithPublisher['publisher'] | undefined;
+    if (!publisher) return [];
+    return [{ key: normalizeLower(publisher.name), name: normalizeString(publisher.name) }];
+  }
+
+  if (scope.kind === 'issue') {
+    if (offset > 0) return [];
+    const issue = await models.Issue.findByPk(scope.issueId, {
+      include: [
+        {
+          model: models.Series,
+          as: 'series',
+          required: true,
+          include: [{ model: models.Publisher, as: 'publisher', required: true }],
+        },
+      ],
+      transaction,
+    });
+    const publisher = (issue as unknown as IssueWithSeries | null)?.series?.publisher;
+    if (!publisher) return [];
+    return [{ key: normalizeLower(publisher.name), name: normalizeString(publisher.name) }];
+  }
+
+  const rows = (await models.Publisher.findAll({
+    where: { original: true },
+    attributes: ['name'],
+    order: [['id', 'ASC']],
+    offset,
+    limit,
+    transaction,
+  })) as unknown as Array<{ name: string }>;
+
+  return rows
+    .map((row) => normalizeString(row.name))
+    .filter((name) => Boolean(name))
+    .map((name) => ({ key: normalizeLower(name), name }));
+};
+
+const loadSeriesCandidatesBatchForScope = async (
+  scope: ReimportScope,
+  offset: number,
+  limit: number,
+  transaction?: Transaction,
+): Promise<SeriesCandidate[]> => {
+  if (scope.kind === 'series') {
+    if (offset > 0) return [];
+    const rows = (await models.Series.findAll({
+      where: { id: scope.seriesId },
+      include: [{ model: models.Publisher, as: 'publisher', required: true }],
+      transaction,
+    })) as unknown as SeriesWithPublisher[];
+    return rows.map((series) => ({
+      key: `${normalizeLower(series.title)}::${toInt(series.volume)}::${normalizeLower(series.publisher?.name)}`,
+      title: normalizeString(series.title),
+      volume: toInt(series.volume),
+      publisherName: normalizeString(series.publisher?.name) || 'Marvel Comics',
+      startyear: toInt(series.startyear),
+      endyear: toInt(series.endyear),
+    }));
+  }
+
+  if (scope.kind === 'issue') {
+    if (offset > 0) return [];
+    const issue = await models.Issue.findByPk(scope.issueId, {
+      include: [{ model: models.Series, as: 'series', required: true, include: [{ model: models.Publisher, as: 'publisher', required: true }] }],
+      transaction,
+    });
+    const series = (issue as unknown as IssueWithSeries | null)?.series;
+    if (!series) return [];
+    return [
+      {
+        key: `${normalizeLower(series.title)}::${toInt(series.volume)}::${normalizeLower(series.publisher?.name)}`,
+        title: normalizeString(series.title),
+        volume: toInt(series.volume),
+        publisherName: normalizeString(series.publisher?.name) || 'Marvel Comics',
+        startyear: toInt(series.startyear),
+        endyear: toInt(series.endyear),
+      },
+    ];
+  }
+
+  const where: Record<string, unknown> = {};
+  if (scope.kind === 'publisher') {
+    where.fk_publisher = scope.publisherId;
+  }
+
+  const include = [
+    {
+      model: models.Publisher,
+      as: 'publisher',
+      required: true,
+      ...(scope.kind === 'all-us' ? { where: { original: true } } : {}),
+    },
+  ];
+
+  const rows = (await models.Series.findAll({
+    where,
+    include,
+    order: [['id', 'ASC']],
+    offset,
+    limit,
+    transaction,
+  })) as unknown as SeriesWithPublisher[];
+
+  return rows.map((series) => ({
+    key: `${normalizeLower(series.title)}::${toInt(series.volume)}::${normalizeLower(series.publisher?.name)}`,
+    title: normalizeString(series.title),
+    volume: toInt(series.volume),
+    publisherName: normalizeString(series.publisher?.name) || 'Marvel Comics',
+    startyear: toInt(series.startyear),
+    endyear: toInt(series.endyear),
+  }));
+};
+
+const loadAllPublisherCandidatesForScope = async (scope: ReimportScope): Promise<PublisherCandidate[]> => {
+  const byKey = new Map<string, PublisherCandidate>();
+  let offset = 0;
+  while (true) {
+    const batch = await loadPublisherCandidatesBatchForScope(scope, offset, ENTITY_BATCH_SIZE);
+    if (batch.length === 0) break;
+    for (const candidate of batch) {
+      if (!candidate.name) continue;
+      if (!byKey.has(candidate.key)) byKey.set(candidate.key, candidate);
+    }
+    if (batch.length < ENTITY_BATCH_SIZE) break;
+    offset += batch.length;
+  }
+  return Array.from(byKey.values());
+};
+
+const loadAllSeriesCandidatesForScope = async (scope: ReimportScope): Promise<SeriesCandidate[]> => {
+  const byKey = new Map<string, SeriesCandidate>();
+  let offset = 0;
+  while (true) {
+    const batch = await loadSeriesCandidatesBatchForScope(scope, offset, ENTITY_BATCH_SIZE);
+    if (batch.length === 0) break;
+    for (const candidate of batch) {
+      if (!candidate.title || !candidate.volume) continue;
+      if (!byKey.has(candidate.key)) byKey.set(candidate.key, candidate);
+    }
+    if (batch.length < ENTITY_BATCH_SIZE) break;
+    offset += batch.length;
+  }
+  return Array.from(byKey.values());
+};
+
+const runPublisherPhase = async (
+  candidates: PublisherCandidate[],
+  dryRun: boolean,
+): Promise<string[]> => {
+  logger.info(`[reimport] phase publishers (${candidates.length} publishers)`);
+  const changes: string[] = [];
+  const batches = chunkBySize(candidates, ENTITY_BATCH_SIZE);
+  let processed = 0;
+
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+    const batch = batches[batchIndex];
+    logger.info(`[reimport] publisher batch ${batchIndex + 1}/${batches.length} (${batch.length})`);
+
+    for (const candidate of batch) {
+      const transaction = await models.sequelize.transaction();
+      try {
+        const publisherName = normalizeString(candidate.name) || 'Marvel Comics';
+        const { created, updatedOriginal } = await findOrCreatePublisher(publisherName, transaction);
+        if (created) {
+          changes.push(`Created publisher "${publisherName}".`);
+        } else if (updatedOriginal) {
+          changes.push(`Updated publisher "${publisherName}" to original=true.`);
+        }
+
+        if (dryRun) await transaction.rollback();
+        else await transaction.commit();
+
+        processed += 1;
+        console.log(`[reimport][publisher] ${processed}/${candidates.length} ${publisherName} ok`);
+      } catch (error) {
+        await transaction.rollback();
+        const message = error instanceof Error ? error.message : String(error);
+        changes.push(`Publisher phase failed for "${candidate.name}": ${message}`);
+        logger.warn(
+          `[reimport] publisher phase failed for "${candidate.name}": ${message}`,
+        );
+        processed += 1;
+        console.log(
+          `[reimport][publisher] ${processed}/${candidates.length} ${candidate.name || 'unknown'} failed: ${message}`,
+        );
+      }
+    }
+  }
+
+  return changes;
+};
+
+const runSeriesPhase = async (
+  candidates: SeriesCandidate[],
+  dryRun: boolean,
+): Promise<string[]> => {
+  logger.info(`[reimport] phase series (${candidates.length} series candidates)`);
+  const changes: string[] = [];
+  const batches = chunkBySize(candidates, ENTITY_BATCH_SIZE);
+  let processed = 0;
+
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+    const batch = batches[batchIndex];
+    logger.info(`[reimport] series batch ${batchIndex + 1}/${batches.length} (${batch.length})`);
+
+    for (const candidate of batch) {
+      const transaction = await models.sequelize.transaction();
+      try {
+        const title = normalizeString(candidate.title) || candidate.title;
+        const volume = toInt(candidate.volume) || candidate.volume;
+        const startyear = toInt(candidate.startyear) || candidate.startyear;
+        const endyear = toInt(candidate.endyear) || candidate.endyear;
+        const publisherName = normalizeString(candidate.publisherName) || 'Marvel Comics';
+
+        const { publisher } = await findOrCreatePublisher(publisherName, transaction);
+        const publisherId = toInt(publisher.id);
+        if (!publisherId) throw new Error('Invalid publisher id in series phase.');
+
+        const [series, created] = await models.Series.findOrCreate({
+          where: {
+            title,
+            volume,
+            fk_publisher: publisherId,
+          },
+          defaults: {
+            title,
+            volume,
+            fk_publisher: publisherId,
+            startyear,
+            endyear,
+            addinfo: '',
+          },
+          transaction,
+        });
+
+        if (!created) {
+          let changed = false;
+          if (toInt(series.startyear) !== startyear) {
+            series.startyear = startyear;
+            changed = true;
+            changes.push(`Updated series "${title}" (Vol. ${volume}) startyear -> ${startyear}.`);
+          }
+          if (toInt(series.endyear) !== endyear) {
+            series.endyear = endyear;
+            changed = true;
+            changes.push(`Updated series "${title}" (Vol. ${volume}) endyear -> ${endyear}.`);
+          }
+          if (changed) await series.save({ transaction });
+        } else {
+          changes.push(`Created series "${title}" (Vol. ${volume}) for publisher "${publisher.name}".`);
+        }
+
+        if (dryRun) await transaction.rollback();
+        else await transaction.commit();
+
+        processed += 1;
+        console.log(`[reimport][series] ${processed}/${candidates.length} ${title} (Vol. ${volume}) ok`);
+      } catch (error) {
+        await transaction.rollback();
+        const message = error instanceof Error ? error.message : String(error);
+        changes.push(
+          `Series phase failed for "${candidate.title}" (Vol. ${candidate.volume}): ${message}`,
+        );
+        logger.warn(
+          `[reimport] series phase failed for "${candidate.title}" (Vol. ${candidate.volume}): ${message}`,
+        );
+        processed += 1;
+        console.log(
+          `[reimport][series] ${processed}/${candidates.length} ${candidate.title} (Vol. ${candidate.volume}) failed: ${message}`,
+        );
+      }
+    }
+  }
+
+  return changes;
+};
+
 export async function runReimport(options?: ReimportRunOptions): Promise<ReimportReport | null> {
   const dryRun = normalizeDryRun(options);
   const scope = options?.scope || defaultScope;
@@ -1103,46 +1758,85 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   const crawler = new MarvelCrawlerService();
 
   try {
-    const candidates = await loadIssuesForScope(scope);
-    const rootIssues = dedupeBySeriesNumber(candidates);
-
-    logger.info(`[reimport] starting run for ${rootIssues.length} issue roots (dryRun=${dryRun})`);
-
+    logger.info(`[reimport] starting run (dryRun=${dryRun}, scope=${scope.kind}, batchSize=${ISSUE_BATCH_SIZE})`);
     const reports: ReimportIssueReport[] = [];
+    logger.info('[reimport] phase publishers');
+    const publisherCandidates = await loadAllPublisherCandidatesForScope(scope);
+    const publisherPhaseChanges = await runPublisherPhase(publisherCandidates, dryRun);
 
-    for (let index = 0; index < rootIssues.length; index += 1) {
-      const issue = rootIssues[index];
-      logger.info(`[reimport] ${index + 1}/${rootIssues.length} - ${buildIssueLabel(issue)}`);
-      const issueTransaction = await models.sequelize.transaction();
-      try {
-        const issueReport = await reimportIssue(issue, crawler, issueTransaction);
-        reports.push(issueReport);
+    logger.info('[reimport] phase series');
+    const seriesCandidates = await loadAllSeriesCandidatesForScope(scope);
+    const seriesPhaseChanges = await runSeriesPhase(seriesCandidates, dryRun);
 
-        if (dryRun) await issueTransaction.rollback();
-        else await issueTransaction.commit();
-      } catch (error) {
-        await issueTransaction.rollback();
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error(`[reimport] issue failed (${buildIssueLabel(issue)}): ${message}`);
-        reports.push({
-          issueId: issue.id,
-          status: 'failed',
-          label: buildIssueLabel(issue),
-          notes: [],
-          warnings: [message],
-          conflicts: [],
-          changes: [],
-        });
+    logger.info('[reimport] phase issues');
+    const maxRootIssues = dryRun && scope.kind === 'all-us' ? DRY_RUN_ALL_US_LIMIT : Number.MAX_SAFE_INTEGER;
+    const dedupeSeenKeys = new Set<string>();
+    let issueReadOffset = 0;
+    let processedIssueCount = 0;
+    let issueBatchNumber = 0;
+
+    while (processedIssueCount < maxRootIssues) {
+      const loadedIssues = await loadIssuesBatchForScope(scope, issueReadOffset, ISSUE_BATCH_SIZE);
+      if (loadedIssues.length === 0) break;
+      issueReadOffset += loadedIssues.length;
+      issueBatchNumber += 1;
+      logger.info(`[reimport] processing issue batch ${issueBatchNumber} (${loadedIssues.length} rows)`);
+
+      for (const issue of loadedIssues) {
+        const issueKey = `${toInt(issue.fk_series)}::${normalizeLower(issue.number)}`;
+        if (dedupeSeenKeys.has(issueKey)) continue;
+        dedupeSeenKeys.add(issueKey);
+        if (processedIssueCount >= maxRootIssues) break;
+        processedIssueCount += 1;
+        logger.info(`[reimport] ${processedIssueCount} - ${buildIssueLabel(issue)}`);
+        const issueTransaction = await models.sequelize.transaction();
+        try {
+          const issueReport = await reimportIssue(issue, crawler, issueTransaction);
+          reports.push(issueReport);
+
+          if (dryRun) await issueTransaction.rollback();
+          else await issueTransaction.commit();
+          console.log(
+            `[reimport][issue] ${processedIssueCount} ${buildIssueLabel(issue)} ${issueReport.status}`,
+          );
+        } catch (error) {
+          await issueTransaction.rollback();
+          const message = error instanceof Error ? error.message : String(error);
+          logger.error(`[reimport] issue failed (${buildIssueLabel(issue)}): ${message}`);
+          console.log(
+            `[reimport][issue] ${processedIssueCount} ${buildIssueLabel(issue)} failed: ${message}`,
+          );
+          reports.push({
+            issueId: toInt(issue.id),
+            status: 'failed',
+            label: buildIssueLabel(issue),
+            notes: [],
+            warnings: [message],
+            conflicts: [],
+            changes: [],
+            changeBuckets: createEmptyChangeBuckets(),
+          });
+        }
       }
     }
 
-    const summary = {
-      total: reports.length,
-      updated: reports.filter((entry) => entry.status === 'updated').length,
-      skipped: reports.filter((entry) => entry.status === 'skipped').length,
-      manual: reports.filter((entry) => entry.status === 'manual').length,
-      failed: reports.filter((entry) => entry.status === 'failed').length,
-    };
+    const changedPublishers = countMatchingChanges(publisherPhaseChanges, ['created publisher', 'updated publisher']);
+    const changedSeries = countMatchingChanges(seriesPhaseChanges, ['created series', 'updated series']);
+    const failedPublishers = countMatchingChanges(publisherPhaseChanges, ['publisher phase failed']);
+    const failedSeries = countMatchingChanges(seriesPhaseChanges, ['series phase failed']);
+    const changedIssues = reports.filter((entry) => entry.changes.length > 0).length;
+    const normalizedIssues = reports.filter((entry) =>
+      entry.changes.some((change) => normalizeLower(change).includes('normalized ')),
+    ).length;
+    const updatedIssues = reports.filter((entry) => entry.status === 'updated').length;
+    const conflictIssues = reports.filter((entry) => entry.status === 'manual').length;
+    const failedIssues = reports.filter((entry) => entry.status === 'failed').length;
+    const conflictSeries = reports.filter((entry) => {
+      return entry.conflicts.some((conflict) => {
+        const normalized = normalizeLower(conflict);
+        return normalized.includes('destination series') || normalized.includes('target series');
+      });
+    }).length;
 
     const finishedAt = new Date().toISOString();
     const result: ReimportReport = {
@@ -1150,8 +1844,18 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
       startedAt,
       finishedAt,
       scope,
-      summary,
-      issues: reports,
+      result: {
+        changedPublishers,
+        changedSeries,
+        changedIssues,
+        normalizedIssues,
+        updatedIssues,
+        conflictIssues,
+        failedIssues,
+        conflictSeries,
+        failedSeries,
+        failedPublishers,
+      },
     };
 
     return result;

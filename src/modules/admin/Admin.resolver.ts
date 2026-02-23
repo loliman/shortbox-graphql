@@ -311,11 +311,11 @@ const buildTaskPayload = (
 ): AdminTaskPayloads[AdminTaskName] => {
   const dryRun = Boolean(input.dryRun);
 
-  if (taskKey === 'cleanup') {
+  if (taskKey === 'cleanup-db') {
     return { dryRun };
   }
 
-  if (taskKey === 'update-story-filters-all') {
+  if (taskKey === 'update-story-badges') {
     return { dryRun };
   }
 

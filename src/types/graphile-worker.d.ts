@@ -8,7 +8,7 @@ declare global {
   namespace GraphileWorker {
     interface Tasks {
       cleanup: CleanupTaskPayload;
-      'update-story-filters-all': UpdateStoryFiltersTaskPayload;
+      'update-story-badges': UpdateStoryFiltersTaskPayload;
       'reimport-us': ReimportUSTaskPayload;
     }
   }

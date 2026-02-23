@@ -58,7 +58,18 @@ const task: Task = async (rawPayload, helpers) => {
     await persistTaskResult(helpers, 'reimport-us', {
       status: 'SUCCESS',
       dryRun: report.dryRun,
-      summary: `total=${report.summary.total}, updated=${report.summary.updated}, manual=${report.summary.manual}, failed=${report.summary.failed}, dryRun=${report.dryRun}`,
+      summary:
+        `changedPublishers=${report.result.changedPublishers}, ` +
+        `changedSeries=${report.result.changedSeries}, ` +
+        `changedIssues=${report.result.changedIssues}, ` +
+        `normalizedIssues=${report.result.normalizedIssues}, ` +
+        `updatedIssues=${report.result.updatedIssues}, ` +
+        `conflictIssues=${report.result.conflictIssues}, ` +
+        `failedIssues=${report.result.failedIssues}, ` +
+        `conflictSeries=${report.result.conflictSeries}, ` +
+        `failedSeries=${report.result.failedSeries}, ` +
+        `failedPublishers=${report.result.failedPublishers}, ` +
+        `dryRun=${report.dryRun}`,
       details: {
         result: report,
       },

@@ -19,8 +19,8 @@ export type ReimportUSTaskPayload = {
 };
 
 export type AdminTaskPayloads = {
-  cleanup: CleanupTaskPayload;
-  'update-story-filters-all': UpdateStoryFiltersTaskPayload;
+  'cleanup-db': CleanupTaskPayload;
+  'update-story-badges': UpdateStoryFiltersTaskPayload;
   'reimport-us': ReimportUSTaskPayload;
 };
 
@@ -34,14 +34,14 @@ export type AdminTaskDefinition<TName extends AdminTaskName = AdminTaskName> = {
 
 export const ADMIN_TASK_DEFINITIONS: AdminTaskDefinition[] = [
   {
-    name: 'cleanup',
+    name: 'cleanup-db',
     label: 'Cleanup',
-    description: 'Entfernt inkonsistente/orphaned Daten und erstellt einen Stufen-Report.',
+    description: 'Entfernt inkonsistente Daten in der Datenbank.',
   },
   {
-    name: 'update-story-filters-all',
-    label: 'Update Story Filters (All DE)',
-    description: 'Berechnet Story-Filter-Flags für alle DE-Issues neu.',
+    name: 'update-story-badges',
+    label: 'Update Story Badges',
+    description: 'Berechnet Story Badges für alle Issues neu.',
   },
   {
     name: 'reimport-us',
@@ -52,8 +52,8 @@ export const ADMIN_TASK_DEFINITIONS: AdminTaskDefinition[] = [
 ];
 
 export const ADMIN_TASK_DEFINITION_BY_NAME: Record<AdminTaskName, AdminTaskDefinition> = {
-  cleanup: ADMIN_TASK_DEFINITIONS[0],
-  'update-story-filters-all': ADMIN_TASK_DEFINITIONS[1],
+  'cleanup-db': ADMIN_TASK_DEFINITIONS[0],
+  'update-story-badges': ADMIN_TASK_DEFINITIONS[1],
   'reimport-us': ADMIN_TASK_DEFINITIONS[2],
 };
 

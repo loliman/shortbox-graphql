@@ -17,7 +17,7 @@ const task: Task = async (rawPayload, helpers) => {
       throw new Error('Story filter update run failed');
     }
 
-    await persistTaskResult(helpers, 'update-story-filters-all', {
+    await persistTaskResult(helpers, 'update-story-badges', {
       status: 'SUCCESS',
       dryRun: report.dryRun,
       summary: `processed=${report.processed}/${report.issueCount}, batches=${report.batchCount}, dryRun=${report.dryRun}`,
@@ -27,7 +27,7 @@ const task: Task = async (rawPayload, helpers) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await persistTaskResult(helpers, 'update-story-filters-all', {
+    await persistTaskResult(helpers, 'update-story-badges', {
       status: 'FAILED',
       dryRun,
       summary: message,
