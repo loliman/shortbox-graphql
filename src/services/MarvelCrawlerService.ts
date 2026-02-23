@@ -639,8 +639,7 @@ function extractAppearances(count: number, issue: CrawlerIssue, indexOfLine: num
         }
         app = app.trim();
 
-        if(app.startsWith("["))
-          app = app.substring(app.indexOf('[') + 1);
+        if (app.startsWith('[')) app = app.substring(app.indexOf('[') + 1);
 
         getAppearances(issue.stories[count], currentType, app, firstApp);
       });
@@ -1161,12 +1160,17 @@ export class MarvelCrawlerService {
       volume: Number(issue.series.volume || volume),
       startyear: Number(issue.series.startyear || 0),
       endyear: Number(issue.series.endyear || 0),
-      publisherName: String(issue.series.publisher?.name || 'Marvel Comics').trim() || 'Marvel Comics',
+      publisherName:
+        String(issue.series.publisher?.name || 'Marvel Comics').trim() || 'Marvel Comics',
     };
   }
 
   async crawlIssue(title: string, volume: number, number: string): Promise<CrawledIssue> {
-    const issue = await crawlIssue(String(number || '').trim(), String(title || '').trim(), Number(volume || 0));
+    const issue = await crawlIssue(
+      String(number || '').trim(),
+      String(title || '').trim(),
+      Number(volume || 0),
+    );
 
     const fallbackStory: CrawledStory = {
       number: 1,
@@ -1196,7 +1200,8 @@ export class MarvelCrawlerService {
 
     return {
       number: String(issue.number || number).trim(),
-      releasedate: String(issue.releasedate || '').substring(0, 10) || new Date().toISOString().slice(0, 10),
+      releasedate:
+        String(issue.releasedate || '').substring(0, 10) || new Date().toISOString().slice(0, 10),
       price: Number(issue.price || 0),
       currency: String(issue.currency || 'USD'),
       seriesTitle: String(issue.series?.title || title).trim(),

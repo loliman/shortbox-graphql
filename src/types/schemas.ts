@@ -118,67 +118,70 @@ export const CoverInputSchema: z.ZodType<unknown> = z.lazy(() =>
   }),
 );
 
-export const FilterSchema = z.object({
-  us: z.boolean(),
-  formats: z.array(z.string()).optional(),
-  withVariants: z.boolean().optional(),
-  releasedates: z.array(DateFilterSchema).optional(),
-  publishers: z.array(PublisherFilterInputSchema).optional(),
-  series: z.array(SeriesFilterInputSchema).optional(),
-  numbers: z.array(NumberFilterSchema).optional(),
-  arcs: z.array(ArcInputSchema).optional(),
-  individuals: z.array(IndividualInputSchema).optional(),
-  appearances: z.array(AppearanceInputSchema).optional(),
-  firstPrint: z.boolean().optional(),
-  notFirstPrint: z.boolean().optional(),
-  onlyPrint: z.boolean().optional(),
-  notOnlyPrint: z.boolean().optional(),
-  onlyTb: z.boolean().optional(),
-  notOnlyTb: z.boolean().optional(),
-  exclusive: z.boolean().optional(),
-  notExclusive: z.boolean().optional(),
-  reprint: z.boolean().optional(),
-  notReprint: z.boolean().optional(),
-  otherOnlyTb: z.boolean().optional(),
-  notOtherOnlyTb: z.boolean().optional(),
-  noPrint: z.boolean().optional(),
-  notNoPrint: z.boolean().optional(),
-  onlyOnePrint: z.boolean().optional(),
-  notOnlyOnePrint: z.boolean().optional(),
-  onlyCollected: z.boolean().optional(),
-  onlyNotCollected: z.boolean().optional(),
-  onlyNotCollectedNoOwnedVariants: z.boolean().optional(),
-  noComicguideId: z.boolean().optional(),
-  noContent: z.boolean().optional(),
-}).refine(
-  (value) =>
-    [value.onlyCollected, value.onlyNotCollected, value.onlyNotCollectedNoOwnedVariants].filter(
-      Boolean,
-    ).length <= 1,
-  {
-    message:
-      'onlyCollected, onlyNotCollected und onlyNotCollectedNoOwnedVariants schließen sich aus',
-    path: ['onlyNotCollectedNoOwnedVariants'],
-  },
-).superRefine((value, ctx) => {
-  const pairs: Array<[boolean | undefined, boolean | undefined, string, string]> = [
-    [value.firstPrint, value.notFirstPrint, 'firstPrint', 'notFirstPrint'],
-    [value.onlyPrint, value.notOnlyPrint, 'onlyPrint', 'notOnlyPrint'],
-    [value.onlyTb, value.notOnlyTb, 'onlyTb', 'notOnlyTb'],
-    [value.exclusive, value.notExclusive, 'exclusive', 'notExclusive'],
-    [value.reprint, value.notReprint, 'reprint', 'notReprint'],
-    [value.otherOnlyTb, value.notOtherOnlyTb, 'otherOnlyTb', 'notOtherOnlyTb'],
-    [value.noPrint, value.notNoPrint, 'noPrint', 'notNoPrint'],
-    [value.onlyOnePrint, value.notOnlyOnePrint, 'onlyOnePrint', 'notOnlyOnePrint'],
-  ];
+export const FilterSchema = z
+  .object({
+    us: z.boolean(),
+    formats: z.array(z.string()).optional(),
+    withVariants: z.boolean().optional(),
+    releasedates: z.array(DateFilterSchema).optional(),
+    publishers: z.array(PublisherFilterInputSchema).optional(),
+    series: z.array(SeriesFilterInputSchema).optional(),
+    numbers: z.array(NumberFilterSchema).optional(),
+    arcs: z.array(ArcInputSchema).optional(),
+    individuals: z.array(IndividualInputSchema).optional(),
+    appearances: z.array(AppearanceInputSchema).optional(),
+    firstPrint: z.boolean().optional(),
+    notFirstPrint: z.boolean().optional(),
+    onlyPrint: z.boolean().optional(),
+    notOnlyPrint: z.boolean().optional(),
+    onlyTb: z.boolean().optional(),
+    notOnlyTb: z.boolean().optional(),
+    exclusive: z.boolean().optional(),
+    notExclusive: z.boolean().optional(),
+    reprint: z.boolean().optional(),
+    notReprint: z.boolean().optional(),
+    otherOnlyTb: z.boolean().optional(),
+    notOtherOnlyTb: z.boolean().optional(),
+    noPrint: z.boolean().optional(),
+    notNoPrint: z.boolean().optional(),
+    onlyOnePrint: z.boolean().optional(),
+    notOnlyOnePrint: z.boolean().optional(),
+    onlyCollected: z.boolean().optional(),
+    onlyNotCollected: z.boolean().optional(),
+    onlyNotCollectedNoOwnedVariants: z.boolean().optional(),
+    noComicguideId: z.boolean().optional(),
+    noContent: z.boolean().optional(),
+  })
+  .refine(
+    (value) =>
+      [value.onlyCollected, value.onlyNotCollected, value.onlyNotCollectedNoOwnedVariants].filter(
+        Boolean,
+      ).length <= 1,
+    {
+      message:
+        'onlyCollected, onlyNotCollected und onlyNotCollectedNoOwnedVariants schließen sich aus',
+      path: ['onlyNotCollectedNoOwnedVariants'],
+    },
+  )
+  .superRefine((value, ctx) => {
+    const pairs: Array<[boolean | undefined, boolean | undefined, string, string]> = [
+      [value.firstPrint, value.notFirstPrint, 'firstPrint', 'notFirstPrint'],
+      [value.onlyPrint, value.notOnlyPrint, 'onlyPrint', 'notOnlyPrint'],
+      [value.onlyTb, value.notOnlyTb, 'onlyTb', 'notOnlyTb'],
+      [value.exclusive, value.notExclusive, 'exclusive', 'notExclusive'],
+      [value.reprint, value.notReprint, 'reprint', 'notReprint'],
+      [value.otherOnlyTb, value.notOtherOnlyTb, 'otherOnlyTb', 'notOtherOnlyTb'],
+      [value.noPrint, value.notNoPrint, 'noPrint', 'notNoPrint'],
+      [value.onlyOnePrint, value.notOnlyOnePrint, 'onlyOnePrint', 'notOnlyOnePrint'],
+    ];
 
-  pairs.forEach(([a, b, aName, bName]) => {
-    if (a && b) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `${aName} und ${bName} schließen sich aus`,
-        path: [bName],
-      });
-    }
+    pairs.forEach(([a, b, aName, bName]) => {
+      if (a && b) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${aName} und ${bName} schließen sich aus`,
+          path: [bName],
+        });
+      }
+    });
   });
-});

@@ -618,7 +618,10 @@ export class IssueService {
     });
 
     const usStoryIds = new Set<number>();
-    for (const story of stories as Array<{ id?: number; issue?: { series?: { publisher?: { original?: boolean } } } }>) {
+    for (const story of stories as Array<{
+      id?: number;
+      issue?: { series?: { publisher?: { original?: boolean } } };
+    }>) {
       if (!story.issue?.series?.publisher?.original) continue;
       const storyId = Number(story.id || 0);
       if (storyId > 0) usStoryIds.add(storyId);
@@ -641,11 +644,7 @@ export class IssueService {
     });
 
     return Array.from(
-      new Set(
-        stories
-          .map((story) => Number(story.fk_issue || 0))
-          .filter((id) => id > 0),
-      ),
+      new Set(stories.map((story) => Number(story.fk_issue || 0)).filter((id) => id > 0)),
     );
   }
 

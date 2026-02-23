@@ -336,13 +336,16 @@ const resolveTargetSeriesData = (
 } => {
   const fallbackTitle = normalizeString(localIssue.series?.title);
   const fallbackVolume = toInt(localIssue.series?.volume);
-  const fallbackPublisherName = normalizeString(localIssue.series?.publisher?.name) || 'Marvel Comics';
+  const fallbackPublisherName =
+    normalizeString(localIssue.series?.publisher?.name) || 'Marvel Comics';
   const fallbackStart = toInt(localIssue.series?.startyear);
   const fallbackEnd = toInt(localIssue.series?.endyear);
 
   return {
     title:
-      normalizeString(crawledIssue?.seriesTitle) || normalizeString(crawledSeries?.title) || fallbackTitle,
+      normalizeString(crawledIssue?.seriesTitle) ||
+      normalizeString(crawledSeries?.title) ||
+      fallbackTitle,
     volume: toInt(crawledIssue?.seriesVolume) || toInt(crawledSeries?.volume) || fallbackVolume,
     startyear:
       toInt(crawledIssue?.seriesStartyear) || toInt(crawledSeries?.startyear) || fallbackStart,
@@ -921,9 +924,15 @@ const reimportIssue = async (
     if (issueIndividuals.changed) report.changes.push('Synchronized issue individuals.');
     const issueArcs = await syncIssueArcs(mutableIssueId, crawledIssue.arcs || [], transaction);
     if (issueArcs.changed) report.changes.push('Synchronized issue arcs.');
-    const mainCoverUrl = normalizeString(crawledIssue.cover?.url) || normalizeString(crawledIssue.coverUrl);
+    const mainCoverUrl =
+      normalizeString(crawledIssue.cover?.url) || normalizeString(crawledIssue.coverUrl);
     const mainCoverNumber = toInt(crawledIssue.cover?.number);
-    const mainCover = await ensureMainCover(mutableIssueId, mainCoverUrl, mainCoverNumber, transaction);
+    const mainCover = await ensureMainCover(
+      mutableIssueId,
+      mainCoverUrl,
+      mainCoverNumber,
+      transaction,
+    );
     if (mainCover.changed) report.changes.push('Synchronized main cover metadata.');
 
     const mainCoverId = toPositiveInt(mainCover.cover.id);
@@ -971,7 +980,9 @@ const reimportIssue = async (
               transaction,
             },
           );
-          report.changes.push(`Normalized story order for Story#${localStoryId} -> ${normalizedNumber}.`);
+          report.changes.push(
+            `Normalized story order for Story#${localStoryId} -> ${normalizedNumber}.`,
+          );
         }
         const storyIndividuals = await syncStoryIndividuals(
           localStoryId,
@@ -1001,7 +1012,8 @@ const reimportIssue = async (
       if (!variantName) continue;
       desiredVariantNames.add(variantName);
 
-      const variantNumber = normalizeString(rawVariant.number || mutableIssue.number) || mutableIssue.number;
+      const variantNumber =
+        normalizeString(rawVariant.number || mutableIssue.number) || mutableIssue.number;
       const targetVariantConflict = await models.Issue.findOne({
         where: {
           fk_series: targetSeriesId,
@@ -1027,7 +1039,11 @@ const reimportIssue = async (
         }
       }
 
-      if (targetVariantConflict && variantIssue && toInt(variantIssue.fk_series) === targetSeriesId) {
+      if (
+        targetVariantConflict &&
+        variantIssue &&
+        toInt(variantIssue.fk_series) === targetSeriesId
+      ) {
         report.status = 'manual';
         report.conflicts.push(
           `Variant conflict for "${variantName}": target variant Issue#${variantIssue.id} already exists.`,
@@ -1064,7 +1080,8 @@ const reimportIssue = async (
           variantChanged = true;
         }
 
-        const nextFormat = normalizeString(rawVariant.format) || normalizeString(variantIssue.format);
+        const nextFormat =
+          normalizeString(rawVariant.format) || normalizeString(variantIssue.format);
         if (nextFormat && normalizeString(variantIssue.format) !== nextFormat) {
           variantIssue.format = nextFormat;
           variantPatch.format = nextFormat;
@@ -1154,7 +1171,9 @@ const reimportIssue = async (
       const existingVariantId = toPositiveInt(existingVariant.id);
       if (!existingVariantId) {
         report.status = 'manual';
-        report.conflicts.push(`Variant "${variantName}" has invalid local id; manual fix required.`);
+        report.conflicts.push(
+          `Variant "${variantName}" has invalid local id; manual fix required.`,
+        );
         continue;
       }
 
@@ -1418,7 +1437,11 @@ const collectSeriesCandidatesFromPrefetch = (
     const issueId = toInt(issue.id);
     const crawl = prefetched.get(issueId);
 
-    const targetSeriesData = resolveTargetSeriesData(issue, crawl?.crawledSeries || null, crawl?.crawledIssue || null);
+    const targetSeriesData = resolveTargetSeriesData(
+      issue,
+      crawl?.crawledSeries || null,
+      crawl?.crawledIssue || null,
+    );
 
     const title = normalizeString(targetSeriesData.title);
     const volume = toInt(targetSeriesData.volume);
@@ -1537,7 +1560,14 @@ const loadSeriesCandidatesBatchForScope = async (
   if (scope.kind === 'issue') {
     if (offset > 0) return [];
     const issue = await models.Issue.findByPk(scope.issueId, {
-      include: [{ model: models.Series, as: 'series', required: true, include: [{ model: models.Publisher, as: 'publisher', required: true }] }],
+      include: [
+        {
+          model: models.Series,
+          as: 'series',
+          required: true,
+          include: [{ model: models.Publisher, as: 'publisher', required: true }],
+        },
+      ],
       transaction,
     });
     const series = (issue as unknown as IssueWithSeries | null)?.series;
@@ -1587,7 +1617,9 @@ const loadSeriesCandidatesBatchForScope = async (
   }));
 };
 
-const loadAllPublisherCandidatesForScope = async (scope: ReimportScope): Promise<PublisherCandidate[]> => {
+const loadAllPublisherCandidatesForScope = async (
+  scope: ReimportScope,
+): Promise<PublisherCandidate[]> => {
   const byKey = new Map<string, PublisherCandidate>();
   let offset = 0;
   while (true) {
@@ -1603,7 +1635,9 @@ const loadAllPublisherCandidatesForScope = async (scope: ReimportScope): Promise
   return Array.from(byKey.values());
 };
 
-const loadAllSeriesCandidatesForScope = async (scope: ReimportScope): Promise<SeriesCandidate[]> => {
+const loadAllSeriesCandidatesForScope = async (
+  scope: ReimportScope,
+): Promise<SeriesCandidate[]> => {
   const byKey = new Map<string, SeriesCandidate>();
   let offset = 0;
   while (true) {
@@ -1636,7 +1670,10 @@ const runPublisherPhase = async (
       const transaction = await models.sequelize.transaction();
       try {
         const publisherName = normalizeString(candidate.name) || 'Marvel Comics';
-        const { created, updatedOriginal } = await findOrCreatePublisher(publisherName, transaction);
+        const { created, updatedOriginal } = await findOrCreatePublisher(
+          publisherName,
+          transaction,
+        );
         if (created) {
           changes.push(`Created publisher "${publisherName}".`);
         } else if (updatedOriginal) {
@@ -1652,9 +1689,7 @@ const runPublisherPhase = async (
         await transaction.rollback();
         const message = error instanceof Error ? error.message : String(error);
         changes.push(`Publisher phase failed for "${candidate.name}": ${message}`);
-        logger.warn(
-          `[reimport] publisher phase failed for "${candidate.name}": ${message}`,
-        );
+        logger.warn(`[reimport] publisher phase failed for "${candidate.name}": ${message}`);
         processed += 1;
         console.log(
           `[reimport][publisher] ${processed}/${candidates.length} ${candidate.name || 'unknown'} failed: ${message}`,
@@ -1723,14 +1758,18 @@ const runSeriesPhase = async (
           }
           if (changed) await series.save({ transaction });
         } else {
-          changes.push(`Created series "${title}" (Vol. ${volume}) for publisher "${publisher.name}".`);
+          changes.push(
+            `Created series "${title}" (Vol. ${volume}) for publisher "${publisher.name}".`,
+          );
         }
 
         if (dryRun) await transaction.rollback();
         else await transaction.commit();
 
         processed += 1;
-        console.log(`[reimport][series] ${processed}/${candidates.length} ${title} (Vol. ${volume}) ok`);
+        console.log(
+          `[reimport][series] ${processed}/${candidates.length} ${title} (Vol. ${volume}) ok`,
+        );
       } catch (error) {
         await transaction.rollback();
         const message = error instanceof Error ? error.message : String(error);
@@ -1758,7 +1797,9 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   const crawler = new MarvelCrawlerService();
 
   try {
-    logger.info(`[reimport] starting run (dryRun=${dryRun}, scope=${scope.kind}, batchSize=${ISSUE_BATCH_SIZE})`);
+    logger.info(
+      `[reimport] starting run (dryRun=${dryRun}, scope=${scope.kind}, batchSize=${ISSUE_BATCH_SIZE})`,
+    );
     const reports: ReimportIssueReport[] = [];
     logger.info('[reimport] phase publishers');
     const publisherCandidates = await loadAllPublisherCandidatesForScope(scope);
@@ -1769,7 +1810,8 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
     const seriesPhaseChanges = await runSeriesPhase(seriesCandidates, dryRun);
 
     logger.info('[reimport] phase issues');
-    const maxRootIssues = dryRun && scope.kind === 'all-us' ? DRY_RUN_ALL_US_LIMIT : Number.MAX_SAFE_INTEGER;
+    const maxRootIssues =
+      dryRun && scope.kind === 'all-us' ? DRY_RUN_ALL_US_LIMIT : Number.MAX_SAFE_INTEGER;
     const dedupeSeenKeys = new Set<string>();
     let issueReadOffset = 0;
     let processedIssueCount = 0;
@@ -1780,7 +1822,9 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
       if (loadedIssues.length === 0) break;
       issueReadOffset += loadedIssues.length;
       issueBatchNumber += 1;
-      logger.info(`[reimport] processing issue batch ${issueBatchNumber} (${loadedIssues.length} rows)`);
+      logger.info(
+        `[reimport] processing issue batch ${issueBatchNumber} (${loadedIssues.length} rows)`,
+      );
 
       for (const issue of loadedIssues) {
         const issueKey = `${toInt(issue.fk_series)}::${normalizeLower(issue.number)}`;
@@ -1820,9 +1864,17 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
       }
     }
 
-    const changedPublishers = countMatchingChanges(publisherPhaseChanges, ['created publisher', 'updated publisher']);
-    const changedSeries = countMatchingChanges(seriesPhaseChanges, ['created series', 'updated series']);
-    const failedPublishers = countMatchingChanges(publisherPhaseChanges, ['publisher phase failed']);
+    const changedPublishers = countMatchingChanges(publisherPhaseChanges, [
+      'created publisher',
+      'updated publisher',
+    ]);
+    const changedSeries = countMatchingChanges(seriesPhaseChanges, [
+      'created series',
+      'updated series',
+    ]);
+    const failedPublishers = countMatchingChanges(publisherPhaseChanges, [
+      'publisher phase failed',
+    ]);
     const failedSeries = countMatchingChanges(seriesPhaseChanges, ['series phase failed']);
     const changedIssues = reports.filter((entry) => entry.changes.length > 0).length;
     const normalizedIssues = reports.filter((entry) =>
@@ -1865,6 +1917,8 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   }
 }
 
-export async function triggerManualReimportDryRun(scope?: ReimportScope): Promise<ReimportReport | null> {
+export async function triggerManualReimportDryRun(
+  scope?: ReimportScope,
+): Promise<ReimportReport | null> {
   return runReimport({ dryRun: true, scope: scope || defaultScope });
 }

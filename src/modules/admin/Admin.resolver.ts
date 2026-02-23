@@ -102,11 +102,7 @@ const parseTaskResult = (
 
     if (parsed.details && typeof parsed.details === 'object') {
       const rawState = (parsed.details as { state?: unknown }).state;
-      if (
-        rawState === 'queued' ||
-        rawState === 'running' ||
-        rawState === 'failed-awaiting-retry'
-      ) {
+      if (rawState === 'queued' || rawState === 'running' || rawState === 'failed-awaiting-retry') {
         workerState = rawState;
       }
     } else if (detailsText) {
@@ -174,7 +170,11 @@ const mapQueuedRowToRun = (
   row: JobViewRow,
   dryRun = false,
 ): AdminTaskRunRecord => {
-  const workerState = row.last_error ? 'failed-awaiting-retry' : row.locked_at ? 'running' : 'queued';
+  const workerState = row.last_error
+    ? 'failed-awaiting-retry'
+    : row.locked_at
+      ? 'running'
+      : 'queued';
 
   const details = {
     state: workerState,
@@ -191,12 +191,11 @@ const mapQueuedRowToRun = (
     finishedAt: null,
     dryRun,
     status: row.last_error ? 'FAILED' : 'SUCCESS',
-    summary:
-      row.last_error
-        ? 'Job failed and is waiting for retry'
-        : row.locked_at
-          ? 'Job running'
-          : 'Job queued',
+    summary: row.last_error
+      ? 'Job failed and is waiting for retry'
+      : row.locked_at
+        ? 'Job running'
+        : 'Job queued',
     details: JSON.stringify(details, null, 2),
   };
 };
@@ -436,11 +435,7 @@ export const resolvers = {
         details: JSON.stringify({ payload, ...queuedDetails }, null, 2),
       };
     },
-    releaseAllAdminTaskLocks: async (
-      _: unknown,
-      __: unknown,
-      context: { loggedIn: boolean },
-    ) => {
+    releaseAllAdminTaskLocks: async (_: unknown, __: unknown, context: { loggedIn: boolean }) => {
       requireLogin(context.loggedIn);
 
       const taskNames = ADMIN_TASK_DEFINITIONS.map((task) => task.name);
@@ -479,9 +474,7 @@ export const resolvers = {
         },
       )) as Array<{ id: string | number }>;
 
-      const jobIds = jobRows
-        .map((row) => String(row.id))
-        .filter((jobId) => jobId.length > 0);
+      const jobIds = jobRows.map((row) => String(row.id)).filter((jobId) => jobId.length > 0);
 
       let removedCount = 0;
       if (jobIds.length > 0) {

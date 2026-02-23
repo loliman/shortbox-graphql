@@ -34,7 +34,9 @@ const chunk = <T>(items: T[], size: number): T[][] => {
   return chunks;
 };
 
-export async function runUpdateStoryFilters(options?: UpdateStoryFiltersOptions): Promise<UpdateStoryFiltersReport | null> {
+export async function runUpdateStoryFilters(
+  options?: UpdateStoryFiltersOptions,
+): Promise<UpdateStoryFiltersReport | null> {
   const dryRun = Boolean(options?.dryRun);
   const batchSize = resolveBatchSize(options?.batchSize);
   const startedAt = new Date().toISOString();
