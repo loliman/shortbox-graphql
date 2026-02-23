@@ -1,9 +1,7 @@
-import { CronJob } from 'cron';
 import { col, Op } from 'sequelize';
 import models from '../models';
 import logger from '../util/logger';
 
-const CLEANUP_CRON = process.env.CLEANUP_CRON || '0 3 * * *';
 const MAX_REPORTED_ITEMS = 100;
 
 type CleanupStageResult = {
@@ -378,16 +376,6 @@ const findUSIssueIdsWithoutDEReference = ({
     },
   };
 };
-
-// Runs daily at 03:00 server time by default.
-export const cleanup = new CronJob(
-  CLEANUP_CRON,
-  async () => {
-    await run();
-  },
-  null,
-  false,
-);
 
 export async function run(options?: CleanupRunOptions): Promise<CleanupDryRunReport | null> {
   const transaction = await models.sequelize.transaction();

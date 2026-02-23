@@ -1,5 +1,4 @@
 import sequelize from './core/database';
-import { cleanup } from './core/cleanup';
 import logger from './util/logger';
 import models from './models';
 
@@ -18,12 +17,6 @@ export async function boot(process: () => Promise<void>) {
   }
 
   logger.info('🚀 Database is all set up');
-
-  logger.info('🚀 Starting cleanup process...');
-
-  cleanup.start();
-
-  logger.info('🚀 ... Done!');
 
   await process();
 

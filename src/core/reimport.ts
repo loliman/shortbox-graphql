@@ -136,7 +136,22 @@ const toInt = (value: unknown): number => {
 
 const dateOnly = (value: unknown): string => {
   const raw = normalizeString(value);
-  return raw.length >= 10 ? raw.slice(0, 10) : raw;
+  if (!raw) return '';
+  const isoMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const slashMatch = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (slashMatch) {
+    const [, year, month, day] = slashMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
 };
 
 const normalizePrice = (value: unknown): number => {
@@ -993,7 +1008,10 @@ const reimportIssue = async (
   return report;
 };
 
-const loadIssuesForScope = async (scope: ReimportScope, transaction: Transaction): Promise<IssueWithSeries[]> => {
+const loadIssuesForScope = async (
+  scope: ReimportScope,
+  transaction?: Transaction,
+): Promise<IssueWithSeries[]> => {
   const include = [
     {
       model: models.Series,
@@ -1083,10 +1101,9 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   const scope = options?.scope || defaultScope;
   const startedAt = new Date().toISOString();
   const crawler = new MarvelCrawlerService();
-  const transaction = await models.sequelize.transaction();
 
   try {
-    const candidates = await loadIssuesForScope(scope, transaction);
+    const candidates = await loadIssuesForScope(scope);
     const rootIssues = dedupeBySeriesNumber(candidates);
 
     logger.info(`[reimport] starting run for ${rootIssues.length} issue roots (dryRun=${dryRun})`);
@@ -1096,8 +1113,27 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
     for (let index = 0; index < rootIssues.length; index += 1) {
       const issue = rootIssues[index];
       logger.info(`[reimport] ${index + 1}/${rootIssues.length} - ${buildIssueLabel(issue)}`);
-      const issueReport = await reimportIssue(issue, crawler, transaction);
-      reports.push(issueReport);
+      const issueTransaction = await models.sequelize.transaction();
+      try {
+        const issueReport = await reimportIssue(issue, crawler, issueTransaction);
+        reports.push(issueReport);
+
+        if (dryRun) await issueTransaction.rollback();
+        else await issueTransaction.commit();
+      } catch (error) {
+        await issueTransaction.rollback();
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(`[reimport] issue failed (${buildIssueLabel(issue)}): ${message}`);
+        reports.push({
+          issueId: issue.id,
+          status: 'failed',
+          label: buildIssueLabel(issue),
+          notes: [],
+          warnings: [message],
+          conflicts: [],
+          changes: [],
+        });
+      }
     }
 
     const summary = {
@@ -1118,12 +1154,8 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
       issues: reports,
     };
 
-    if (dryRun) await transaction.rollback();
-    else await transaction.commit();
-
     return result;
   } catch (error) {
-    await transaction.rollback();
     logger.error(`[reimport] failed: ${(error as Error).message}`);
     return null;
   }

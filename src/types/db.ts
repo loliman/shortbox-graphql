@@ -8,6 +8,7 @@ import { Arc } from '../modules/arc/Arc.model';
 import { Individual } from '../modules/individual/Individual.model';
 import { Appearance } from '../modules/appearance/Appearance.model';
 import { User } from '../modules/user/User.model';
+import { AdminTaskResult } from '../modules/admin-task-result/AdminTaskResult.model';
 
 export interface DbModels {
   Publisher: ModelStatic<Publisher>;
@@ -19,6 +20,7 @@ export interface DbModels {
   Individual: ModelStatic<Individual>;
   Appearance: ModelStatic<Appearance>;
   User: ModelStatic<User>;
+  AdminTaskResult: ModelStatic<AdminTaskResult>;
   Issue_Individual: ModelStatic<Model>;
   Issue_Arc: ModelStatic<Model>;
   Story_Individual: ModelStatic<Model>;
