@@ -27,6 +27,7 @@ const splitFilterTerms = (value: string | null | undefined): string[] => {
 };
 
 const isNumericFilterValue = (value: string): boolean => /^\d+(\.\d+)?$/.test(value.trim());
+const TRANSLATOR_STORY_INDIVIDUAL_TYPE = 'TRANSLATOR';
 
 type ExportPublisher = { name: string };
 type ExportSeries = {
@@ -360,6 +361,8 @@ export class FilterService {
             .filter((entry) => entry.length > 0),
         )
       : splitFilterTerms(runtimeFilter.appearances as string | null | undefined);
+    let needsStoryIndividualJoin = false;
+    let needsParentIndividualJoin = false;
 
     if (appearanceTerms.length > 0) {
       appendAndCondition({
@@ -379,32 +382,67 @@ export class FilterService {
     if (runtimeFilter.individuals && runtimeFilter.individuals.length > 0) {
       const individualConditions = runtimeFilter.individuals
         .flatMap((ind) => {
-          const name = typeof ind?.name === 'string' ? ind.name : '';
+          const name = typeof ind?.name === 'string' ? ind.name.trim() : '';
           if (!name) return [];
 
           const rawTypes = Array.isArray(ind?.type) ? ind.type : [];
-          const types = rawTypes.filter(
-            (type): type is string => typeof type === 'string' && !!type,
+          const normalizedTypes = dedupeTerms(
+            rawTypes
+              .filter((type): type is string => typeof type === 'string' && !!type)
+              .map((type) => type.trim().toUpperCase()),
           );
+          const nonTranslatorTypes = normalizedTypes.filter(
+            (type) => type !== TRANSLATOR_STORY_INDIVIDUAL_TYPE,
+          );
+          const includesTranslatorType = normalizedTypes.includes(TRANSLATOR_STORY_INDIVIDUAL_TYPE);
 
-          const storyIndividualCondition: Record<string, unknown> = {
-            '$stories.individuals.name$': name,
-          };
-          const childStoryIndividualCondition: Record<string, unknown> = {
-            '$stories.children.individuals.name$': name,
-          };
-
-          if (types.length > 0) {
-            storyIndividualCondition['$stories.individuals.story_individual.type$'] = {
-              [Op.in]: types,
+          const buildStoryIndividualCondition = (types: string[]): Record<string, unknown> => {
+            const condition: Record<string, unknown> = {
+              '$stories.individuals.name$': name,
             };
-            childStoryIndividualCondition['$stories.children.individuals.story_individual.type$'] =
-              { [Op.in]: types };
+            if (types.length > 0) {
+              condition['$stories.individuals.story_individual.type$'] = { [Op.in]: types };
+            }
+            needsStoryIndividualJoin = true;
+            return condition;
+          };
+
+          const buildParentStoryIndividualCondition = (types: string[]): Record<string, unknown> => {
+            const condition: Record<string, unknown> = {
+              '$stories.parent.individuals.name$': name,
+            };
+            if (types.length > 0) {
+              condition['$stories.parent.individuals.story_individual.type$'] = { [Op.in]: types };
+            }
+            needsParentIndividualJoin = true;
+            return condition;
+          };
+
+          const conditions: Array<Record<string, unknown>> = [];
+          if (normalizedTypes.length === 0) {
+            conditions.push(buildParentStoryIndividualCondition([]));
+            conditions.push({
+              [Op.and]: [{ '$stories.parent.id$': null }, buildStoryIndividualCondition([])],
+            });
+            return conditions;
           }
 
-          return [storyIndividualCondition, childStoryIndividualCondition];
-        })
-        .filter((condition) => Object.keys(condition).length > 0);
+          if (nonTranslatorTypes.length > 0) {
+            conditions.push(buildParentStoryIndividualCondition(nonTranslatorTypes));
+            conditions.push({
+              [Op.and]: [
+                { '$stories.parent.id$': null },
+                buildStoryIndividualCondition(nonTranslatorTypes),
+              ],
+            });
+          }
+
+          if (includesTranslatorType) {
+            conditions.push(buildStoryIndividualCondition([TRANSLATOR_STORY_INDIVIDUAL_TYPE]));
+          }
+
+          return conditions;
+        });
 
       if (individualConditions.length > 0) appendAndCondition({ [Op.or]: individualConditions });
     }
@@ -463,9 +501,7 @@ export class FilterService {
 
     const needsStorySwitches = storySwitchOrConditions.length > 0;
     const needsAppearanceJoin = appearanceTerms.length > 0;
-    const needsIndividualJoin = Boolean(
-      runtimeFilter.individuals && runtimeFilter.individuals.length > 0,
-    );
+    const needsIndividualJoin = needsStoryIndividualJoin || needsParentIndividualJoin;
     const needsParentJoinForExclusive = Boolean(
       (runtimeFilter.exclusive || runtimeFilter.notExclusive) && !us,
     );
@@ -502,8 +538,23 @@ export class FilterService {
         }
       }
 
-      if (needsIndividualJoin) {
+      if (needsStoryIndividualJoin) {
         ensureInclude(storyInclude.include || [], 'individuals', () => ({
+          model: this.models.Individual,
+          as: 'individuals',
+          required: false,
+        }));
+      }
+
+      if (needsParentIndividualJoin) {
+        const parentInclude = ensureInclude(storyInclude.include || [], 'parent', () => ({
+          model: this.models.Story,
+          as: 'parent',
+          required: false,
+          include: [],
+        }));
+        const parentNested = parentInclude.include || [];
+        ensureInclude(parentNested, 'individuals', () => ({
           model: this.models.Individual,
           as: 'individuals',
           required: false,
@@ -520,7 +571,7 @@ export class FilterService {
         parentInclude.required = false;
       }
 
-      if (needsAppearanceJoin || needsIndividualJoin) {
+      if (needsAppearanceJoin) {
         const childrenInclude = ensureInclude(storyInclude.include || [], 'children', () => ({
           model: this.models.Story,
           as: 'children',
@@ -529,20 +580,11 @@ export class FilterService {
         }));
         childrenInclude.required = false;
         const childInclude = childrenInclude.include || [];
-        if (needsAppearanceJoin) {
-          ensureInclude(childInclude, 'appearances', () => ({
-            model: this.models.Appearance,
-            as: 'appearances',
-            required: false,
-          }));
-        }
-        if (needsIndividualJoin) {
-          ensureInclude(childInclude, 'individuals', () => ({
-            model: this.models.Individual,
-            as: 'individuals',
-            required: false,
-          }));
-        }
+        ensureInclude(childInclude, 'appearances', () => ({
+          model: this.models.Appearance,
+          as: 'appearances',
+          required: false,
+        }));
       }
 
       if (needsStorySwitches) appendAndCondition({ [Op.or]: storySwitchOrConditions });
