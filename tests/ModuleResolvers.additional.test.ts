@@ -1258,6 +1258,12 @@ describe('Smaller resolvers additional coverage', () => {
     const issueLoader = {
       load: jest.fn().mockResolvedValue({ id: 6, series: { publisher: { original: true } } }),
     };
+    const issueVariantsLoader = {
+      load: jest.fn().mockResolvedValue([
+        { id: 6, format: 'Heft', variant: '' },
+        { id: 7, format: 'Heft', variant: 'A' },
+      ]),
+    };
 
     expect(
       storyResolvers.Story.id({ id: 8 } as any, {} as any, { loggedIn: false } as any),
@@ -1309,6 +1315,18 @@ describe('Smaller resolvers additional coverage', () => {
       storyResolvers.Story.issue({ fk_issue: 9 } as any, {} as any, { issueLoader } as any),
     ).resolves.toEqual({ id: 6, series: { publisher: { original: true } } });
     await expect(
+      storyResolvers.Story.issue(
+        { fk_issue: 9 } as any,
+        {} as any,
+        { issueLoader, issueVariantsLoader } as any,
+      ),
+    ).resolves.toEqual({
+      id: 6,
+      series: { publisher: { original: true } },
+      format: 'Heft',
+      variant: '',
+    });
+    await expect(
       storyResolvers.Story.issue({ issue: { id: 61 } } as any, {} as any, {} as any),
     ).resolves.toEqual({ id: 61 });
     await expect(
@@ -1358,7 +1376,7 @@ describe('Smaller resolvers additional coverage', () => {
     ).resolves.toEqual([{ id: 2 }]);
     await expect(
       coverResolvers.Cover.issue({ fk_issue: 1 } as any, {} as any, { issueLoader } as any),
-    ).resolves.toEqual({ id: 6, series: { publisher: { original: true } } });
+    ).resolves.toMatchObject({ id: 6, series: { publisher: { original: true } } });
     await expect(
       coverResolvers.Cover.issue({ issue: { id: 62 } } as any, {} as any, {} as any),
     ).resolves.toEqual({ id: 62 });

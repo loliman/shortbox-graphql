@@ -1,4 +1,5 @@
 import { StoryResolvers } from '../../types/graphql';
+import { pickPreferredIssueVariant } from '../../util/issueVariantOrdering';
 
 type StoryParent = {
   id: number;
@@ -60,6 +61,29 @@ const toNumberSortValue = (value: unknown): number => {
     if (!Number.isNaN(numeric)) return numeric;
   }
   return Number.POSITIVE_INFINITY;
+};
+
+const normalizeStoryIssueTarget = async (
+  issue: unknown,
+  issueVariantsLoader: unknown,
+): Promise<unknown> => {
+  if (!issue || typeof issue !== 'object') return issue;
+  if (!hasLoad<number, unknown[]>(issueVariantsLoader)) return issue;
+
+  const issueId = toNumericId((issue as { id?: unknown }).id);
+  if (issueId == null) return issue;
+
+  const siblings = await issueVariantsLoader.load(issueId);
+  if (!Array.isArray(siblings) || siblings.length === 0) return issue;
+
+  const preferred = pickPreferredIssueVariant(
+    siblings as Array<{ id?: unknown; format?: unknown; variant?: unknown }>,
+  );
+  if (!preferred) return issue;
+
+  (issue as { format?: unknown }).format = preferred.format;
+  (issue as { variant?: unknown }).variant = preferred.variant;
+  return issue;
 };
 
 export const resolvers: StoryResolvers = {
@@ -196,11 +220,13 @@ export const resolvers: StoryResolvers = {
       if (!hasLoad<number, unknown[]>(storyReprintsLoader)) return [];
       return await storyReprintsLoader.load(storyParent.id);
     },
-    issue: async (parent, _, { issueLoader }) => {
+    issue: async (parent, _, { issueLoader, issueVariantsLoader }) => {
       const storyParent = parent as StoryParent;
-      if (storyParent.issue) return storyParent.issue;
+      if (storyParent.issue)
+        return await normalizeStoryIssueTarget(storyParent.issue, issueVariantsLoader);
       if (!hasLoad<number, unknown | null>(issueLoader)) return null;
-      return await issueLoader.load(storyParent.fk_issue);
+      const loadedIssue = await issueLoader.load(storyParent.fk_issue);
+      return await normalizeStoryIssueTarget(loadedIssue, issueVariantsLoader);
     },
     individuals: async (parent) =>
       (parent as StoryParent).getIndividuals

@@ -7,6 +7,11 @@ import { naturalCompare } from '../util/util';
 import { fromRoman } from '../util/dbFunctions';
 import { MarvelCrawlerService } from './MarvelCrawlerService';
 import { updateStoryFilterFlagsForIssue } from '../util/FilterUpdater';
+import {
+  compareIssueVariants,
+  pickPreferredIssueVariant,
+  sortIssueVariants,
+} from '../util/issueVariantOrdering';
 
 const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
   'updatedat',
@@ -35,7 +40,6 @@ const normalizeLastEditedFilter = (filter: Filter | undefined): Filter | undefin
 };
 
 const ROMAN_NUMBER_PATTERN = /^(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))$/i;
-const PARENT_FORMATS = new Set(['HEFT', 'SC', 'HC']);
 
 const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
   const left = String(leftRaw ?? '').trim();
@@ -52,28 +56,15 @@ const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
   return naturalCompare(left, right);
 };
 
-const isParentCandidate = (issue: { format?: string | null; variant?: string | null }): boolean =>
-  PARENT_FORMATS.has(
-    String(issue.format ?? '')
-      .trim()
-      .toUpperCase(),
-  ) && String(issue.variant ?? '').trim() === '';
-
 const pickIssueRepresentative = <
   T extends { id: number; format?: string | null; variant?: string | null },
 >(
   groupedIssues: T[],
 ): T => {
-  const parentCandidates = groupedIssues.filter((issue) => isParentCandidate(issue));
-  if (parentCandidates.length > 0) {
-    return [...parentCandidates].sort((left, right) => left.id - right.id)[0];
-  }
-
-  return [...groupedIssues].sort((left, right) => {
-    const variantSort = naturalCompare(String(left.variant ?? ''), String(right.variant ?? ''));
-    if (variantSort !== 0) return variantSort;
-    return left.id - right.id;
-  })[0];
+  return (
+    pickPreferredIssueVariant(groupedIssues) ||
+    [...groupedIssues].sort((left, right) => left.id - right.id)[0]
+  );
 };
 
 const dedupeIssueList = <
@@ -139,6 +130,16 @@ const toIdKey = (value: unknown): string | null => {
   const numeric = toNumericId(value);
   if (numeric == null) return null;
   return String(numeric);
+};
+
+const toSeriesNumberGroupKey = (issue: {
+  fk_series?: unknown;
+  number?: unknown;
+}): string | null => {
+  const seriesIdKey = toIdKey(issue.fk_series);
+  const number = String(issue.number ?? '').trim();
+  if (!seriesIdKey || number === '') return null;
+  return `${seriesIdKey}::${number}`;
 };
 
 const normalizeDbIds = (ids: readonly unknown[]): number[] =>
@@ -223,10 +224,7 @@ export class IssueService {
         const numberSort = compareIssueNumber(a.number, b.number);
         if (numberSort !== 0) return numberSort;
 
-        const variantSort = naturalCompare(String(a.variant ?? ''), String(b.variant ?? ''));
-        if (variantSort !== 0) return variantSort;
-
-        return a.id - b.id;
+        return compareIssueVariants(a, b);
       });
       const dedupedResults = dedupeIssueList(sortedResults).map(normalizeNavbarIssueVariant);
       return buildConnectionFromNodes(dedupedResults, dedupedResults.length, undefined);
@@ -258,10 +256,7 @@ export class IssueService {
         const numberSort = compareIssueNumber(a.number, b.number);
         if (numberSort !== 0) return numberSort;
 
-        const variantSort = naturalCompare(String(a.variant ?? ''), String(b.variant ?? ''));
-        if (variantSort !== 0) return variantSort;
-
-        return a.id - b.id;
+        return compareIssueVariants(a, b);
       });
       const dedupedResults = dedupeIssueList(sortedResults).map(normalizeNavbarIssueVariant);
       return buildConnectionFromNodes(dedupedResults, dedupedResults.length, undefined);
@@ -1044,7 +1039,7 @@ export class IssueService {
     loggedIn: boolean,
   ) {
     type WhereMap = Record<string | symbol, unknown>;
-    type IssueIdRow = { id: number | string };
+    type IssueIdRow = { id: number | string; fk_series?: unknown; number?: unknown };
     const limit = first || 25;
     const decodedCursor = decodeCursorId(after || undefined);
 
@@ -1149,16 +1144,24 @@ export class IssueService {
     const idScanLimit = Math.min((limit + 1) * 5, 250);
     const idRows = (await this.models.Issue.findAll({
       ...options,
-      attributes: ['id'],
+      attributes: ['id', 'fk_series', 'number'],
       limit: idScanLimit,
     })) as unknown as IssueIdRow[];
 
     const orderedUniqueIds: number[] = [];
-    const seenIds = new Set<string>();
+    const seenGroups = new Set<string>();
     idRows.forEach((row) => {
       const idKey = toIdKey((row as { id?: unknown })?.id);
-      if (!idKey || seenIds.has(idKey)) return;
-      seenIds.add(idKey);
+      if (!idKey) return;
+
+      const groupKey = toSeriesNumberGroupKey({
+        fk_series: (row as { fk_series?: unknown }).fk_series,
+        number: (row as { number?: unknown }).number,
+      });
+      const dedupeKey = groupKey || `id::${idKey}`;
+      if (seenGroups.has(dedupeKey)) return;
+
+      seenGroups.add(dedupeKey);
       orderedUniqueIds.push(Number(idKey));
     });
 
@@ -1189,6 +1192,59 @@ export class IssueService {
     const orderedResults = pageIds
       .map((id) => issuesById.get(String(id)))
       .filter((issue): issue is (typeof hydratedIssues)[number] => Boolean(issue));
+
+    const siblingGroups = new Map<string, { fkSeries: number; number: string }>();
+    for (const issue of orderedResults) {
+      const groupKey = toSeriesNumberGroupKey(issue as { fk_series?: unknown; number?: unknown });
+      const seriesIdKey = toIdKey(issue.fk_series);
+      const number = String(issue.number ?? '').trim();
+      if (!groupKey || !seriesIdKey || number === '') continue;
+      if (!siblingGroups.has(groupKey)) {
+        siblingGroups.set(groupKey, { fkSeries: Number(seriesIdKey), number });
+      }
+    }
+
+    const siblingWhere = [...siblingGroups.values()].map(({ fkSeries, number }) => ({
+      fk_series: fkSeries,
+      number,
+    }));
+
+    const siblings =
+      siblingWhere.length > 0
+        ? await this.models.Issue.findAll({
+            where: { [Op.or]: siblingWhere },
+            attributes: ['id', 'fk_series', 'number', 'format', 'variant'],
+          })
+        : [];
+
+    const preferredByGroup = new Map<string, { format?: string | null; variant?: string | null }>();
+    const siblingsByGroup = new Map<string, typeof siblings>();
+    for (const sibling of siblings) {
+      const key = toSeriesNumberGroupKey(sibling as { fk_series?: unknown; number?: unknown });
+      if (!key) continue;
+      const grouped = siblingsByGroup.get(key);
+      if (grouped) grouped.push(sibling);
+      else siblingsByGroup.set(key, [sibling]);
+    }
+
+    for (const [key, grouped] of siblingsByGroup) {
+      const preferred = pickPreferredIssueVariant(grouped);
+      if (!preferred) continue;
+      preferredByGroup.set(key, {
+        format: (preferred as { format?: string | null }).format ?? null,
+        variant: (preferred as { variant?: string | null }).variant ?? null,
+      });
+    }
+
+    orderedResults.forEach((issue) => {
+      const key = toSeriesNumberGroupKey(issue as { fk_series?: unknown; number?: unknown });
+      if (!key) return;
+      const preferred = preferredByGroup.get(key);
+      if (!preferred) return;
+
+      issue.format = preferred.format ?? issue.format;
+      issue.variant = preferred.variant ?? issue.variant;
+    });
 
     return buildConnectionFromNodes(orderedResults, limit, after || undefined);
   }
@@ -1258,14 +1314,13 @@ export class IssueService {
 
     const variants = await this.models.Issue.findAll({
       where: { [Op.or]: whereOr },
-      order: [
-        ['variant', 'ASC'],
-        ['id', 'ASC'],
-      ],
+      order: [['id', 'ASC']],
     });
 
     return parsedKeys.map(({ fkSeries, number }) =>
-      variants.filter((variant) => variant.fk_series === fkSeries && variant.number === number),
+      sortIssueVariants(
+        variants.filter((variant) => variant.fk_series === fkSeries && variant.number === number),
+      ),
     );
   }
 
@@ -1307,11 +1362,7 @@ export class IssueService {
       whereOr.length > 0
         ? await this.models.Issue.findAll({
             where: { [Op.or]: whereOr },
-            order: [
-              ['format', 'ASC'],
-              ['variant', 'ASC'],
-              ['id', 'ASC'],
-            ],
+            order: [['id', 'ASC']],
           })
         : [];
 
@@ -1331,7 +1382,8 @@ export class IssueService {
       const base = byIssueId.get(issueIdKey);
       const fkSeriesKey = toIdKey(base?.fk_series);
       if (!base || !fkSeriesKey || base.number === '') return [];
-      return siblingsByKey.get(`${fkSeriesKey}::${base.number}`) || [];
+      const siblingsForIssue = siblingsByKey.get(`${fkSeriesKey}::${base.number}`) || [];
+      return sortIssueVariants(siblingsForIssue);
     });
   }
 }

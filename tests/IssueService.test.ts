@@ -162,6 +162,30 @@ describe('IssueService', () => {
     expect(result.edges[0].node.variant).toBe('');
   });
 
+  it('should prefer Heft over Softcover and Hardcover when grouping by series+number', async () => {
+    const seriesInput = { title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } };
+    mockModels.Issue.findAll.mockResolvedValue([
+      { id: 302, fk_series: 1, number: '11', format: 'Softcover', variant: '' },
+      { id: 303, fk_series: 1, number: '11', format: 'Hardcover', variant: '' },
+      { id: 301, fk_series: 1, number: '11', format: 'Heft', variant: '' },
+      { id: 304, fk_series: 1, number: '11', format: 'Heft', variant: 'B' },
+    ]);
+
+    const result = await issueService.findIssues(
+      undefined,
+      seriesInput,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].node.id).toBe(301);
+    expect(result.edges[0].node.format).toBe('Heft');
+    expect(result.edges[0].node.variant).toBe('');
+  });
+
   it('keeps model-like issue fields when only variant issues exist', async () => {
     const seriesInput = {
       title: 'Star Wars',
@@ -226,7 +250,7 @@ describe('IssueService', () => {
     const idScanCall = mockModels.Issue.findAll.mock.calls[0][0];
     expect(idScanCall).toEqual(
       expect.objectContaining({
-        attributes: ['id'],
+        attributes: ['id', 'fk_series', 'number'],
         order: [
           ['updatedat', 'DESC'],
           ['id', 'DESC'],
@@ -388,5 +412,38 @@ describe('IssueService', () => {
     expect(variants[0].map((v: any) => v.id)).toEqual([101, 102]);
     expect(variants[1].map((v: any) => v.id)).toEqual([201]);
     expect(variants[2]).toEqual([]);
+  });
+
+  it('sorts grouped variants with regular issues first', async () => {
+    mockModels.Issue.findAll.mockResolvedValue([
+      { id: 705, fk_series: 7, number: '18', format: 'Heft', variant: 'B' },
+      { id: 704, fk_series: 7, number: '18', format: 'Hardcover', variant: '' },
+      { id: 706, fk_series: 7, number: '18', format: 'Heft', variant: 'A' },
+      { id: 701, fk_series: 7, number: '18', format: 'Heft', variant: '' },
+      { id: 702, fk_series: 7, number: '18', format: 'Softcover', variant: '' },
+      { id: 703, fk_series: 7, number: '18', format: 'Hardcover', variant: '' },
+    ]);
+
+    const variants = await issueService.getVariantsBySeriesAndNumberKeys(['7::18']);
+
+    expect(variants).toHaveLength(1);
+    expect(variants[0].map((entry: any) => entry.id)).toEqual([701, 702, 703, 704, 706, 705]);
+  });
+
+  it('sorts issueVariantsLoader siblings with regular issues first', async () => {
+    mockModels.Issue.findAll
+      .mockResolvedValueOnce([{ id: 88, fk_series: 7, number: '18' }])
+      .mockResolvedValueOnce([
+        { id: 705, fk_series: 7, number: '18', format: 'Heft', variant: 'B' },
+        { id: 704, fk_series: 7, number: '18', format: 'Hardcover', variant: '' },
+        { id: 706, fk_series: 7, number: '18', format: 'Heft', variant: 'A' },
+        { id: 701, fk_series: 7, number: '18', format: 'Heft', variant: '' },
+        { id: 702, fk_series: 7, number: '18', format: 'Softcover', variant: '' },
+      ]);
+
+    const variantsByIssue = await issueService.getVariantsByIssueIds([88]);
+
+    expect(variantsByIssue).toHaveLength(1);
+    expect(variantsByIssue[0].map((entry: any) => entry.id)).toEqual([701, 702, 704, 706, 705]);
   });
 });
