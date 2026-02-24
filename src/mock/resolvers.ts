@@ -106,7 +106,7 @@ export const mockResolvers = {
     active: (parent: { active?: boolean }) => parent.active ?? true,
   },
   Issue: {
-    updatedAt: (parent: { updatedAt?: string; updatedat?: string }) =>
+    updatedat: (parent: { updatedAt?: string; updatedat?: string }) =>
       parent.updatedAt ?? parent.updatedat ?? null,
   },
 };

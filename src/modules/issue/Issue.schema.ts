@@ -71,7 +71,7 @@ export const typeDef = gql`
     collected: Boolean
     comicguideid: String
     createdat: DateTime
-    updatedAt: DateTime
+    updatedat: DateTime
     series: Series
     stories: [Story]
     storyOwner: Issue
