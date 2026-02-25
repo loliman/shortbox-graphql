@@ -18,10 +18,15 @@ export type ReimportUSTaskPayload = {
   scope?: ReimportScopePayload;
 };
 
+export type RebuildSearchIndexTaskPayload = {
+  dryRun?: boolean;
+};
+
 export type AdminTaskPayloads = {
   'cleanup-db': CleanupTaskPayload;
   'update-story-badges': UpdateStoryFiltersTaskPayload;
   'reimport-us': ReimportUSTaskPayload;
+  'rebuild-search-index': RebuildSearchIndexTaskPayload;
 };
 
 export type AdminTaskName = keyof AdminTaskPayloads;
@@ -49,12 +54,18 @@ export const ADMIN_TASK_DEFINITIONS: AdminTaskDefinition[] = [
     description:
       'Crawlt US-Issues neu, korrigiert normale Datenabweichungen und markiert manuelle Konflikte.',
   },
+  {
+    name: 'rebuild-search-index',
+    label: 'Rebuild Search Index',
+    description: 'Baut den QuickSearch-Index aus Publishern, Serien und Ausgaben neu auf.',
+  },
 ];
 
 export const ADMIN_TASK_DEFINITION_BY_NAME: Record<AdminTaskName, AdminTaskDefinition> = {
   'cleanup-db': ADMIN_TASK_DEFINITIONS[0],
   'update-story-badges': ADMIN_TASK_DEFINITIONS[1],
   'reimport-us': ADMIN_TASK_DEFINITIONS[2],
+  'rebuild-search-index': ADMIN_TASK_DEFINITIONS[3],
 };
 
 export const isAdminTaskName = (value: string): value is AdminTaskName =>

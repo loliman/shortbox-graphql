@@ -343,6 +343,10 @@ const buildTaskPayload = (
     }
   }
 
+  if (taskKey === 'rebuild-search-index') {
+    return { dryRun };
+  }
+
   return { dryRun };
 };
 
