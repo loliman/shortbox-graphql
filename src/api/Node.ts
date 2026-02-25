@@ -21,7 +21,6 @@ type ParsedSearchPattern = {
   volume?: number;
   year?: number;
   issueNumber?: string;
-  variantQuery: boolean;
 };
 
 type SearchIndexRow = {
@@ -56,6 +55,11 @@ type NodeCandidate = {
 
 const SEARCH_RESULT_LIMIT = 20;
 const SEARCH_POOL_LIMIT = 500;
+const SEARCH_TYPE_POOL_LIMITS = {
+  series: 250,
+  issue: 900,
+  publisher: 120,
+} as const;
 
 export const resolvers: NodeResolvers = {
   Query: {
@@ -66,30 +70,63 @@ export const resolvers: NodeResolvers = {
       const runSearch = async (rawQuery: string) =>
         models.sequelize.query<SearchIndexRow>(
           `
+            WITH ranked AS (
+              SELECT
+                si.node_type,
+                si.label,
+                si.url,
+                si.publisher_name,
+                si.series_title,
+                si.series_volume,
+                si.series_startyear,
+                si.series_endyear,
+                si.issue_number,
+                si.issue_format,
+                si.issue_variant,
+                si.issue_title,
+                ts_rank_cd(
+                  si.search_tsv,
+                  websearch_to_tsquery('simple', unaccent(CAST(:q_raw AS text)))
+                ) AS ts_rank,
+                similarity(si.search_text, unaccent(CAST(:q_raw AS text))) AS trigram_rank,
+                ROW_NUMBER() OVER (
+                  PARTITION BY si.node_type
+                  ORDER BY
+                    ts_rank_cd(
+                      si.search_tsv,
+                      websearch_to_tsquery('simple', unaccent(CAST(:q_raw AS text)))
+                    ) DESC,
+                    similarity(si.search_text, unaccent(CAST(:q_raw AS text))) DESC,
+                    si.label ASC
+                ) AS type_rank
+              FROM shortbox.search_index si
+              WHERE si.us = CAST(:us AS boolean)
+                AND (
+                  si.search_tsv @@ websearch_to_tsquery('simple', unaccent(CAST(:q_raw AS text)))
+                  OR si.search_text ILIKE CAST(:q_like AS text)
+                )
+            )
             SELECT
-              si.node_type,
-              si.label,
-              si.url,
-              si.publisher_name,
-              si.series_title,
-              si.series_volume,
-              si.series_startyear,
-              si.series_endyear,
-              si.issue_number,
-              si.issue_format,
-              si.issue_variant,
-              si.issue_title,
-              ts_rank_cd(
-                si.search_tsv,
-                websearch_to_tsquery('simple', unaccent(CAST(:q_raw AS text)))
-              ) AS ts_rank,
-              similarity(si.search_text, unaccent(CAST(:q_raw AS text))) AS trigram_rank
-            FROM shortbox.search_index si
-            WHERE si.us = CAST(:us AS boolean)
-              AND (
-                si.search_tsv @@ websearch_to_tsquery('simple', unaccent(CAST(:q_raw AS text)))
-                OR si.search_text ILIKE CAST(:q_like AS text)
-              )
+              node_type,
+              label,
+              url,
+              publisher_name,
+              series_title,
+              series_volume,
+              series_startyear,
+              series_endyear,
+              issue_number,
+              issue_format,
+              issue_variant,
+              issue_title,
+              ts_rank,
+              trigram_rank
+            FROM ranked
+            WHERE
+              (node_type = 'series' AND type_rank <= CAST(:series_pool_limit AS integer))
+              OR (node_type = 'issue' AND type_rank <= CAST(:issue_pool_limit AS integer))
+              OR (node_type = 'publisher' AND type_rank <= CAST(:publisher_pool_limit AS integer))
+            ORDER BY ts_rank DESC, trigram_rank DESC, label ASC
             LIMIT CAST(:pool_limit AS integer)
           `,
           {
@@ -98,6 +135,9 @@ export const resolvers: NodeResolvers = {
               q_raw: rawQuery,
               q_like: `%${normalizeForSearch(rawQuery).replace(/\s+/g, '%')}%`,
               pool_limit: SEARCH_POOL_LIMIT,
+              series_pool_limit: SEARCH_TYPE_POOL_LIMITS.series,
+              issue_pool_limit: SEARCH_TYPE_POOL_LIMITS.issue,
+              publisher_pool_limit: SEARCH_TYPE_POOL_LIMITS.publisher,
             },
             type: QueryTypes.SELECT,
           },
@@ -153,7 +193,6 @@ function toCandidate(row: SearchIndexRow, parsed: ParsedSearchPattern): NodeCand
   const issueVariant = (row.issue_variant || '').trim();
 
   if (type === 'issue') {
-    if (!parsed.variantQuery && issueVariant !== '') return null;
     if (parsed.issueNumber && !normalizeForSearch(issueNumber).startsWith(normalizeForSearch(parsed.issueNumber))) {
       return null;
     }
@@ -212,7 +251,7 @@ function toCandidate(row: SearchIndexRow, parsed: ParsedSearchPattern): NodeCand
 
   return {
     type,
-    label: row.label,
+    label: type === 'issue' ? buildIssueDisplayLabel(row) : row.label,
     url: row.url,
     relevance,
     seriesTitleSort: row.series_title || '',
@@ -234,10 +273,6 @@ function parseSearchPattern(input: string): ParsedSearchPattern {
   let issueNumber: string | undefined;
   let volume: number | undefined;
   let year: number | undefined;
-  const variantQuery = rest.some((token) => {
-    const lowered = token.toLowerCase();
-    return lowered === 'variant' || lowered === 'variants' || lowered === 'var';
-  });
 
   for (let idx = 0; idx < rest.length - 1; idx += 1) {
     const marker = rest[idx]?.toLowerCase();
@@ -270,7 +305,6 @@ function parseSearchPattern(input: string): ParsedSearchPattern {
     volume,
     year,
     issueNumber,
-    variantQuery,
   };
 }
 
@@ -373,6 +407,52 @@ function sortIssueCandidates(left: NodeCandidate, right: NodeCandidate): number 
   return left.label.localeCompare(right.label);
 }
 
+function sortIssueRepresentatives(left: NodeCandidate, right: NodeCandidate): number {
+  const formatCompare = compareIssueFormatPriority(left.issueFormatSort || '', right.issueFormatSort || '');
+  if (formatCompare !== 0) return formatCompare;
+
+  const leftVariant = String(left.issueVariantSort || '').trim();
+  const rightVariant = String(right.issueVariantSort || '').trim();
+  const leftIsRegular = leftVariant === '';
+  const rightIsRegular = rightVariant === '';
+  if (leftIsRegular !== rightIsRegular) return leftIsRegular ? -1 : 1;
+
+  const variantCompare = leftVariant.localeCompare(rightVariant, undefined, { sensitivity: 'base' });
+  if (variantCompare !== 0) return variantCompare;
+
+  if (left.relevance !== right.relevance) return right.relevance - left.relevance;
+  return left.label.localeCompare(right.label);
+}
+
+function compareIssueFormatPriority(leftFormat: string, rightFormat: string): number {
+  return issueFormatPriority(leftFormat) - issueFormatPriority(rightFormat);
+}
+
+function issueFormatPriority(rawFormat: string): number {
+  const normalized = normalizeForSearch(rawFormat);
+  if (normalized === 'heft') return 0;
+  if (normalized === 'softcover') return 1;
+  if (normalized === 'hardcover' || normalized === 'hc') return 2;
+  return 3;
+}
+
+function dedupeIssuesBySeriesAndNumber(issues: NodeCandidate[]): NodeCandidate[] {
+  const grouped = new Map<string, NodeCandidate[]>();
+  for (const issue of issues) {
+    const groupKey = `${issue.seriesKey || ''}::${normalizeForSearch(issue.issueNumberSort || '')}`;
+    const existing = grouped.get(groupKey);
+    if (existing) existing.push(issue);
+    else grouped.set(groupKey, [issue]);
+  }
+
+  const deduped: NodeCandidate[] = [];
+  for (const entries of grouped.values()) {
+    entries.sort(sortIssueRepresentatives);
+    deduped.push(entries[0]);
+  }
+  return deduped;
+}
+
 function buildSeriesFirstBlocks(
   nodes: NodeCandidate[],
   limits: {
@@ -401,7 +481,7 @@ function buildSeriesFirstBlocks(
     if (leftExactSeries !== rightExactSeries) return leftExactSeries ? -1 : 1;
     return sortSeriesCandidates(left, right);
   });
-  const issues = nodes.filter((node) => node.type === 'issue');
+  const issues = dedupeIssuesBySeriesAndNumber(nodes.filter((node) => node.type === 'issue'));
   const publishers = nodes.filter((node) => node.type === 'publisher').sort(sortSeriesCandidates);
 
   const issuesBySeries = new Map<string, NodeCandidate[]>();
@@ -498,4 +578,16 @@ function buildSeriesScopedRaw(parsed: ParsedSearchPattern): string {
   if (parsed.volume != null) tokens.push('vol', String(parsed.volume));
   if (parsed.year != null) tokens.push(String(parsed.year));
   return tokens.join(' ').trim();
+}
+
+function buildIssueDisplayLabel(row: SearchIndexRow): string {
+  const sourceLabel = String(row.label || '').trim();
+  const issueNumber = String(row.issue_number || '').trim();
+  const issueTitle = String(row.issue_title || '').trim();
+  if (!sourceLabel || !issueNumber) return sourceLabel;
+
+  const hashIndex = sourceLabel.indexOf(' #');
+  const seriesLabel = hashIndex >= 0 ? sourceLabel.slice(0, hashIndex).trim() : sourceLabel;
+  const titleSuffix = issueTitle ? `: ${issueTitle}` : '';
+  return `${seriesLabel} #${issueNumber}${titleSuffix}`;
 }
