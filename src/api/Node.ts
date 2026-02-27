@@ -193,11 +193,17 @@ function toCandidate(row: SearchIndexRow, parsed: ParsedSearchPattern): NodeCand
   const issueVariant = (row.issue_variant || '').trim();
 
   if (type === 'issue') {
-    if (parsed.issueNumber && !normalizeForSearch(issueNumber).startsWith(normalizeForSearch(parsed.issueNumber))) {
+    if (
+      parsed.issueNumber &&
+      !normalizeForSearch(issueNumber).startsWith(normalizeForSearch(parsed.issueNumber))
+    ) {
       return null;
     }
     if (parsed.volume != null && Number(row.series_volume || 0) !== parsed.volume) return null;
-    if (parsed.year != null && !isYearMatch(row.series_startyear, row.series_endyear, parsed.year)) {
+    if (
+      parsed.year != null &&
+      !isYearMatch(row.series_startyear, row.series_endyear, parsed.year)
+    ) {
       return null;
     }
     if (
@@ -211,18 +217,24 @@ function toCandidate(row: SearchIndexRow, parsed: ParsedSearchPattern): NodeCand
 
   if (type === 'series') {
     if (parsed.volume != null && Number(row.series_volume || 0) !== parsed.volume) return null;
-    if (parsed.year != null && !isYearMatch(row.series_startyear, row.series_endyear, parsed.year)) {
+    if (
+      parsed.year != null &&
+      !isYearMatch(row.series_startyear, row.series_endyear, parsed.year)
+    ) {
       return null;
     }
   }
 
   let relevance =
-    (Number(row.ts_rank || 0) * 1000) + (Number(row.trigram_rank || 0) * 300) + scoreStringMatch(row.label, parsed.raw);
+    Number(row.ts_rank || 0) * 1000 +
+    Number(row.trigram_rank || 0) * 300 +
+    scoreStringMatch(row.label, parsed.raw);
 
   if (type === 'series') {
     if (normalizedTitlePattern && seriesTitle.includes(normalizedTitlePattern)) relevance += 240;
     if (parsed.volume != null && Number(row.series_volume || 0) === parsed.volume) relevance += 200;
-    if (parsed.year != null && isYearMatch(row.series_startyear, row.series_endyear, parsed.year)) relevance += 180;
+    if (parsed.year != null && isYearMatch(row.series_startyear, row.series_endyear, parsed.year))
+      relevance += 180;
     relevance += scoreIdentityBonus(
       `${row.series_title || ''} vol ${row.series_volume || ''} ${row.series_startyear || ''}`,
       parsed.raw,
@@ -236,7 +248,8 @@ function toCandidate(row: SearchIndexRow, parsed: ParsedSearchPattern): NodeCand
       relevance += 220;
     }
     if (parsed.volume != null && Number(row.series_volume || 0) === parsed.volume) relevance += 180;
-    if (parsed.year != null && isYearMatch(row.series_startyear, row.series_endyear, parsed.year)) relevance += 170;
+    if (parsed.year != null && isYearMatch(row.series_startyear, row.series_endyear, parsed.year))
+      relevance += 170;
     if (
       parsed.issueNumber &&
       normalizeForSearch(issueNumber).startsWith(normalizeForSearch(parsed.issueNumber))
@@ -393,7 +406,10 @@ function sortSeriesCandidates(left: NodeCandidate, right: NodeCandidate): number
 }
 
 function sortIssueCandidates(left: NodeCandidate, right: NodeCandidate): number {
-  const numberCompare = compareIssueNumberForSort(left.issueNumberSort || '', right.issueNumberSort || '');
+  const numberCompare = compareIssueNumberForSort(
+    left.issueNumberSort || '',
+    right.issueNumberSort || '',
+  );
   if (numberCompare !== 0) return numberCompare;
 
   if (left.relevance !== right.relevance) return right.relevance - left.relevance;
@@ -408,7 +424,10 @@ function sortIssueCandidates(left: NodeCandidate, right: NodeCandidate): number 
 }
 
 function sortIssueRepresentatives(left: NodeCandidate, right: NodeCandidate): number {
-  const formatCompare = compareIssueFormatPriority(left.issueFormatSort || '', right.issueFormatSort || '');
+  const formatCompare = compareIssueFormatPriority(
+    left.issueFormatSort || '',
+    right.issueFormatSort || '',
+  );
   if (formatCompare !== 0) return formatCompare;
 
   const leftVariant = String(left.issueVariantSort || '').trim();
@@ -417,7 +436,9 @@ function sortIssueRepresentatives(left: NodeCandidate, right: NodeCandidate): nu
   const rightIsRegular = rightVariant === '';
   if (leftIsRegular !== rightIsRegular) return leftIsRegular ? -1 : 1;
 
-  const variantCompare = leftVariant.localeCompare(rightVariant, undefined, { sensitivity: 'base' });
+  const variantCompare = leftVariant.localeCompare(rightVariant, undefined, {
+    sensitivity: 'base',
+  });
   if (variantCompare !== 0) return variantCompare;
 
   if (left.relevance !== right.relevance) return right.relevance - left.relevance;
@@ -467,20 +488,22 @@ function buildSeriesFirstBlocks(
 ): NodeCandidate[] {
   const normalizedTitleQuery = normalizeForSearch(limits.titleQuery || '');
   const normalizedIssueNumberQuery = normalizeForSearch(limits.issueNumberQuery || '');
-  const series = nodes.filter((node) => node.type === 'series').sort((left, right) => {
-    const leftExactSeries =
-      normalizedTitleQuery !== '' &&
-      limits.volumeQuery != null &&
-      normalizeForSearch(left.seriesTitleSort || '') === normalizedTitleQuery &&
-      Number(left.seriesVolumeSort || 0) === Number(limits.volumeQuery);
-    const rightExactSeries =
-      normalizedTitleQuery !== '' &&
-      limits.volumeQuery != null &&
-      normalizeForSearch(right.seriesTitleSort || '') === normalizedTitleQuery &&
-      Number(right.seriesVolumeSort || 0) === Number(limits.volumeQuery);
-    if (leftExactSeries !== rightExactSeries) return leftExactSeries ? -1 : 1;
-    return sortSeriesCandidates(left, right);
-  });
+  const series = nodes
+    .filter((node) => node.type === 'series')
+    .sort((left, right) => {
+      const leftExactSeries =
+        normalizedTitleQuery !== '' &&
+        limits.volumeQuery != null &&
+        normalizeForSearch(left.seriesTitleSort || '') === normalizedTitleQuery &&
+        Number(left.seriesVolumeSort || 0) === Number(limits.volumeQuery);
+      const rightExactSeries =
+        normalizedTitleQuery !== '' &&
+        limits.volumeQuery != null &&
+        normalizeForSearch(right.seriesTitleSort || '') === normalizedTitleQuery &&
+        Number(right.seriesVolumeSort || 0) === Number(limits.volumeQuery);
+      if (leftExactSeries !== rightExactSeries) return leftExactSeries ? -1 : 1;
+      return sortSeriesCandidates(left, right);
+    });
   const issues = dedupeIssuesBySeriesAndNumber(nodes.filter((node) => node.type === 'issue'));
   const publishers = nodes.filter((node) => node.type === 'publisher').sort(sortSeriesCandidates);
 
