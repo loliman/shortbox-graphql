@@ -76,9 +76,7 @@ const toInt = (value: unknown): number => {
 const toWikiSeriesPageTitle = (title: string, volume: number): string =>
   `${normalizeString(title).replace(/\s+/g, '_')}_Vol_${toInt(volume)}`;
 
-const fromWikiSeriesPageTitle = (
-  pageTitle: string,
-): { title: string; volume: number } | null => {
+const fromWikiSeriesPageTitle = (pageTitle: string): { title: string; volume: number } | null => {
   const raw = normalizeString(pageTitle);
   const match = raw.match(/^(.*)_Vol_(\d+)$/i);
   if (!match) return null;
@@ -113,7 +111,9 @@ const probeSeriesPage = async (title: string, volume: number): Promise<SeriesPag
   };
 
   const redirects = response.data?.query?.redirects || [];
-  const redirectEntry = redirects.find((entry) => normalizeLower(entry.from) === normalizeLower(wikiTitle));
+  const redirectEntry = redirects.find(
+    (entry) => normalizeLower(entry.from) === normalizeLower(wikiTitle),
+  );
   if (redirectEntry?.to) {
     return { state: 'redirect', targetPageTitle: String(redirectEntry.to) };
   }
@@ -243,7 +243,8 @@ const applySeriesTarget = async (
   const patch: Record<string, unknown> = {};
   if (normalizeString(localSeries.title) !== normalizedTitle) patch.title = normalizedTitle;
   if (toInt(localSeries.volume) !== normalizedVolume) patch.volume = normalizedVolume;
-  if (toInt(localSeries.fk_publisher) !== toInt(publisher.id)) patch.fk_publisher = toInt(publisher.id);
+  if (toInt(localSeries.fk_publisher) !== toInt(publisher.id))
+    patch.fk_publisher = toInt(publisher.id);
   if (toInt(localSeries.startyear) !== normalizedStartyear) patch.startyear = normalizedStartyear;
   if (toInt(localSeries.endyear) !== normalizedEndyear) patch.endyear = normalizedEndyear;
 
@@ -322,7 +323,9 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
             if (pageProbe.state === 'redirect') {
               const parsedRedirect = fromWikiSeriesPageTitle(pageProbe.targetPageTitle);
               if (!parsedRedirect) {
-                throw new Error(`Cannot parse redirected series target "${pageProbe.targetPageTitle}"`);
+                throw new Error(
+                  `Cannot parse redirected series target "${pageProbe.targetPageTitle}"`,
+                );
               }
 
               target = {
@@ -416,6 +419,8 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   }
 }
 
-export async function triggerManualReimportDryRun(scope?: ReimportScope): Promise<ReimportReport | null> {
+export async function triggerManualReimportDryRun(
+  scope?: ReimportScope,
+): Promise<ReimportReport | null> {
   return runReimport({ dryRun: true, scope: scope || defaultScope });
 }
