@@ -131,6 +131,21 @@ type CrawlerStory = {
 const BASE_URI = 'https://marvel.fandom.com';
 const INDEX_URI = BASE_URI + '/index.php';
 const API_URI = BASE_URI + '/api.php';
+const REQUEST_DELAY_MS = 220;
+const REQUEST_MAX_RETRIES = 4;
+const REQUEST_BACKOFF_MS = 700;
+const DEFAULT_REQUEST_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Referer: BASE_URI + '/',
+};
+
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 type CrawlerApiImageResponse = {
   query: {
@@ -157,19 +172,45 @@ const request = async (options: {
 }) => {
   const transformFn = options.transform;
   const useCustomTransform = typeof transformFn === 'function';
-  const response = await axios({
-    url: options.uri || options.url,
-    method: options.method || 'GET',
-    params: options.qs,
-    data: options.body,
-    headers: options.headers,
-    responseType: useCustomTransform ? 'text' : 'json',
-    transformResponse: useCustomTransform ? [(value) => value] : undefined,
-  });
-  if (useCustomTransform) {
-    return transformFn(String(response.data ?? ''));
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= REQUEST_MAX_RETRIES; attempt += 1) {
+    try {
+      if (attempt > 0) {
+        const backoff = REQUEST_BACKOFF_MS * attempt + Math.floor(Math.random() * 300);
+        await sleep(backoff);
+      } else {
+        await sleep(REQUEST_DELAY_MS);
+      }
+
+      const response = await axios({
+        url: options.uri || options.url,
+        method: options.method || 'GET',
+        params: options.qs,
+        data: options.body,
+        headers: {
+          ...DEFAULT_REQUEST_HEADERS,
+          ...(options.headers || {}),
+        },
+        responseType: useCustomTransform ? 'text' : 'json',
+        transformResponse: useCustomTransform ? [(value) => value] : undefined,
+      });
+
+      if (useCustomTransform) {
+        return transformFn(String(response.data ?? ''));
+      }
+      return response.data;
+    } catch (error) {
+      lastError = error;
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      const retryable = status === 403 || status === 429 || (status != null && status >= 500);
+      if (!retryable || attempt >= REQUEST_MAX_RETRIES) {
+        break;
+      }
+    }
   }
-  return response.data;
+
+  throw lastError;
 };
 
 export async function crawlIssue(number: string, title: string, volume: number) {

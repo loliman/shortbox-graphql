@@ -67,6 +67,7 @@ const task: Task = async (rawPayload, helpers) => {
         `conflictIssues=${report.result.conflictIssues}, ` +
         `failedIssues=${report.result.failedIssues}, ` +
         `conflictSeries=${report.result.conflictSeries}, ` +
+        `notFoundSeries=${report.result.notFoundSeries}, ` +
         `failedSeries=${report.result.failedSeries}, ` +
         `failedPublishers=${report.result.failedPublishers}, ` +
         `dryRun=${report.dryRun}`,
