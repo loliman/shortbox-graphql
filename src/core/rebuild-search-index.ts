@@ -81,7 +81,10 @@ export async function runRebuildSearchIndex(
   const transaction = await models.sequelize.transaction();
 
   try {
-    const publishers = (await models.Publisher.findAll({ raw: true, transaction })) as unknown as PublisherSearchRow[];
+    const publishers = (await models.Publisher.findAll({
+      raw: true,
+      transaction,
+    })) as unknown as PublisherSearchRow[];
     const series = (await models.Series.findAll({
       raw: true,
       nest: true,
