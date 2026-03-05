@@ -115,6 +115,28 @@ describe('IssueService', () => {
     expect(numbers).toEqual(['I', 'II', '1', '2', '10', '11']);
   });
 
+  it('should sort negative and fractional issue numbers before regular integers', async () => {
+    const seriesInput = { title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } };
+    mockModels.Issue.findAll.mockResolvedValue([
+      { id: 1, number: '1', variant: '', fk_series: 1 },
+      { id: 2, number: '½', variant: '', fk_series: 1 },
+      { id: 3, number: '-1', variant: '', fk_series: 1 },
+      { id: 4, number: '2', variant: '', fk_series: 1 },
+    ]);
+
+    const result = await issueService.findIssues(
+      undefined,
+      seriesInput,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
+    const numbers = result.edges.map((edge: any) => edge.node.number);
+
+    expect(numbers).toEqual(['-1', '½', '1', '2']);
+  });
+
   it('should return only one API entry per issue number when variants exist', async () => {
     const seriesInput = { title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } };
     mockModels.Issue.findAll.mockResolvedValue([
@@ -374,6 +396,45 @@ describe('IssueService', () => {
         required: true,
       }),
     );
+  });
+
+  it('should keep lastEdited ordering but resolve preview cover from the preferred sibling issue', async () => {
+    mockModels.Issue.findAll
+      .mockResolvedValueOnce([{ id: 200, fk_series: 7, number: '18' }])
+      .mockResolvedValueOnce([
+        { id: 200, fk_series: 7, number: '18', format: 'Heft', variant: 'B', comicguideid: '0' },
+      ])
+      .mockResolvedValueOnce([
+        { id: 200, fk_series: 7, number: '18', format: 'Heft', variant: 'B', comicguideid: '0' },
+        {
+          id: 201,
+          fk_series: 7,
+          number: '18',
+          format: 'Hardcover',
+          variant: '',
+          comicguideid: '91529',
+        },
+      ]);
+    mockModels.Issue.findByPk.mockResolvedValue(null);
+
+    const result = await issueService.getLastEdited(
+      undefined,
+      1,
+      undefined,
+      undefined,
+      undefined,
+      false,
+    );
+
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0]?.node).toMatchObject({
+      id: 200,
+      format: 'Hardcover',
+      variant: '',
+      __coverIssueId: 201,
+      __coverComicguideId: '91529',
+    });
+    expect(mockModels.Issue.findAll).toHaveBeenCalledTimes(3);
   });
 
   it('should batch stories/primary cover by issue ids', async () => {

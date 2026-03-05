@@ -8,6 +8,7 @@ export class Issue extends Model {
   public format!: string;
   public variant!: string;
   public releasedate!: string;
+  public legacy_number!: string;
   public pages!: number;
   public price!: number;
   public currency!: string;
@@ -84,6 +85,11 @@ export default (sequelize: Sequelize) => {
       releasedate: {
         type: DataTypes.DATEONLY,
         allowNull: false,
+      },
+      legacy_number: {
+        type: DataTypes.STRING(255),
+        allowNull: false,
+        defaultValue: '',
       },
       pages: {
         type: DataTypes.INTEGER,

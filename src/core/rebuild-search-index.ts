@@ -42,6 +42,7 @@ type SeriesSearchRow = {
 type IssueSearchRow = {
   id: number;
   number: string;
+  legacy_number: string;
   format: string;
   variant: string;
   title: string;
@@ -180,6 +181,7 @@ export async function runRebuildSearchIndex(
       const seriesStartyear = Number(seriesItem?.startyear || 0);
       const seriesEndyear = Number(seriesItem?.endyear || 0);
       const issueNumber = (issueItem.number || '').trim();
+      const issueLegacyNumber = (issueItem.legacy_number || '').trim();
       const issueFormat = (issueItem.format || '').trim();
       const issueVariant = (issueItem.variant || '').trim();
       const issueTitle = (issueItem.title || '').trim();
@@ -193,6 +195,7 @@ export async function runRebuildSearchIndex(
       const label = createNodeIssueLabel(
         seriesLabel,
         issueNumber,
+        issueLegacyNumber,
         issueFormat,
         issueVariant,
         issueTitle,
@@ -224,7 +227,7 @@ export async function runRebuildSearchIndex(
           issueVariant,
         ),
         search_text: normalizeSearchText(
-          `${publisherName} ${seriesTitle} vol ${seriesVolume} ${seriesStartyear} ${seriesEndyear} ${issueNumber} ${issueFormat} ${issueVariant} ${issueTitle}`,
+          `${publisherName} ${seriesTitle} vol ${seriesVolume} ${seriesStartyear} ${seriesEndyear} ${issueNumber} ${issueLegacyNumber} ${issueFormat} ${issueVariant} ${issueTitle}`,
         ),
       });
       issueRows += 1;

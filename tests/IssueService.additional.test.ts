@@ -147,6 +147,15 @@ describe('IssueService additional coverage', () => {
     const deleteInstance = jest.fn().mockResolvedValue(true);
     mockModels.Issue.findOne.mockResolvedValue({ deleteInstance });
     await expect(issueService.deleteIssue(baseItem, tx)).resolves.toBe(true);
+    expect(mockModels.Issue.findOne).toHaveBeenLastCalledWith({
+      where: {
+        number: '1',
+        variant: 'A',
+        format: 'HC',
+        fk_series: 7,
+      },
+      transaction: tx,
+    });
     expect(deleteInstance).toHaveBeenCalledWith(tx, mockModels);
 
     mockModels.Publisher.findOne.mockResolvedValue(null);
@@ -184,10 +193,284 @@ describe('IssueService additional coverage', () => {
     const existing = { save } as any;
     mockModels.Issue.findOne.mockResolvedValue(existing);
     await issueService.editIssue(baseItem, baseItem, tx);
+    expect(mockModels.Issue.findOne).toHaveBeenLastCalledWith({
+      where: {
+        number: '1',
+        variant: 'A',
+        format: 'HC',
+        fk_series: 8,
+      },
+      transaction: tx,
+    });
     expect(existing.title).toBe('Title');
     expect(existing.number).toBe('1');
     expect(existing.variant).toBe('A');
     expect(save).toHaveBeenCalledWith({ transaction: tx });
+  });
+
+  it('uses format to disambiguate duplicate issues during edit', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: ' 1 ',
+      variant: '',
+      format: ' Hardcover ',
+      series: {
+        title: ' Series ',
+        volume: 1,
+        publisher: { name: ' Pub ' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      format: 'Softcover',
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll.mockResolvedValueOnce([]);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Issue.findOne).toHaveBeenCalledWith({
+      where: {
+        number: '1',
+        variant: '',
+        format: 'Hardcover',
+        fk_series: 7,
+      },
+      transaction: tx,
+    });
+    expect(existing.format).toBe('Softcover');
+    expect(save).toHaveBeenCalledWith({ transaction: tx });
+  });
+
+  it('clears parent links when edited stories omit parent references', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      stories: [{ number: 25 }],
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          number: 25,
+          title: 'Story',
+          addinfo: '',
+          part: '',
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll
+      .mockResolvedValueOnce([{ id: 901, number: 25, fk_parent: 902 }])
+      .mockResolvedValueOnce([]);
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Story.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: null,
+        number: 1,
+        title: 'Story',
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('resolves US parent stories against the main issue with empty variant', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          number: 25,
+          title: 'Story',
+          addinfo: '',
+          part: '',
+          parent: {
+            number: 2,
+            issue: {
+              series: { title: 'Invincible Iron Man', volume: 4 },
+              number: '593',
+            },
+          },
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 99 });
+    mockModels.Issue.findOne
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce({ id: 500 });
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll
+      .mockResolvedValueOnce([{ id: 901, number: 25, fk_parent: 902 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 777, number: 2 }]);
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Issue.findOne).toHaveBeenNthCalledWith(2, {
+      where: {
+        number: '593',
+        variant: '',
+        fk_series: 99,
+      },
+      transaction: tx,
+    });
+    expect(mockModels.Story.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 777,
+        number: 1,
+        title: 'Story',
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('moves all sibling variants to the new series when the edited issue changes series', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: ' 1 ',
+      variant: ' Variant B ',
+      series: {
+        title: ' Old Series ',
+        volume: 1,
+        publisher: { name: ' Old Pub ' },
+      },
+    } as any;
+    const newItem = {
+      ...baseItem,
+      number: ' 1 ',
+      variant: ' Variant B ',
+      series: {
+        title: ' New Series ',
+        volume: 2,
+        publisher: { name: ' New Pub ' },
+      },
+    } as any;
+
+    const editedSave = jest.fn().mockResolvedValue({ id: 111 });
+    const siblingSave = jest.fn().mockResolvedValue({ id: 112 });
+    const editedIssue = { id: 111, save: editedSave } as any;
+    const siblingIssue = { id: 112, save: siblingSave, fk_series: 7 } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3 })
+      .mockResolvedValueOnce({ id: 4 });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 8 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(editedIssue);
+    mockModels.Issue.findAll.mockResolvedValueOnce([editedIssue, siblingIssue]);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Issue.findAll).toHaveBeenCalledWith({
+      where: {
+        number: '1',
+        fk_series: 7,
+      },
+      transaction: tx,
+    });
+    expect(editedIssue.fk_series).toBe(8);
+    expect(siblingIssue.fk_series).toBe(8);
+    expect(editedSave).toHaveBeenCalledWith({ transaction: tx });
+    expect(siblingSave).toHaveBeenCalledWith({ transaction: tx });
+  });
+
+  it('does not touch story links when editing a US issue', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: ' 1 ',
+      variant: '',
+      series: {
+        title: ' US Series ',
+        volume: 1,
+        publisher: { name: ' Marvel Comics ' },
+      },
+    } as any;
+    const newItem = {
+      ...baseItem,
+      number: ' 1 ',
+      variant: '',
+      series: {
+        title: ' US Series Moved ',
+        volume: 2,
+        publisher: { name: ' Marvel Comics ' },
+      },
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+    const siblingSave = jest.fn().mockResolvedValue({ id: 212 });
+    const sibling = { id: 212, save: siblingSave, fk_series: 7 } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: true })
+      .mockResolvedValueOnce({ id: 4, original: true });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 8 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([existing, sibling]);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Story.destroy).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledWith({ transaction: tx });
+    expect(siblingSave).toHaveBeenCalledWith({ transaction: tx });
   });
 
   it('applies lastEdited filter mapping and cursor fallback for null cursor value', async () => {

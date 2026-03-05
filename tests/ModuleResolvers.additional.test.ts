@@ -1086,6 +1086,26 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
         { issueCoverLoader: { load: jest.fn().mockResolvedValue(null) } } as any,
       ),
     ).resolves.toBeNull();
+    const preferredCoverLoader = { load: jest.fn().mockResolvedValue({ id: 77, url: "preferred" }) };
+    await expect(
+      issueResolvers.Issue.cover(
+        { id: 4, __coverIssueId: 9, __coverComicguideId: "00042", comicguideid: "0" } as any,
+        {} as any,
+        { issueCoverLoader: preferredCoverLoader } as any,
+      ),
+    ).resolves.toEqual({ id: 77, url: "preferred" });
+    expect(preferredCoverLoader.load).toHaveBeenCalledWith(9);
+    await expect(
+      issueResolvers.Issue.cover(
+        { id: 4, __coverIssueId: 9, __coverComicguideId: "00042", comicguideid: "0" } as any,
+        {} as any,
+        { issueCoverLoader: { load: jest.fn().mockResolvedValue(null) } } as any,
+      ),
+    ).resolves.toEqual({
+      fk_issue: 9,
+      issue: { id: 4, __coverIssueId: 9, __coverComicguideId: "00042", comicguideid: "0" },
+      url: 'https://www.comicguide.de/pics/large/42.jpg',
+    });
 
     expect(
       issueResolvers.Issue.createdat(
@@ -1113,6 +1133,50 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
         {} as any,
       ),
     ).toBeNull();
+  });
+
+  it('resolves one canonical issue title across variants and falls back by series+number', async () => {
+    const issueVariantsLoader = {
+      load: jest.fn().mockResolvedValue([
+        { id: 4, fk_series: 8, number: '1', title: 'Zulu', variant: '' },
+        { id: 5, fk_series: 8, number: '1', title: ' Alpha ', variant: 'B' },
+        { id: 6, fk_series: 8, number: '1', title: '', variant: 'C' },
+      ]),
+    };
+
+    await expect(
+      issueResolvers.Issue.title(
+        { id: 4, fk_series: 8, number: '1', title: 'Zulu' } as any,
+        {} as any,
+        { issueVariantsLoader } as any,
+        {} as any,
+      ),
+    ).resolves.toBe('Alpha');
+    expect(issueVariantsLoader.load).toHaveBeenCalledWith(4);
+
+    const models = {
+      Issue: {
+        findAll: jest
+          .fn()
+          .mockResolvedValue([{ id: 7, fk_series: 8, number: '1', title: 'Beta', variant: 'A' }]),
+      },
+    } as any;
+
+    await expect(
+      issueResolvers.Issue.title(
+        { id: 7, fk_series: 8, number: '1', title: 'Gamma' } as any,
+        {} as any,
+        {
+          issueVariantsLoader: { load: jest.fn().mockResolvedValue([]) },
+          models,
+        } as any,
+        {} as any,
+      ),
+    ).resolves.toBe('Beta');
+    expect(models.Issue.findAll).toHaveBeenCalledWith({
+      where: { fk_series: 8, number: '1' },
+      order: [['id', 'ASC']],
+    });
   });
 });
 

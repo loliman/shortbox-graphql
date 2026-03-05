@@ -40,6 +40,37 @@ const normalizeLastEditedFilter = (filter: Filter | undefined): Filter | undefin
 };
 
 const ROMAN_NUMBER_PATTERN = /^(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))$/i;
+const FRACTION_NUMBER_PATTERN = /^(-?\d+)\s*\/\s*(\d+)$/;
+const DECIMAL_NUMBER_PATTERN = /^-?\d+(?:[.,]\d+)?$/;
+const UNICODE_FRACTION_VALUES: Record<string, number> = {
+  '¼': 0.25,
+  '½': 0.5,
+  '¾': 0.75,
+};
+
+const parseSortableIssueNumber = (value: string): number | null => {
+  const trimmed = value.trim();
+  const unicodeFractionMatch = trimmed.match(/^(-?\d+)?\s*([¼½¾])$/);
+  if (unicodeFractionMatch) {
+    const whole = Number(unicodeFractionMatch[1] || 0);
+    const fraction = UNICODE_FRACTION_VALUES[unicodeFractionMatch[2]];
+    if (Number.isFinite(whole) && fraction != null) return whole + fraction;
+  }
+
+  const fractionMatch = trimmed.match(FRACTION_NUMBER_PATTERN);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
+      return numerator / denominator;
+    }
+    return null;
+  }
+
+  if (!DECIMAL_NUMBER_PATTERN.test(trimmed)) return null;
+  const parsed = Number(trimmed.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
   const left = String(leftRaw ?? '').trim();
@@ -52,6 +83,12 @@ const compareIssueNumber = (leftRaw: unknown, rightRaw: unknown): number => {
   }
   if (leftIsRoman) return -1;
   if (rightIsRoman) return 1;
+
+  const leftSortable = parseSortableIssueNumber(left);
+  const rightSortable = parseSortableIssueNumber(right);
+  if (leftSortable != null && rightSortable != null && leftSortable !== rightSortable) {
+    return leftSortable - rightSortable;
+  }
 
   return naturalCompare(left, right);
 };
@@ -283,12 +320,16 @@ export class IssueService {
 
     if (!series) throw new Error('Series not found');
 
+    const issueWhere: Record<string, unknown> = {
+      number: item.number ? item.number.trim() : '',
+      variant: item.variant ? item.variant.trim() : '',
+      fk_series: series.id,
+    };
+    const itemFormat = typeof item.format === 'string' ? item.format.trim() : '';
+    if (itemFormat !== '') issueWhere.format = itemFormat;
+
     let issue = await this.models.Issue.findOne({
-      where: {
-        number: item.number ? item.number.trim() : '',
-        variant: item.variant ? item.variant.trim() : '',
-        fk_series: series.id,
-      },
+      where: issueWhere,
       transaction,
     });
 
@@ -317,7 +358,7 @@ export class IssueService {
 
     if (!series) throw new Error('Series not found');
 
-    const issueInput = item as IssueInput & { comicguideid?: number };
+    const issueInput = item as IssueInput & { comicguideid?: number; legacy_number?: string };
 
     const createdIssue = await this.models.Issue.create(
       {
@@ -326,6 +367,7 @@ export class IssueService {
         format: item.format,
         variant: (item.variant || '').trim(),
         releasedate: item.releasedate,
+        legacy_number: issueInput.legacy_number || '',
         pages: item.pages,
         price: item.price,
         currency: item.currency,
@@ -363,12 +405,16 @@ export class IssueService {
 
     if (!oldSeries) throw new Error('Series not found');
 
+    const issueWhere: Record<string, unknown> = {
+      number: (old.number || '').trim(),
+      variant: (old.variant || '').trim(),
+      fk_series: oldSeries.id,
+    };
+    const oldFormat = typeof old.format === 'string' ? old.format.trim() : '';
+    if (oldFormat !== '') issueWhere.format = oldFormat;
+
     let res = await this.models.Issue.findOne({
-      where: {
-        number: (old.number || '').trim(),
-        variant: (old.variant || '').trim(),
-        fk_series: oldSeries.id,
-      },
+      where: issueWhere,
       transaction,
     });
 
@@ -392,11 +438,25 @@ export class IssueService {
 
     if (!newSeries) throw new Error('Series not found');
 
+    const oldNumber = (old.number || '').trim();
+    const seriesChanged = oldSeries.id !== newSeries.id;
+    const siblingIssuesToMove = seriesChanged
+      ? await this.models.Issue.findAll({
+          where: {
+            number: oldNumber,
+            fk_series: oldSeries.id,
+          },
+          transaction,
+        })
+      : [];
+
     res.title = (item.title || '').trim();
     res.number = (item.number || '').trim();
     res.format = item.format || '';
     res.variant = (item.variant || '').trim();
     res.releasedate = item.releasedate ?? '';
+    const issueUpdateInput = item as IssueInput & { legacy_number?: string };
+    res.legacy_number = issueUpdateInput.legacy_number || '';
     res.pages = item.pages || 0;
     res.price = item.price || 0;
     res.currency = item.currency || '';
@@ -419,18 +479,27 @@ export class IssueService {
     //edit issues
 
     const savedIssue = await res.save({ transaction });
-    const removedUsParentStoryIds = await this.syncStoriesFromParentRefs(
-      savedIssue.id,
-      item,
-      transaction,
-    );
-    await updateStoryFilterFlagsForIssue(this.models, savedIssue.id, transaction);
-    const removedUsIssueIds = await this.resolveIssueIdsFromStoryIds(
-      removedUsParentStoryIds,
-      transaction,
-    );
-    for (const removedUsIssueId of removedUsIssueIds) {
-      await updateStoryFilterFlagsForIssue(this.models, removedUsIssueId, transaction);
+    if (seriesChanged) {
+      for (const siblingIssue of siblingIssuesToMove) {
+        if (!siblingIssue || siblingIssue.id === savedIssue.id) continue;
+        siblingIssue.fk_series = newSeries.id;
+        await siblingIssue.save({ transaction });
+      }
+    }
+    if (!oldPublisher.original) {
+      const removedUsParentStoryIds = await this.syncStoriesFromParentRefs(
+        savedIssue.id,
+        item,
+        transaction,
+      );
+      await updateStoryFilterFlagsForIssue(this.models, savedIssue.id, transaction);
+      const removedUsIssueIds = await this.resolveIssueIdsFromStoryIds(
+        removedUsParentStoryIds,
+        transaction,
+      );
+      for (const removedUsIssueId of removedUsIssueIds) {
+        await updateStoryFilterFlagsForIssue(this.models, removedUsIssueId, transaction);
+      }
     }
     return savedIssue;
   }
@@ -475,14 +544,6 @@ export class IssueService {
     const oldUsParentStoryIds = await this.filterUsParentStoryIds(oldParentStoryIds, transaction);
     const newlyLinkedParentStoryIds = new Set<number>();
 
-    const existingParentsByNumber = new Map<number, Array<number | null>>();
-    for (const existingStory of existingStories) {
-      const storyNumber = Number(existingStory.number || 0);
-      const list = existingParentsByNumber.get(storyNumber) || [];
-      list.push(existingStory.fk_parent ?? null);
-      existingParentsByNumber.set(storyNumber, list);
-    }
-
     await this.models.Story.destroy({
       where: { fk_issue: issueId },
       transaction,
@@ -496,11 +557,6 @@ export class IssueService {
     for (const rawStory of inputStories) {
       if (!rawStory || typeof rawStory !== 'object') continue;
       const story = rawStory as StoryInputLike;
-      const sourceStoryNumber = Number(story.number || 0);
-      const fallbackParentCandidates =
-        sourceStoryNumber > 0 ? existingParentsByNumber.get(sourceStoryNumber) || [] : [];
-      const fallbackParentId =
-        fallbackParentCandidates.length > 0 ? (fallbackParentCandidates.shift() ?? null) : null;
       const parent = story.parent;
       const parentIssue = parent?.issue;
       const parentSeries = parentIssue?.series;
@@ -560,7 +616,7 @@ export class IssueService {
           }
         } else {
           const selectedParentStory = parentStories.find(
-            (entry) => entry.number === requestedParentStoryNumber,
+            (entry) => Number(entry.number || 0) === requestedParentStoryNumber,
           );
           if (selectedParentStory) {
             await createStoryRow(selectedParentStory.id);
@@ -569,7 +625,7 @@ export class IssueService {
         }
       }
 
-      if (!hasCreatedStory) await createStoryRow(fallbackParentId);
+      if (!hasCreatedStory) await createStoryRow(null);
     }
 
     return Array.from(oldUsParentStoryIds).filter((id) => !newlyLinkedParentStoryIds.has(id));
@@ -675,6 +731,7 @@ export class IssueService {
     };
     type CrawledVariantLike = {
       number?: string;
+      legacyNumber?: string;
       format?: string;
       variant?: string;
       releasedate?: string;
@@ -683,10 +740,10 @@ export class IssueService {
       cover?: CrawledCoverLike;
     };
     type CrawledIssueLike = {
+      legacyNumber?: string;
       releasedate?: string;
       price?: number;
       currency?: string;
-      coverUrl?: string;
       cover?: CrawledCoverLike;
       stories?: CrawledStoryLike[];
       individuals?: CrawledNamedType[];
@@ -895,6 +952,7 @@ export class IssueService {
     let issue = await this.models.Issue.findOne({
       where: {
         number,
+        variant: '',
         fk_series: series.id,
       },
       transaction,
@@ -913,6 +971,7 @@ export class IssueService {
           format: 'Heft',
           variant: '',
           releasedate: crawledIssue.releasedate,
+          legacy_number: String(crawledIssue.legacyNumber || ''),
           pages: 0,
           price: crawledIssue.price || 0,
           currency: crawledIssue.currency || 'USD',
@@ -927,7 +986,7 @@ export class IssueService {
 
       const mainCover = crawledIssue.cover || {
         number: 0,
-        url: crawledIssue.coverUrl || '',
+        url: '',
         individuals: [],
       };
 
@@ -988,6 +1047,7 @@ export class IssueService {
             releasedate: String(
               crawledVariant.releasedate || issue.releasedate || crawledIssue.releasedate || '',
             ),
+            legacy_number: String(crawledVariant.legacyNumber || crawledIssue.legacyNumber || ''),
             pages: 0,
             price: Number(crawledVariant.price || 0),
             currency: String(crawledVariant.currency || crawledIssue.currency || 'USD'),
@@ -1213,11 +1273,19 @@ export class IssueService {
       siblingWhere.length > 0
         ? await this.models.Issue.findAll({
             where: { [Op.or]: siblingWhere },
-            attributes: ['id', 'fk_series', 'number', 'format', 'variant'],
+            attributes: ['id', 'fk_series', 'number', 'format', 'variant', 'comicguideid'],
           })
         : [];
 
-    const preferredByGroup = new Map<string, { format?: string | null; variant?: string | null }>();
+    const preferredByGroup = new Map<
+      string,
+      {
+        id?: number | null;
+        format?: string | null;
+        variant?: string | null;
+        comicguideid?: string | null;
+      }
+    >();
     const siblingsByGroup = new Map<string, typeof siblings>();
     for (const sibling of siblings) {
       const key = toSeriesNumberGroupKey(sibling as { fk_series?: unknown; number?: unknown });
@@ -1231,8 +1299,10 @@ export class IssueService {
       const preferred = pickPreferredIssueVariant(grouped);
       if (!preferred) continue;
       preferredByGroup.set(key, {
+        id: toNumericId((preferred as { id?: unknown }).id),
         format: (preferred as { format?: string | null }).format ?? null,
         variant: (preferred as { variant?: string | null }).variant ?? null,
+        comicguideid: String((preferred as { comicguideid?: unknown }).comicguideid ?? ''),
       });
     }
 
@@ -1244,6 +1314,18 @@ export class IssueService {
 
       issue.format = preferred.format ?? issue.format;
       issue.variant = preferred.variant ?? issue.variant;
+      (
+        issue as typeof issue & {
+          __coverIssueId?: number | null;
+          __coverComicguideId?: string | null;
+        }
+      ).__coverIssueId = preferred.id ?? null;
+      (
+        issue as typeof issue & {
+          __coverIssueId?: number | null;
+          __coverComicguideId?: string | null;
+        }
+      ).__coverComicguideId = preferred.comicguideid ?? null;
     });
 
     return buildConnectionFromNodes(orderedResults, limit, after || undefined);
@@ -1280,12 +1362,17 @@ export class IssueService {
   }
 
   async getPrimaryCoversByIssueIds(issueIds: readonly number[]) {
+    const dbIssueIds = normalizeDbIds(issueIds as unknown as readonly unknown[]);
     const covers = await this.models.Cover.findAll({
       where: {
-        fk_issue: { [Op.in]: [...issueIds] },
-        number: 0,
+        fk_issue: { [Op.in]: dbIssueIds },
+        fk_parent: null,
       },
-      order: [['id', 'ASC']],
+      order: [
+        ['fk_issue', 'ASC'],
+        ['number', 'ASC'],
+        ['id', 'ASC'],
+      ],
     });
     return issueIds.map((issueId) => {
       const issueIdKey = toIdKey(issueId);

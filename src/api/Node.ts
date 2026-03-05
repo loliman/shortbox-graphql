@@ -33,6 +33,7 @@ type SearchIndexRow = {
   series_startyear: number | null;
   series_endyear: number | null;
   issue_number: string | null;
+  issue_legacy_number: string | null;
   issue_format: string | null;
   issue_variant: string | null;
   issue_title: string | null;
@@ -81,6 +82,7 @@ export const resolvers: NodeResolvers = {
                 si.series_startyear,
                 si.series_endyear,
                 si.issue_number,
+                i.legacy_number AS issue_legacy_number,
                 si.issue_format,
                 si.issue_variant,
                 si.issue_title,
@@ -100,6 +102,9 @@ export const resolvers: NodeResolvers = {
                     si.label ASC
                 ) AS type_rank
               FROM shortbox.search_index si
+              LEFT JOIN shortbox.issue i
+                ON si.node_type = 'issue'
+               AND i.id = si.source_id
               WHERE si.us = CAST(:us AS boolean)
                 AND (
                   si.search_tsv @@ websearch_to_tsquery('simple', unaccent(CAST(:q_raw AS text)))
@@ -116,6 +121,7 @@ export const resolvers: NodeResolvers = {
               series_startyear,
               series_endyear,
               issue_number,
+              issue_legacy_number,
               issue_format,
               issue_variant,
               issue_title,
@@ -190,10 +196,15 @@ function toCandidate(row: SearchIndexRow, parsed: ParsedSearchPattern): NodeCand
   const seriesTitle = normalizeForSearch(row.series_title || '');
   const normalizedTitlePattern = normalizeForSearch(parsed.title || parsed.raw);
   const issueNumber = (row.issue_number || '').trim();
+  const issueLegacyNumber = (row.issue_legacy_number || '').trim();
   const issueVariant = (row.issue_variant || '').trim();
 
   if (type === 'issue') {
-    if (parsed.issueNumber && !normalizeForSearch(issueNumber).startsWith(normalizeForSearch(parsed.issueNumber))) {
+    if (
+      parsed.issueNumber &&
+      !normalizeForSearch(issueNumber).startsWith(normalizeForSearch(parsed.issueNumber)) &&
+      !normalizeForSearch(issueLegacyNumber).startsWith(normalizeForSearch(parsed.issueNumber))
+    ) {
       return null;
     }
     if (parsed.volume != null && Number(row.series_volume || 0) !== parsed.volume) return null;
@@ -239,12 +250,13 @@ function toCandidate(row: SearchIndexRow, parsed: ParsedSearchPattern): NodeCand
     if (parsed.year != null && isYearMatch(row.series_startyear, row.series_endyear, parsed.year)) relevance += 170;
     if (
       parsed.issueNumber &&
-      normalizeForSearch(issueNumber).startsWith(normalizeForSearch(parsed.issueNumber))
+      (normalizeForSearch(issueNumber).startsWith(normalizeForSearch(parsed.issueNumber)) ||
+        normalizeForSearch(issueLegacyNumber).startsWith(normalizeForSearch(parsed.issueNumber)))
     ) {
       relevance += 210;
     }
     relevance += scoreIdentityBonus(
-      `${row.series_title || ''} vol ${row.series_volume || ''} ${row.series_startyear || ''} ${row.issue_number || ''} ${row.issue_format || ''} ${row.issue_variant || ''}`,
+      `${row.series_title || ''} vol ${row.series_volume || ''} ${row.series_startyear || ''} ${row.issue_number || ''} ${row.issue_legacy_number || ''} ${row.issue_format || ''} ${row.issue_variant || ''}`,
       parsed.raw,
     );
   }
@@ -383,7 +395,44 @@ function isYearMatch(startyear: number | null, endyear: number | null, year: num
   return false;
 }
 
+const FRACTION_NUMBER_PATTERN = /^(-?\d+)\s*\/\s*(\d+)$/;
+const DECIMAL_NUMBER_PATTERN = /^-?\d+(?:[.,]\d+)?$/;
+const UNICODE_FRACTION_VALUES: Record<string, number> = {
+  '¼': 0.25,
+  '½': 0.5,
+  '¾': 0.75,
+};
+
+function parseSortableIssueNumber(value: string): number | null {
+  const trimmed = value.trim();
+  const unicodeFractionMatch = trimmed.match(/^(-?\d+)?\s*([¼½¾])$/);
+  if (unicodeFractionMatch) {
+    const whole = Number(unicodeFractionMatch[1] || 0);
+    const fraction = UNICODE_FRACTION_VALUES[unicodeFractionMatch[2]];
+    if (Number.isFinite(whole) && fraction != null) return whole + fraction;
+  }
+
+  const fractionMatch = trimmed.match(FRACTION_NUMBER_PATTERN);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
+      return numerator / denominator;
+    }
+    return null;
+  }
+
+  if (!DECIMAL_NUMBER_PATTERN.test(trimmed)) return null;
+  const parsed = Number(trimmed.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function compareIssueNumberForSort(leftRaw: string, rightRaw: string): number {
+  const leftSortable = parseSortableIssueNumber(leftRaw);
+  const rightSortable = parseSortableIssueNumber(rightRaw);
+  if (leftSortable != null && rightSortable != null && leftSortable !== rightSortable) {
+    return leftSortable - rightSortable;
+  }
   return leftRaw.localeCompare(rightRaw, undefined, { numeric: true, sensitivity: 'base' });
 }
 
@@ -583,11 +632,13 @@ function buildSeriesScopedRaw(parsed: ParsedSearchPattern): string {
 function buildIssueDisplayLabel(row: SearchIndexRow): string {
   const sourceLabel = String(row.label || '').trim();
   const issueNumber = String(row.issue_number || '').trim();
+  const issueLegacyNumber = String(row.issue_legacy_number || '').trim();
   const issueTitle = String(row.issue_title || '').trim();
   if (!sourceLabel || !issueNumber) return sourceLabel;
 
   const hashIndex = sourceLabel.indexOf(' #');
   const seriesLabel = hashIndex >= 0 ? sourceLabel.slice(0, hashIndex).trim() : sourceLabel;
   const titleSuffix = issueTitle ? `: ${issueTitle}` : '';
-  return `${seriesLabel} #${issueNumber}${titleSuffix}`;
+  const legacySuffix = issueLegacyNumber ? ` LGY #${issueLegacyNumber}` : '';
+  return `${seriesLabel} #${issueNumber}${legacySuffix}${titleSuffix}`;
 }

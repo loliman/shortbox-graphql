@@ -42,6 +42,7 @@ export const typeDef = gql`
     format: String
     variant: String
     releasedate: Date
+    legacy_number: String
     pages: Int
     price: Float
     currency: String
@@ -61,6 +62,7 @@ export const typeDef = gql`
     format: String
     variant: String
     releasedate: Date
+    legacy_number: String
     pages: Int
     price: Float
     currency: String

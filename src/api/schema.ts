@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import gql from 'graphql-tag';
 
+// Load the contract SDL from the local checkout when available during development.
 const localSchemaPath = resolve(__dirname, '../../../shortbox-contract/schema/shortbox.graphql');
 const schemaPath = existsSync(localSchemaPath)
   ? localSchemaPath

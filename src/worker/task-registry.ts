@@ -15,6 +15,7 @@ export type UpdateStoryFiltersTaskPayload = {
 
 export type ReimportUSTaskPayload = {
   dryRun?: boolean;
+  enableTargetDeFastPath?: boolean;
   scope?: ReimportScopePayload;
 };
 

@@ -56,6 +56,7 @@ export const IssueInputSchema = z.object({
   format: z.string().optional(),
   variant: z.string().optional(),
   releasedate: z.string().or(z.date()).optional().nullable(),
+  legacy_number: z.string().optional(),
   pages: z.number().optional(),
   price: z.number().optional(),
   currency: z.string().optional(),

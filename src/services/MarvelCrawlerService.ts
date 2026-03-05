@@ -1,6 +1,10 @@
-/* istanbul ignore file */
-import * as cheerio from 'cheerio';
-import axios from 'axios';
+import * as cheerio from "cheerio";
+import type { AnyNode, Element } from "domhandler";
+import { request } from "undici";
+
+/* =====================
+ * Public (your) types
+ * ===================== */
 
 export interface CrawledSeries {
   title: string;
@@ -8,6 +12,7 @@ export interface CrawledSeries {
   startyear: number;
   endyear: number;
   publisherName: string;
+  genre?: string;
 }
 
 export interface CrawledStory {
@@ -15,21 +20,40 @@ export interface CrawledStory {
   title: string;
   addinfo?: string;
   part?: string;
+  reprintOf?: CrawledStoryReference;
   individuals?: CrawledIndividual[];
   appearances?: CrawledAppearance[];
 }
 
+export interface CrawledStoryReference {
+  number?: number;
+  issue: {
+    number: string;
+    series: {
+      title: string;
+      volume: number;
+    };
+  };
+}
+
 export interface CrawledIssue {
   number: string;
+  legacyNumber?: string;
   releasedate: string;
   price: number;
   currency: string;
-  seriesTitle?: string;
-  seriesVolume?: number;
-  seriesPublisherName?: string;
-  seriesStartyear?: number;
-  seriesEndyear?: number;
-  coverUrl: string;
+  variant?: string;
+  format?: string;
+  series?: {
+    title: string;
+    volume: number;
+    startyear?: number;
+    endyear?: number;
+    genre?: string;
+    publisher?: {
+      name: string;
+    };
+  };
   stories: CrawledStory[];
   cover?: CrawledCover;
   variants?: unknown[];
@@ -40,7 +64,7 @@ export interface CrawledIssue {
 export interface CrawledAppearance {
   name: string;
   type: string;
-  role: string;
+  role?: string;
   firstapp?: boolean;
 }
 
@@ -60,1216 +84,1471 @@ export interface CrawledCover {
   individuals: CrawledIndividual[];
 }
 
-type CrawlerAppearance = {
-  name: string;
-  type: string;
-  role: string;
-  firstapp?: boolean;
+type PageTitleResolution = {
+  requestedPageTitle: string;
+  resolvedPageTitle: string;
 };
 
-type CrawlerArc = {
-  title: string;
-  type: string;
+type CrawlIssueOptions = {
+  pageTitleResolution?: PageTitleResolution;
 };
 
-type CrawlerIndividual = {
-  name: string;
-  type: string;
-};
+/* ==================
+ * Internal constants
+ * ================== */
 
-type CrawlerCover = {
-  number: number;
-  url?: string;
-  individuals: CrawlerIndividual[];
-};
+const WIKI_BASE = "https://marvel.fandom.com";
+const API = `${WIKI_BASE}/api.php`;
+const USER_AGENT = "shortbox-crawler/1.1 (+https://shortbox.de)";
+const seriesCache = new Map<string, Promise<CrawledSeries>>();
+const pageTitleResolutionCache = new Map<string, Promise<PageTitleResolution>>();
+const HTTP_MAX_ATTEMPTS = 2;
+const HTTP_RETRY_DELAY_MS = 2500;
+const STORY_TITLE_MAX_LENGTH = 255;
+const APPEARANCE_NAME_MAX_LENGTH = 255;
+const RETRYABLE_HTTP_STATUS_CODES = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
+const RETRYABLE_HTTP_ERROR_CODES = new Set([
+  "ECONNABORTED",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "ETIMEDOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
 
-type CrawlerSeries = {
-  title: string;
-  volume: number;
-  publisher: {
-    name?: string;
-    original?: boolean;
-  };
-  startyear?: string | number;
-  endyear?: string | number;
-  genre?: string;
-};
+/* =========
+ * Utilities
+ * ========= */
 
-type CrawlerIssue = {
-  format: string;
-  currency: string;
-  number: string;
-  variant?: string;
-  releasedate: string;
-  price?: number;
-  series: CrawlerSeries;
-  cover: CrawlerCover;
-  variants: CrawlerIssue[];
-  stories: CrawlerStory[];
-  individuals: CrawlerIndividual[];
-  arcs: CrawlerArc[];
-};
+function ws(s: string) {
+  return s.replace(/\s+/g, " ").trim();
+}
 
-type CrawlerStoryReference = {
-  title: string;
-  number?: number;
-  issue: Pick<CrawlerIssue, 'number' | 'series'>;
-  individuals: CrawlerIndividual[];
-  appearances: CrawlerAppearance[];
-};
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-type CrawlerStory = {
-  title: string;
-  number?: number;
-  addinfo?: string;
-  part?: string;
-  individuals: CrawlerIndividual[];
-  appearances: CrawlerAppearance[];
-  reprintOf?: CrawlerStoryReference;
-};
+function getErrorCode(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : "";
+}
 
-const BASE_URI = 'https://marvel.fandom.com';
-const INDEX_URI = BASE_URI + '/index.php';
-const API_URI = BASE_URI + '/api.php';
-const REQUEST_DELAY_MS = 220;
-const REQUEST_MAX_RETRIES = 4;
-const REQUEST_BACKOFF_MS = 700;
-const DEFAULT_REQUEST_HEADERS: Record<string, string> = {
-  'User-Agent':
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9',
-  Referer: BASE_URI + '/',
-};
+function isRetryableHttpStatus(statusCode: number): boolean {
+  return RETRYABLE_HTTP_STATUS_CODES.has(statusCode);
+}
 
-const sleep = async (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+function isRetryableRequestError(error: unknown): boolean {
+  return RETRYABLE_HTTP_ERROR_CODES.has(getErrorCode(error));
+}
 
-type CrawlerApiImageResponse = {
-  query: {
-    pages: Record<string, { imageinfo?: Array<{ url: string }> }>;
-  };
-};
-
-type CrawlerApiParseResponse = {
-  parse?: {
-    wikitext: {
-      '*': string;
-    };
-  };
-};
-
-const request = async (options: {
-  uri?: string;
-  url?: string;
-  method?: string;
-  qs?: Record<string, unknown>;
-  body?: unknown;
-  headers?: Record<string, string>;
-  transform?: (body: string) => unknown;
-}) => {
-  const transformFn = options.transform;
-  const useCustomTransform = typeof transformFn === 'function';
+async function requestTextWithRetry(
+  url: string,
+  headers: Record<string, string>,
+): Promise<{ statusCode: number; text: string }> {
   let lastError: unknown;
 
-  for (let attempt = 0; attempt <= REQUEST_MAX_RETRIES; attempt += 1) {
+  for (let attempt = 0; attempt < HTTP_MAX_ATTEMPTS; attempt += 1) {
     try {
-      if (attempt > 0) {
-        const backoff = REQUEST_BACKOFF_MS * attempt + Math.floor(Math.random() * 300);
-        await sleep(backoff);
-      } else {
-        await sleep(REQUEST_DELAY_MS);
+      const res = await request(url, { headers });
+      const text = await res.body.text();
+
+      if (attempt + 1 < HTTP_MAX_ATTEMPTS && isRetryableHttpStatus(res.statusCode)) {
+        await wait(HTTP_RETRY_DELAY_MS);
+        continue;
       }
 
-      const response = await axios({
-        url: options.uri || options.url,
-        method: options.method || 'GET',
-        params: options.qs,
-        data: options.body,
-        headers: {
-          ...DEFAULT_REQUEST_HEADERS,
-          ...(options.headers || {}),
-        },
-        responseType: useCustomTransform ? 'text' : 'json',
-        transformResponse: useCustomTransform ? [(value) => value] : undefined,
-      });
-
-      if (useCustomTransform) {
-        return transformFn(String(response.data ?? ''));
-      }
-      return response.data;
+      return { statusCode: res.statusCode, text };
     } catch (error) {
       lastError = error;
-      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-      const retryable = status === 403 || status === 429 || (status != null && status >= 500);
-      if (!retryable || attempt >= REQUEST_MAX_RETRIES) {
-        break;
+      if (attempt + 1 < HTTP_MAX_ATTEMPTS && isRetryableRequestError(error)) {
+        await wait(HTTP_RETRY_DELAY_MS);
+        continue;
       }
+      throw error;
     }
   }
 
-  throw lastError;
+  throw lastError instanceof Error ? lastError : new Error(`Request failed for ${url}`);
+}
+
+function normalizeWikiHref(value: string | null | undefined): string {
+  return ws(String(value || "")).replace(/^https?:\/\/[^/]+/i, "");
+}
+
+function isWikiHref(value: string | null | undefined): boolean {
+  return normalizeWikiHref(value).startsWith("/wiki/");
+}
+
+function normalizeHeader(s: string) {
+  // "Writer(s)" => "writer", "Original Price" => "original price"
+  return ws(s)
+    .toLowerCase()
+    .replace(/\(s\)/g, "") // writer(s) -> writer
+    .replace(/[:\[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeLower(s: string) {
+  return ws(s).toLowerCase();
+}
+
+function normalizeIndividualType(type: string) {
+  const normalized = normalizeHeader(type);
+  if (normalized === "coverartist") return "ARTIST";
+  if (normalized === "editorinchief") return "EDITOR";
+  return normalized.replace(/\s+/g, "").toUpperCase();
+}
+
+function toUnderscoreTitle(s: string) {
+  return s.trim().replace(/ /g, "_");
+}
+
+function buildSeriesPageTitle(seriesTitle: string, volume: number) {
+  return `${toUnderscoreTitle(seriesTitle)}_Vol_${volume}`;
+}
+
+function buildIssuePageTitle(seriesTitle: string, volume: number, issueNumber: string) {
+  return `${toUnderscoreTitle(seriesTitle)}_Vol_${volume}_${toUnderscoreTitle(issueNumber)}`;
+}
+
+function parseIssuePageTitle(pageTitle: string): { seriesTitle: string; volume: number; issueNumber: string } | null {
+  const raw = ws(pageTitle);
+  const match = raw.match(/^(.*?)(?:_|\s)Vol(?:_|\s)(\d+)(?:_|\s)(.+)$/i);
+  if (!match) return null;
+  return {
+    seriesTitle: ws(match[1].replace(/_/g, " ")),
+    volume: Number(match[2]),
+    issueNumber: ws(match[3].replace(/_/g, " ")),
+  };
+}
+
+function parseSeriesPageTitle(pageTitle: string): { seriesTitle: string; volume: number } | null {
+  const raw = ws(pageTitle);
+  const match = raw.match(/^(.*?)(?:_|\s)Vol(?:_|\s)(\d+)$/i);
+  if (!match) return null;
+  return {
+    seriesTitle: ws(match[1].replace(/_/g, " ")),
+    volume: Number(match[2]),
+  };
+}
+
+function normalizeTitleKey(value: string): string {
+  return ws(value)
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function canonicalSeriesTitle(value: string): string {
+  const normalized = ws(value)
+    .replace(/_/g, " ")
+    .replace(/\s*\/\s*/g, " and ")
+    .replace(/\s*&\s*/g, " and ")
+    .replace(/\s+(HC|TPB|SC|GN|OGN)$/i, "");
+  if (normalizeTitleKey(normalized) === "marvelpointone") return "Point One";
+  if (normalizeTitleKey(normalized) === "allnewalldifferentmarvelpointone") {
+    return "All-New, All-Different Point One";
+  }
+  if (normalizeTitleKey(normalized) === "marvelcomicssuperspecial") return "Marvel Super Special";
+  return normalized;
+}
+
+function normalizeWikiTitleForComparison(value: string): string {
+  return ws(value).replace(/_/g, " ").toLowerCase();
+}
+
+function normalizeIssueNumberKey(value: string): string {
+  const normalized = ws(value)
+    .replace(/^([0-9]+[a-z.]*)\s*:\s+.*$/i, "$1")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/a\.i\./g, "ai")
+    .replace(/\s+/g, "");
+  return normalized;
+}
+
+async function apiGet(params: Record<string, string>): Promise<any> {
+  const qs = new URLSearchParams({ format: "json", formatversion: "2", ...params });
+  const url = `${API}?${qs.toString()}`;
+
+  const { statusCode, text } = await requestTextWithRetry(url, { "user-agent": USER_AGENT });
+
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new Error(`API ${statusCode} for ${url}\n${text.slice(0, 500)}`);
+  }
+  return JSON.parse(text);
+}
+
+async function resolvePageTitle(
+  pageTitle: string,
+  providedResolution?: PageTitleResolution,
+): Promise<PageTitleResolution> {
+  const requestedPageTitle = ws(pageTitle);
+  if (
+    providedResolution?.resolvedPageTitle &&
+    normalizeWikiTitleForComparison(providedResolution.requestedPageTitle) ===
+      normalizeWikiTitleForComparison(requestedPageTitle)
+  ) {
+    return {
+      requestedPageTitle,
+      resolvedPageTitle: ws(providedResolution.resolvedPageTitle),
+    };
+  }
+
+  const cached = pageTitleResolutionCache.get(requestedPageTitle);
+  if (cached) return cached;
+
+  const pending = (async (): Promise<PageTitleResolution> => {
+    try {
+      const probe = await apiGet({
+        action: "query",
+        redirects: "1",
+        titles: requestedPageTitle,
+      });
+      const pages = probe?.query?.pages || [];
+      const page = Array.isArray(pages) ? pages[0] : null;
+      if (page && !("missing" in page)) {
+        return {
+          requestedPageTitle,
+          resolvedPageTitle: ws(page.title || requestedPageTitle),
+        };
+      }
+    } catch {
+      // fall through to exact not found
+    }
+    throw new Error(`No parse.text for page "${requestedPageTitle}"`);
+  })();
+
+  pageTitleResolutionCache.set(requestedPageTitle, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    pageTitleResolutionCache.delete(requestedPageTitle);
+    throw error;
+  }
+}
+
+async function loadParsedHtml(pageTitle: string): Promise<string | null> {
+  const data = await apiGet({
+    action: "parse",
+    page: pageTitle,
+    prop: "text|sections",
+  });
+
+  return data?.parse?.text ? String(data.parse.text) : null;
+}
+
+async function parsePageHtmlByTitle(
+  pageTitle: string,
+  pageTitleResolution?: PageTitleResolution,
+): Promise<cheerio.CheerioAPI> {
+  const resolvedPage = await resolvePageTitle(pageTitle, pageTitleResolution);
+  const resolvedHtml = await loadParsedHtml(resolvedPage.resolvedPageTitle);
+
+  if (!resolvedHtml) throw new Error(`No parse.text for page "${resolvedPage.resolvedPageTitle}"`);
+  return cheerio.load(resolvedHtml);
+}
+
+function addUniqueIndividual(out: CrawledIndividual[], name: string, type: string) {
+  const normalizedType = normalizeIndividualType(type);
+  const k = `${normalizedType}::${name}`.toLowerCase();
+  if (!out.some((i) => `${i.type}::${i.name}`.toLowerCase() === k)) {
+    out.push({ name, type: normalizedType });
+  }
+}
+
+function addUniqueAppearance(out: CrawledAppearance[], a: CrawledAppearance) {
+  const name = ws(a.name);
+  if (!name || name.length > APPEARANCE_NAME_MAX_LENGTH) return;
+  if (a.type === "REALITY" || a.type === "REALITIES") return;
+  const candidate: CrawledAppearance = {
+    ...a,
+    name,
+    role: a.role ? ws(a.role) : undefined,
+  };
+  const k = `${candidate.type}::${candidate.role || ""}::${candidate.name}`.toLowerCase();
+  if (!out.some((x) => `${x.type}::${x.role || ""}::${x.name}`.toLowerCase() === k)) {
+    out.push(candidate);
+  }
+}
+
+function splitListNames(raw: string | null): string[] {
+  if (!raw) return [];
+  const parts = raw
+    .split(/\n|,|•|·| and /gi)
+    .map(ws)
+    .filter(Boolean);
+  return Array.from(new Set(parts));
+}
+
+function cleanAppearanceName(raw: string): string {
+  let value = ws(raw.replace(/[⏴⏵]/g, " "));
+
+  // Remove trailing contextual/status markers while preserving identity parentheses,
+  // e.g. "Binary (Carol Danvers) (Joins)" -> "Binary (Carol Danvers)".
+  const removableSuffixes = new Set([
+    "joins",
+    "leaves",
+    "mentioned",
+    "referenced",
+    "invoked",
+    "illusion",
+    "illusion and recap",
+    "drawing in illusion and appears in recap",
+    "behind the scenes in recap",
+    "main story and recap",
+    "main story and flashback",
+    "main story and behind the scenes in flashback",
+    "only in recap",
+    "appears in recap",
+    "only on screen as a static image or video record",
+    "on-screen in flashback",
+    "appears as a statue in recap",
+    "impersonates moon knight on-screen in illusion in main story",
+    "in thor's thoughts only",
+    "first appearance",
+    "only appearance",
+    "appears in flashback",
+    "only in flashback",
+    "only in flashback unnamed",
+    "see chronology",
+    "mentioned in narration or thoughts",
+    "appears on screen",
+    "photo",
+    "cameo",
+    "name revealed",
+    "voice only",
+    "revealed to be alive",
+    "resurrection",
+    "death",
+    "death of several",
+    "death of multiple",
+    "corpse skeleton or other remains",
+    "topical reference",
+    "origin revealed",
+    "deceased",
+    "destroyed",
+    "destruction",
+    "apparent death",
+    "apparent destruction",
+    "temporarily enthralled by the countess",
+    "enthralled by the countess",
+    "freed from the countess thrall",
+    "freed from the countess' thrall",
+    "as a hologram",
+    "as a hologram death",
+    "as a hologram destruction",
+    "grave only",
+    "last appearance",
+    "first full appearance",
+    "unnamed",
+  ]);
+
+  while (true) {
+    const match = value.match(/\s*\(([^()]+)\)\s*$/);
+    if (!match) break;
+    const normalized = normalizeHeader(match[1]);
+    if (!removableSuffixes.has(normalized)) break;
+    value = ws(value.slice(0, value.length - match[0].length));
+  }
+
+  value = ws(
+    value.replace(/\(([^()]+)\)/g, (full, inner) => {
+      const normalized = normalizeHeader(inner);
+      for (const suffix of removableSuffixes) {
+        if (normalized.includes(suffix)) return "";
+      }
+      const contextualKeywords = [
+        "reference",
+        "recap",
+        "flashback",
+        "illusion",
+        "on screen",
+        "on-screen",
+        "behind the scenes",
+        "appears as",
+        "appears in",
+        "impersonates",
+        "statue",
+        "drawing",
+        "photo",
+        "cameo",
+        "death",
+        "destruction",
+        "last appearance",
+        "first full appearance",
+        "name revealed",
+        "voice only",
+        "revealed to be alive",
+        "resurrection",
+        "enthralled",
+        "freed from",
+        "hologram",
+        "grave only",
+      ];
+      if (contextualKeywords.some((keyword) => normalized.includes(keyword))) return "";
+      return full;
+    }),
+  );
+
+  return value;
+}
+
+function parsePrice(raw: string | null): { price: number; currency: string } {
+  if (!raw) return { price: 0, currency: "" };
+  const symbolMatch = raw.match(/([€$£])\s*([0-9]+(?:\.[0-9]+)?)/);
+  if (symbolMatch) {
+    const currencyBySymbol: Record<string, string> = {
+      "$": "USD",
+      "€": "EUR",
+      "£": "GBP",
+    };
+    return {
+      currency: currencyBySymbol[symbolMatch[1]] || "",
+      price: Number(symbolMatch[2]),
+    };
+  }
+
+  const codeMatch = raw.match(/\b([A-Z]{3})\b\s*([0-9]+(?:\.[0-9]+)?)/i);
+  if (codeMatch) {
+    return { currency: codeMatch[1].toUpperCase(), price: Number(codeMatch[2]) };
+  }
+
+  return { price: 0, currency: "" };
+}
+
+function formatReleaseDate(raw: string | null): string {
+  const value = ws(raw || "");
+  if (!value) return "";
+
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return `${isoMatch[3]}.${isoMatch[2]}.${isoMatch[1]}`;
+
+  const monthMatch = value.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+  if (monthMatch) {
+    const monthByName: Record<string, string> = {
+      january: "01",
+      february: "02",
+      march: "03",
+      april: "04",
+      may: "05",
+      june: "06",
+      july: "07",
+      august: "08",
+      september: "09",
+      october: "10",
+      november: "11",
+      december: "12",
+    };
+    const month = monthByName[monthMatch[1].toLowerCase()];
+    if (month) {
+      return `${monthMatch[2].padStart(2, "0")}.${month}.${monthMatch[3]}`;
+    }
+  }
+
+  return value;
+}
+
+function normalizeLegacyNumber(raw: string | null): string | null {
+  const value = ws(raw || "").replace(/^LGY:\s*/i, "");
+  if (!value) return null;
+
+  const hashMatch = value.match(/#\s*([A-Za-z0-9./-]+)/);
+  if (hashMatch) return ws(hashMatch[1]);
+
+  const directMatch = value.match(/^([A-Za-z0-9./-]+)$/);
+  if (directMatch) return ws(directMatch[1]);
+
+  return null;
+}
+
+function parseYearRange(raw: string | null): { startyear: number; endyear: number } {
+  if (!raw) return { startyear: 0, endyear: 0 };
+  const years = raw.match(/\d{4}/g) || [];
+  if (years.length === 0) return { startyear: 0, endyear: 0 };
+  if (years.length === 1) {
+    const year = Number(years[0]);
+    return { startyear: year, endyear: year };
+  }
+  return { startyear: Number(years[0]), endyear: Number(years[years.length - 1]) };
+}
+
+/* =====================================
+ * H3 blocks (Issue Details etc.)
+ * ===================================== */
+
+function h3BlockValueText($: cheerio.CheerioAPI, headerWanted: string): string | null {
+  const want = normalizeHeader(headerWanted);
+
+  const h3 = $("h3")
+    .filter((_, el) => normalizeHeader($(el).text()) === want)
+    .first();
+
+  if (!h3.length) return null;
+
+  const chunk = h3.nextUntil("h3, h2");
+  const txt = ws(chunk.text());
+  return txt || null;
+}
+
+function h3BlockLinksText($: cheerio.CheerioAPI, headerWanted: string): string[] {
+  const want = normalizeHeader(headerWanted);
+
+  const h3 = $("h3")
+    .filter((_, el) => normalizeHeader($(el).text()) === want)
+    .first();
+
+  if (!h3.length) return [];
+
+  const chunk = h3.nextUntil("h3, h2");
+  const names = chunk
+    .find("a[href^='/wiki/']")
+    .map((_, a) => ws($(a).text()))
+    .get()
+    .filter(Boolean) as string[];
+
+  return Array.from(new Set(names));
+}
+
+/* =====================================
+ * Portable infobox (fallback)
+ * ===================================== */
+
+function infoboxRows($: cheerio.CheerioAPI) {
+  return $(".portable-infobox .pi-data").toArray();
+}
+
+function infoboxValueText($: cheerio.CheerioAPI, label: string): string | null {
+  const want = normalizeHeader(label);
+  for (const el of infoboxRows($)) {
+    const lbl = normalizeHeader($(el).find(".pi-data-label").text());
+    if (lbl === want) {
+      const val = ws($(el).find(".pi-data-value").text());
+      return val || null;
+    }
+  }
+  return null;
+}
+
+function infoboxTopImageUrl($: cheerio.CheerioAPI): string | null {
+  const img = $(".portable-infobox figure.pi-item.pi-image img").first();
+  const src = img.attr("src") || img.attr("data-src");
+  return src ? normalizeImageUrl(src) : null;
+}
+
+function infoboxTopImageFileTitle($: cheerio.CheerioAPI): string | null {
+  const imageLink = $(".portable-infobox figure.pi-item.pi-image a")
+    .filter((_, el) => isWikiHref($(el).attr("href")))
+    .first();
+  const href = normalizeWikiHref(imageLink.attr("href")).replace(/^\/wiki\//, "");
+  if (/^File:/i.test(href)) return href;
+  if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(href)) return `File:${href.replace(/^File:/i, "")}`;
+
+  const image = $(".portable-infobox figure.pi-item.pi-image img").first();
+  const imageName = ws(
+    String(image.attr("data-image-name") || image.attr("data-image-key") || "").replace(/^File:/i, ""),
+  );
+  return imageName ? `File:${imageName}` : null;
+}
+
+function inlineLabelValueText($: cheerio.CheerioAPI, label: string): string | null {
+  const want = normalizeHeader(label);
+
+  const labelSpan = $("span")
+    .filter((_, el) => normalizeHeader($(el).text()) === want)
+    .first();
+
+  if (!labelSpan.length) return null;
+  const container = labelSpan.parent();
+  if (!container.length) return null;
+
+  const linkValues = Array.from(
+    new Set(
+      container
+        .find("a[href^='/wiki/']")
+        .map((_, el) => ws($(el).text()))
+        .get()
+        .filter(Boolean) as string[],
+    ),
+  );
+  if (linkValues.length > 0) return linkValues.join(", ");
+
+  const clone = container.clone();
+  clone.find("span").first().remove();
+  const value = ws(clone.text());
+  return value || null;
+}
+
+function parseLegacyNumber($: cheerio.CheerioAPI): string | null {
+  const fromLabels =
+    normalizeLegacyNumber(h3BlockValueText($, "LGY")) ??
+    normalizeLegacyNumber(h3BlockValueText($, "Legacy Number")) ??
+    normalizeLegacyNumber(infoboxValueText($, "LGY")) ??
+    normalizeLegacyNumber(infoboxValueText($, "Legacy Number")) ??
+    normalizeLegacyNumber(inlineLabelValueText($, "LGY")) ??
+    normalizeLegacyNumber(inlineLabelValueText($, "Legacy Number"));
+
+  if (fromLabels) return fromLabels;
+
+  const fallback = $("span, div, p, li, td")
+    .map((_, el) => ws($(el).text()))
+    .get()
+    .find((text) => /^LGY:\s*.+/i.test(text));
+
+  return normalizeLegacyNumber(fallback || null);
+}
+
+/* ======================
+ * Stories / credits logic
+ * ====================== */
+
+type StoryKey = {
+  number: number;
+  headingText: string; // e.g. 1. "Foo" OR 1st story
+  title: string;
+  h2El: Element;
 };
 
-export async function crawlIssue(number: string, title: string, volume: number) {
-  let issue: CrawlerIssue = {
-    format: 'Heft',
-    currency: 'USD',
-    number: number,
-    releasedate: new Date().toISOString().replace('T', ' ').replace('Z', ''),
-    series: {
-      title: title,
-      volume: volume,
-      publisher: {},
-    },
-    cover: {
-      number: 0,
-      individuals: [],
-    },
-    variants: [],
-    stories: [],
-    individuals: [],
-    arcs: [],
-  };
-
-  await crawlInfobox(issue);
-  await crawlSeries(issue);
-  await fixVariants(issue);
-  await crawlCovers(issue);
-  await fixStories(issue);
-  fixPublisher(issue);
-
-  await finalizeStories(issue);
-
-  return issue;
+function cleanStoryTitle(raw: string): string {
+  let value = ws(raw);
+  while (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith('“') && value.endsWith('”'))
+  ) {
+    value = ws(value.slice(1, -1));
+  }
+  const quotedWithSuffix = value.match(/^["“](.+?)["”](\s*(?:•|\().*)?$/);
+  if (quotedWithSuffix) {
+    value = ws(`${quotedWithSuffix[1]}${quotedWithSuffix[2] || ''}`);
+  }
+  if (value.length > STORY_TITLE_MAX_LENGTH) {
+    value = value.slice(0, STORY_TITLE_MAX_LENGTH).trim();
+  }
+  return value;
 }
 
-async function finalizeStories(issue: CrawlerIssue) {
-  await asyncForEach(issue.stories, async (story: CrawlerStory, idx: number) => {
-    story.number = idx + 1;
+function findStories($: cheerio.CheerioAPI): StoryKey[] {
+  const out: StoryKey[] = [];
 
-    story.appearances = story.appearances.filter(
-      (thing: CrawlerAppearance, index: number, self: CrawlerAppearance[]) =>
-        index === self.findIndex((t) => t.name === thing.name),
+  $("h2").each((_, el) => {
+    const t = ws($(el).text());
+
+    // A) 1. "Story Title"
+    const mA = t.match(/^(\d+)\.\s*["“](.+?)["”]\s*$/);
+    if (mA) {
+      out.push({ number: Number(mA[1]), headingText: t, title: cleanStoryTitle(mA[2]), h2El: el });
+      return;
+    }
+
+    // B) 1st story / 2nd story / ... or 1st profile / 2nd profile / ...
+    const mB = t.match(/^(\d+)(st|nd|rd|th)\s+(story|profile)$/i);
+    if (mB) {
+      out.push({ number: Number(mB[1]), headingText: t, title: cleanStoryTitle(t), h2El: el });
+      return;
+    }
+  });
+
+  out.sort((a, b) => a.number - b.number);
+  return out;
+}
+
+function nextUntilH2Nodes(startEl: Element): AnyNode[] {
+  const nodes: AnyNode[] = [];
+  let cur = (startEl as any).nextSibling;
+  while (cur) {
+    if ((cur as any).name === "h2") break;
+    nodes.push(cur as any);
+    cur = (cur as any).nextSibling;
+  }
+  return nodes;
+}
+
+function parseStoryIndividualsFromBlock(htmlFragment: string): CrawledIndividual[] {
+  const $$ = cheerio.load(`<root>${htmlFragment}</root>`);
+  const individuals: CrawledIndividual[] = [];
+
+  const capture = (needleHeader: string, type: string) => {
+    const want = normalizeHeader(needleHeader);
+
+    const h = $$("h3")
+      .filter((_, el) => normalizeHeader($$(el).text()).includes(want))
+      .first();
+    if (!h.length) return;
+
+    const chunk = h.nextUntil("h3, h2");
+    const linkNames = Array.from(
+      new Set(
+        chunk
+          .find("a[href^='/wiki/']")
+          .map((_, el) => ws($$(el).text()))
+          .get()
+          .filter(Boolean) as string[],
+      ),
     );
 
-    if (story.reprintOf) {
-      await crawlReprint(story);
+    if (linkNames.length > 0) {
+      for (const name of linkNames) addUniqueIndividual(individuals, name, type);
+      return;
     }
-  });
-}
 
-async function crawlReprint(story: CrawlerStory) {
-  if (!story.reprintOf) return;
-  const reprint = story.reprintOf;
-
-  let issue = (await crawlIssue(
-    reprint.issue.number,
-    reprint.issue.series.title,
-    reprint.issue.series.volume,
-  )) as CrawlerIssue;
-
-  let originalStoryIndex: number | undefined = reprint.number;
-
-  if (originalStoryIndex) {
-    originalStoryIndex--;
-  } else if (story.title) {
-    let storyParts = story.title.split(' ');
-    issue.stories.forEach((s: CrawlerStory, i: number) => {
-      if (!s.title) return;
-
-      let found = 0;
-      let originalStoryParts = s.title.split(' ');
-
-      storyParts.forEach((part) => {
-        if (originalStoryParts.includes(part)) {
-          found++;
-        }
-      });
-
-      if (found === storyParts.length || found >= 3) {
-        originalStoryIndex = i;
-      }
-    });
-  } else {
-    originalStoryIndex = 0;
-  }
-
-  if (!originalStoryIndex || originalStoryIndex - 1 > issue.stories.length) originalStoryIndex = 0;
-
-  const reprintOf = JSON.parse(
-    JSON.stringify(issue.stories[originalStoryIndex]),
-  ) as CrawlerStoryReference;
-  reprintOf.issue = {
-    number: issue.number,
-    series: issue.series,
+    const txt = ws(chunk.text());
+    for (const name of splitListNames(txt)) addUniqueIndividual(individuals, name, type);
   };
-  story.reprintOf = reprintOf;
+
+  capture("Writer", "writer");
+  capture("Penciler", "penciler");
+  capture("Inker", "inker");
+  capture("Colorist", "colorist");
+  capture("Letterer", "letterer");
+  capture("Editor", "editor");
+
+  return individuals;
 }
 
-function fixPublisher(issue: CrawlerIssue) {
-  if (!issue.series.publisher.name) {
-    issue.series.publisher.name = 'Marvel Comics';
-  }
-}
+function parseStoryReprintOfFromBlock(htmlFragment: string): CrawledStoryReference | undefined {
+  const $$ = cheerio.load(`<root>${htmlFragment}</root>`);
+  const reprintNode = $$("[data-source^='ReprintOf']").first();
+  if (!reprintNode.length) return undefined;
 
-async function fixStories(issue: CrawlerIssue) {
-  let stories: CrawlerStory[] = [];
-  let storyIdx = 1;
+  const text = ws(reprintNode.text());
+  const storyMatch = text.match(/Reprint of the\s+(\d+)(st|nd|rd|th)\s+story\s+from/i);
+  const anchor = reprintNode.find("a[href^='/wiki/']").first();
+  const href = anchor.attr("href") || "";
+  const pageTitle = ws(href.replace(/^\/wiki\//, ""));
+  const parsedIssue = parseIssuePageTitle(pageTitle);
+  if (!parsedIssue) return undefined;
 
-  //We do have some issues, that are missing stories in between, so we have to create dummies
-  issue.stories.forEach((story: CrawlerStory) => {
-    while ((story.number || 0) > storyIdx) {
-      let dummyStory: CrawlerStory = {
-        title: '',
-        individuals: [],
-        appearances: [],
-        number: storyIdx++,
-      };
-      issue.stories.push(dummyStory);
-    }
-
-    stories.push(story);
-    storyIdx++;
-  });
-
-  issue.stories = stories;
-}
-
-async function fixVariants(issue: CrawlerIssue) {
-  if (!issue.variants) return;
-
-  issue.variants = issue.variants.filter((value: CrawlerIssue) => Object.keys(value).length !== 0);
-
-  issue.variants.forEach((v: CrawlerIssue, i: number) => {
-    let title = v.variant;
-    if (issue.variants && issue.variants.map((o: CrawlerIssue) => o.variant).includes(title)) {
-      title =
-        title +
-        ' ' +
-        (issue.variants.map((o: CrawlerIssue) => o.variant).filter((variant) => variant === title)
-          .length +
-          1);
-    }
-
-    let cover: CrawlerCover = {
-      number: 0,
-      url: v.cover.url,
-      individuals: [],
-    };
-
-    let variant: CrawlerIssue = {
-      number: issue.number,
-      variant: v.variant ? v.variant : getFromAlphabet(i),
-      format: 'Heft',
-      currency: 'USD',
-      releasedate: issue.releasedate,
-      series: JSON.parse(JSON.stringify(issue.series)),
-      cover: cover,
-      variants: [],
-      individuals: [],
-      stories: [],
-      arcs: [],
-    };
-
-    if (issue.variants) issue.variants[i] = variant;
-  });
-
-  issue.variants.forEach((v: CrawlerIssue, i: number) => {
-    let duplicateCount = 0;
-
-    if (!issue.variants) return;
-
-    for (let j = i + 1; j < issue.variants.length; j++) {
-      if (issue.variants[j].variant === v.variant) {
-        issue.variants[j].variant += ' ' + getFromAlphabet(duplicateCount + 1);
-        duplicateCount++;
-      }
-    }
-
-    if (duplicateCount > 0) v.variant += ' ' + getFromAlphabet(0);
-  });
-}
-
-async function crawlCovers(issue: CrawlerIssue) {
-  await crawlCover(issue.cover, issue);
-
-  await asyncForEach(issue.variants, async (v: CrawlerIssue) => {
-    await crawlCover(v.cover, v);
-  });
-}
-
-async function crawlCover(cover: CrawlerCover, issue: CrawlerIssue) {
-  if (!cover) return;
-
-  if (!cover.url || cover.url.trim() === '') cover.url = generateIssueUrl(issue) + '.jpg';
-
-  while (cover.url.indexOf('%3A') !== -1) cover.url = cover.url.replace('%3A', '');
-
-  try {
-    let $ = (await request({
-      uri:
-        API_URI +
-        '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
-        encodeURI(cover.url),
-      transform: (body: string) => JSON.parse(body),
-    })) as CrawlerApiImageResponse;
-
-    if (Object.keys($.query.pages)[0] === '-1') {
-      $ = await request({
-        uri:
-          API_URI +
-          '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
-          decodeURI(cover.url),
-        transform: (body: string) => JSON.parse(body),
-      });
-    }
-
-    if (Object.keys($.query.pages)[0] === '-1') {
-      $ = await request({
-        uri:
-          API_URI +
-          '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
-          encodeURI(cover.url.replace('.jpg', '.png')),
-        transform: (body: string) => JSON.parse(body),
-      });
-    }
-
-    if (Object.keys($.query.pages)[0] === '-1') {
-      $ = await request({
-        uri:
-          API_URI +
-          '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
-          decodeURI(cover.url.replace('.jpg', '.png')),
-        transform: (body: string) => JSON.parse(body),
-      });
-    }
-
-    if (Object.keys($.query.pages)[0] === '-1') {
-      $ = await request({
-        uri:
-          API_URI +
-          '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
-          encodeURI(cover.url.replace('.jpg', '.gif')),
-        transform: (body: string) => JSON.parse(body),
-      });
-    }
-
-    if (Object.keys($.query.pages)[0] === '-1') {
-      $ = await request({
-        uri:
-          API_URI +
-          '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
-          decodeURI(cover.url.replace('.jpg', '.gif')),
-        transform: (body: string) => JSON.parse(body),
-      });
-    }
-
-    if (Object.keys($.query.pages)[0] === '-1') {
-      $ = await request({
-        uri:
-          API_URI +
-          '?action=query&prop=imageinfo&iiprop=url&format=json&titles=File:' +
-          decodeURI(cover.url.replace(':', '')),
-        transform: (body: string) => JSON.parse(body),
-      });
-    }
-
-    const firstPage = $.query.pages[Object.keys($.query.pages)[0]];
-    const imageUrl = firstPage?.imageinfo?.[0]?.url || '';
-    cover.url = imageUrl.includes('/revision/')
-      ? imageUrl.substring(0, imageUrl.indexOf('/revision/'))
-      : imageUrl;
-  } catch (e) {
-    cover.url = '';
-  }
-}
-
-async function crawlInfobox(issue: CrawlerIssue) {
-  let $: CrawlerApiParseResponse;
-
-  try {
-    $ = await request({
-      uri: API_URI + '?action=parse&format=json&prop=wikitext&page=' + generateIssueUrl(issue),
-      transform: function (body: string) {
-        return JSON.parse(body);
+  return {
+    number: storyMatch ? Number(storyMatch[1]) : undefined,
+    issue: {
+      number: parsedIssue.issueNumber,
+      series: {
+        title: parsedIssue.seriesTitle,
+        volume: parsedIssue.volume,
       },
-    });
-  } catch (e) {
-    throw new Error('Cannot find issue ' + generateIssueUrl(issue));
-  }
-
-  if (!$.parse) {
-    throw new Error('Cannot find issue ' + generateIssueUrl(issue));
-  }
-
-  let lines: string[] = $.parse.wikitext['*'].split('\n');
-
-  if (lines[0].trim().startsWith('#REDIRECT')) {
-    let redirect = lines[0].trim().replace('#REDIRECT [[', '');
-    redirect = redirect.replace(']]', '');
-
-    issue.series.title = redirect.substring(0, redirect.indexOf('Vol')).trim();
-    redirect = redirect.substring(redirect.indexOf('Vol') + 3).trim();
-    issue.series.volume = Number.parseInt(redirect.substring(0, redirect.indexOf(' ')).trim());
-    issue.number = redirect.substring(redirect.indexOf(' ')).trim();
-
-    await crawlInfobox(issue);
-  } else {
-    lines.forEach((line, i) => {
-      line = line.trim();
-
-      if (line.startsWith('|') && line.indexOf('=') > -1) {
-        line
-          .split('|')
-          .slice(1)
-          .forEach((l) => crawlInfoboxLine(l, i, issue, lines));
-      }
-    });
-  }
+    },
+  };
 }
 
-function parseIssueNumber(string: string) {
-  return Number.parseInt(string.replace(/\D/g, ''));
-}
+/* =======================
+ * Appearances per story
+ * ======================= */
 
-function crawlInfoboxLine(line: string, indexOfLine: number, issue: CrawlerIssue, $: string[]) {
-  let type = line.substring(0, line.indexOf('=')).trim();
-  let content = line.substring(line.indexOf('=') + 1).trim();
-  let count = extractNumberOfInfoboxLine(type);
+function parseAppearancesForStory($: cheerio.CheerioAPI, story: StoryKey): CrawledAppearance[] {
+  // Looks for H2 "Appearing in ..." containing story title or heading text
+  const storyLower = story.title.toLowerCase();
+  let h2El: Element | null = null;
 
-  if (type.indexOf('Artist') !== -1) {
-    extractCover(content, issue);
-  } else if (type.startsWith('Image') && content.indexOf('from') === -1) {
-    extractVariant(type, content, count, issue);
-  } else if (type.startsWith('Month')) {
-    let month = isNaN(Number.parseInt(content))
-      ? 'JanFebMarAprMayJunJulAugSepOctNovDec'.indexOf(content.substring(0, 3)) / 3 + 1
-      : Number.parseInt(content);
+  $("h2").each((_, el) => {
+    const t = ws($(el).text()).toLowerCase();
+    if (!t.includes("appearing in")) return;
 
-    month = Math.ceil(month);
-    month = month < 1 || month > 12 ? 1 : month;
-    issue.releasedate = issue.releasedate.substring(0, 5) + month + issue.releasedate.substring(7);
-  } else if (type.startsWith('Year')) {
-    issue.releasedate = Number.parseInt(content) + issue.releasedate.substring(4);
-  } else if (type.startsWith('Editor-in-Chief')) {
-    extractEditorInChief(content, issue);
-  } else if (type.startsWith('Editor')) {
-    extractEditor(content, count, issue);
-  } else if (type.startsWith('StoryTitle')) {
-    extractStory(content, count, issue);
-  } else if (type.startsWith('Writer')) {
-    extractWriter(content, count, issue);
-  } else if (type.startsWith('Penciler')) {
-    extractPenciler(content, count, issue);
-  } else if (type.startsWith('Inker')) {
-    extractInker(content, count, issue);
-  } else if (type.startsWith('Letterer')) {
-    extractLetterer(content, count, issue);
-  } else if (type.startsWith('Colorist')) {
-    extractColourist(content, count, issue);
-  } else if (type.startsWith('AdaptedFrom')) {
-    extractAdaptedFrom(content, count, issue);
-  } else if (type.startsWith('ReprintOf')) {
-    extractReprint(content, count, type, issue);
-  } else if (type.startsWith('Event')) {
-    addArc(content.trim(), 'EVENT', issue.arcs);
-  } else if (type.startsWith('StoryArc')) {
-    addArc(content.trim(), 'STORYARC', issue.arcs);
-  } else if (type.startsWith('StoryLine')) {
-    addArc(content.trim(), 'STORYLINE', issue.arcs);
-  } else if (type.startsWith('OriginalPrice')) {
-    issue.price = Number.parseFloat(content.substring(1));
-    if (isNaN(issue.price)) {
-      issue.price = 0;
+    if (t.includes(storyLower) || t.includes(story.headingText.toLowerCase())) {
+      h2El = el;
     }
-  } else if (type.startsWith('Appearing')) {
-    extractAppearances(count, issue, indexOfLine, $);
-  } else {
-    //console.log(type + ' (#' + count + '): ' + content);
-  }
-}
+  });
 
-function extractAppearances(count: number, issue: CrawlerIssue, indexOfLine: number, $: string[]) {
-  //Sooooometimes (again...) there are no individuals defined, so we have to create the story during the
-  //appearing block :(
-  count -= 1;
-  if (!issue.stories[count]) createStory(count + 1, issue);
+  if (!h2El) return [];
 
-  if (!issue.stories[count].title) {
-    issue.stories[count].title = 'Untitled';
-  }
+  const nodes = nextUntilH2Nodes(h2El);
+  const $$ = cheerio.load(`<root>${nodes.map((n) => $.html(n)).join("")}</root>`);
+  const out: CrawledAppearance[] = [];
 
-  if (issue.stories[count].reprintOf) {
-    return;
-  }
+  const normalizeAppearanceCategory = (lbl: string): { type: string; role?: string } => {
+    const l = normalizeHeader(lbl).replace(/:$/, "");
+    if (l.includes("featured")) return { type: "CHARACTER", role: "FEATURED" };
+    if (l.includes("supporting")) return { type: "CHARACTER", role: "SUPPORTING" };
+    if (l.includes("antagonist")) return { type: "CHARACTER", role: "ANTAGONIST" };
+    if (l.includes("other")) return { type: "CHARACTER", role: "OTHER" };
+    if (l.includes("location")) return { type: "LOCATION" };
+    if (l.includes("item")) return { type: "ITEM" };
+    if (l.includes("vehicle")) return { type: "VEHICLE" };
+    if (l.includes("organization")) return { type: "ORGANIZATION" };
+    if (l.includes("race")) return { type: "RACE" };
+    if (l.includes("event")) return { type: "EVENT" };
+    if (l.includes("realit")) return { type: "REALITY" };
+    return { type: ws(lbl.replace(/:$/, "")).replace(/\s+/g, "_").toUpperCase() };
+  };
 
-  let currentAppIdx = indexOfLine + 1;
-  let currentLine = $[currentAppIdx++].trim();
-  let currentType = '';
-  while (!currentLine.startsWith('|') && currentLine.indexOf('=') === -1) {
-    let firstApp = currentLine.indexOf('1st') > -1;
+  const extractListItemText = ($$: cheerio.CheerioAPI, li: AnyNode): string => {
+    const item = $$(li).clone();
+    item.find("ul, ol").remove();
+    return cleanAppearanceName(item.text());
+  };
 
-    if (currentLine.indexOf('<!--') !== -1) {
-      currentLine = currentLine.replace('<!--', '');
-    }
-
-    if (currentLine.startsWith("'''")) {
-      currentLine = currentLine.replace(/'''/g, '');
-      currentLine = currentLine.replace(/:/g, '');
-      currentLine = currentLine.trim();
-
-      if (currentLine.indexOf(' ') > -1)
-        currentType = currentLine.substring(0, currentLine.indexOf(' '));
-      else currentType = currentLine.substring(0, currentLine.length - 1);
-
-      currentType = currentType.trim().toUpperCase();
-    } else if (currentLine.startsWith('*')) {
-      const appsFromLinks = Array.from(currentLine.matchAll(/\[([^\]]+)\]/g), (match) => match[1]);
-      let apps: string[] | null = appsFromLinks.length > 0 ? appsFromLinks : null;
-
-      if (!apps) {
-        //currentLine = currentLine.replace(/\*/g, "");
-        currentLine = currentLine.trim();
-
-        if (currentLine.indexOf('<br') !== -1 || currentLine.indexOf('-->') !== -1) {
-          currentLine = $[currentAppIdx++];
-          if (currentLine) currentLine = currentLine.trim();
-        }
-        let appsArr: string[] = [];
-        if (currentLine) appsArr.push(currentLine);
-        apps = appsArr;
-      } else {
-        apps.forEach((app, i) => {
-          if (app.indexOf('|') > -1) {
-            app = app.substring(0, app.indexOf('|'));
-
-            if (app.indexOf('Character Index') > -1) {
-              app = app.substring(app.indexOf('#') + 1);
-            }
-
-            if (app.indexOf('-->') === -1 && apps) apps[i] = app;
-          }
+  const collectAppearanceListItems = (
+    $$: cheerio.CheerioAPI,
+    list: cheerio.Cheerio<AnyNode>,
+    category: { type: string; role?: string },
+  ) => {
+    list.children("li").each((__, li) => {
+      const nestedLists = $$(li).children("ul, ol");
+      if (nestedLists.length > 0) {
+        nestedLists.each((___, nested) => {
+          collectAppearanceListItems($$, $$(nested), category);
         });
+        return;
       }
 
-      apps.forEach((app) => {
-        if (!app) return;
-        if (app.indexOf("'''") > -1 || app.indexOf('<!--') > -1) return;
-        if (app.indexOf('{') > -1) app = app.substring(0, app.indexOf('{'));
-
-        if (app.indexOf('#') > -1) app = app.substring(app.indexOf('#') + 1);
-
-        if (app.indexOf('<small>') > -1) app = app.substring(0, app.indexOf('<'));
-
-        if (app.startsWith('"') && app.endsWith('"')) app = app.substring(1, app.length - 1);
-
-        if (app.startsWith("'") && app.endsWith("'")) app = app.substring(1, app.length - 1);
-
-        if (app.indexOf('<ref>') !== -1) {
-          app = app.substring(0, app.indexOf('<ref>'));
-        }
-
-        app = app.trim();
-        while (app.startsWith('*')) app = app.replace('*', '');
-        if (app.startsWith('w:c')) {
-          app = app.replace('w:c:', '');
-          app = app.substring(app.indexOf(':') + 1);
-        }
-        app = app.trim();
-
-        if (app.startsWith('[')) app = app.substring(app.indexOf('[') + 1);
-
-        getAppearances(issue.stories[count], currentType, app, firstApp);
-      });
-    }
-
-    currentLine = $[currentAppIdx++];
-    if (currentLine) currentLine = currentLine.trim();
-    else break;
-  }
-}
-
-function extractReprint(content: string, count: number, type: string, issue: CrawlerIssue) {
-  createStory(count, issue);
-  const storyEntry = issue.stories[count - 1];
-  if (!storyEntry) return;
-
-  if (type.indexOf('Story') > 0) {
-    if (storyEntry.reprintOf) {
-      storyEntry.reprintOf.number = Number.parseInt(content);
-    }
-  } else {
-    const original: Pick<CrawlerIssue, 'number' | 'series'> = {
-      number: '',
-      series: { title: '', volume: 1, publisher: {} },
-    };
-
-    if (content.indexOf('Vol') === -1) {
-      original.series.title = content.substring(0, content.indexOf('#')).trim();
-      original.series.volume = 1;
-      original.number = content.substring(content.lastIndexOf('#') + 1).trim();
-    } else if (content.indexOf('#') !== -1) {
-      original.series.title = content.substring(0, content.indexOf('Vol')).trim();
-      original.series.volume = Number.parseInt(
-        content.substring(content.indexOf('Vol') + 3, content.lastIndexOf(' ')),
-      );
-      original.number = content.substring(content.lastIndexOf('#') + 1).trim();
-    } else {
-      original.series.title = content.substring(0, content.indexOf('Vol')).trim();
-      original.series.volume = Number.parseInt(
-        content.substring(content.indexOf('Vol') + 3, content.lastIndexOf(' ')),
-      );
-      original.number = content.substring(content.lastIndexOf(' ')).trim();
-    }
-
-    createStory(count, issue);
-
-    if (!storyEntry.reprintOf) {
-      storyEntry.reprintOf = {
-        title: '',
-        issue: { number: '', series: { title: '', volume: 1, publisher: {} } },
-        individuals: [],
-        appearances: [],
-      } as CrawlerStoryReference;
-    }
-    const storyRef = storyEntry.reprintOf;
-    if (!storyRef) return;
-    storyRef.individuals = [];
-    storyRef.appearances = [];
-    storyRef.issue = original;
-  }
-}
-
-function extractAdaptedFrom(content: string, count: number, issue: CrawlerIssue) {
-  createStory(count, issue);
-  addIndividual(content, 'ORIGINAL', issue.stories[count - 1].individuals);
-}
-
-function extractColourist(content: string, count: number, issue: CrawlerIssue) {
-  createStory(count, issue);
-  addIndividual(content, 'COLORIST', issue.stories[count - 1].individuals);
-}
-
-function extractLetterer(content: string, count: number, issue: CrawlerIssue) {
-  createStory(count, issue);
-  addIndividual(content, 'LETTERER', issue.stories[count - 1].individuals);
-}
-
-function extractInker(content: string, count: number, issue: CrawlerIssue) {
-  createStory(count, issue);
-  addIndividual(content, 'INKER', issue.stories[count - 1].individuals);
-}
-
-function extractPenciler(content: string, count: number, issue: CrawlerIssue) {
-  createStory(count, issue);
-  addIndividual(content, 'PENCILER', issue.stories[count - 1].individuals);
-}
-
-function extractWriter(content: string, count: number, issue: CrawlerIssue) {
-  createStory(count, issue);
-  if (!issue.stories[count - 1].reprintOf)
-    addIndividual(content, 'WRITER', issue.stories[count - 1].individuals);
-}
-
-function extractStory(content: string, count: number, issue: CrawlerIssue) {
-  createStory(count, issue);
-  if (!issue.stories[count - 1].reprintOf) {
-    if (content.endsWith('}}')) content = content.replace('}}', '');
-
-    while (content.startsWith('"')) content = content.substring(1);
-
-    while (content.endsWith('"')) content = content.substring(0, content.length - 1);
-
-    issue.stories[count - 1].title = !content || content.trim() === '' ? 'Untitled' : content;
-  }
-}
-
-function extractCover(content: string, issue: CrawlerIssue) {
-  addIndividual(content, 'ARTIST', issue.cover.individuals);
-}
-
-function extractEditorInChief(content: string, issue: CrawlerIssue) {
-  addIndividual(content, 'EDITOR', issue.individuals);
-}
-
-function extractEditor(content: string, count: number, issue: CrawlerIssue) {
-  createStory(count, issue);
-  if (!issue.stories[count - 1].reprintOf)
-    addIndividual(content, 'EDITOR', issue.stories[count - 1].individuals);
-}
-
-function extractVariant(type: string, content: string, count: number, issue: CrawlerIssue) {
-  if (count === 1) {
-    return;
-  }
-
-  if (issue.variants && type.indexOf('Text') === -1 && !content.startsWith('<!--')) {
-    createCover(count, issue);
-    issue.variants[count - 1].cover = {
-      number: 0,
-      url: content,
-      individuals: [],
-    };
-  } else {
-    if (issue.variants && issue.variants[count - 1] && content !== '') {
-      while (content.indexOf('[[') !== -1) content = content.replace('[[', '');
-      while (content.indexOf(']]') !== -1) content = content.replace(']]', '');
-      content = content.substring(content.indexOf('|') + 1).trim();
-
-      while (content.startsWith('"')) content = content.replace('"', '');
-      while (content.endsWith('"')) content = content.replace('"', '');
-      while (content.startsWith("'")) content = content.replace("'", '');
-      while (content.endsWith("'")) content = content.replace("'", '');
-      while (content.startsWith('*')) content = content.replace('*', '');
-
-      content = content.replace('Variant', '').trim();
-      content = content.replace('<small>', '').trim();
-      content = content.replace('</small>', '').trim();
-      content = content.trim();
-
-      issue.variants[count - 1].variant = content;
-    }
-  }
-}
-
-function extractNumberOfInfoboxLine(type: string) {
-  if (type.indexOf('_') > -1) return parseIssueNumber(type.substring(0, type.indexOf('_')));
-  else if (type.includes(' ')) return parseIssueNumber(type.substring(0, type.indexOf(' ')));
-  else if (type !== 'Image' && type.indexOf('Image') > -1)
-    return parseIssueNumber(type.replace('Image', ''));
-  else {
-    let temp = type.replace(/\D/g, '');
-    if (temp.trim() === '') return 1;
-    else return parseIssueNumber(temp);
-  }
-}
-
-export async function crawlSeries(issue: CrawlerIssue) {
-  try {
-    const $ = (await request({
-      uri: INDEX_URI + '?action=render&title=' + generateSeriesUrl(issue.series),
-      transform: (body: string) => cheerio.load(body),
-    })) as cheerio.CheerioAPI;
-
-    extractPublisher($, issue);
-    extractGenre($, issue);
-    extractDates($, issue);
-  } catch (e) {
-    throw new Error('Cannot find series ' + generateSeriesUrl(issue.series));
-  }
-}
-
-function extractDates($: cheerio.CheerioAPI, issue: CrawlerIssue) {
-  let publicationDate = $("span:contains('Publication Date: ')").first();
-  if (publicationDate.length > 0) {
-    let text = publicationDate.parent().text();
-
-    let date = text;
-    if (text.indexOf('Next Release') !== -1) {
-      date = date.substring(0, text.indexOf('Next Release: '));
-    }
-    if (text.indexOf('Relaunched in') !== -1) {
-      date = date.substring(0, text.indexOf('Relaunched in: '));
-    }
-
-    date = date.replace(/[a-zA-Z :,—]/g, '');
-
-    let finished =
-      text.substring(0, text.indexOf('Publication Date: ')).replace('Status: ', '') === 'Finished';
-
-    const series = issue.series as CrawlerIssue['series'] & {
-      startyear?: string;
-      endyear?: string | number;
-    };
-    series.startyear = date.substring(0, 4);
-
-    if (date.length === 8) {
-      series.endyear = date.substring(4, 8);
-    } else if (finished) {
-      series.endyear = series.startyear;
-    } else {
-      series.endyear = 0;
-    }
-  }
-}
-
-function extractGenre($: cheerio.CheerioAPI, issue: CrawlerIssue) {
-  let genre = $("span:contains('Genre: ')").first();
-  if (genre.length > 0) {
-    const series = issue.series as CrawlerIssue['series'] & { genre?: string };
-    series.genre = genre.next().text().trim();
-  }
-}
-
-function extractPublisher($: cheerio.CheerioAPI, issue: CrawlerIssue) {
-  let publisher = $("span:contains('Publisher: ')").first();
-  if (!issue.series.publisher) {
-    issue.series.publisher = {};
-  }
-  if (publisher.length > 0) {
-    issue.series.publisher.name = publisher.next().text().trim();
-  } else {
-    issue.series.publisher.name = 'Marvel Comics';
-  }
-  issue.series.publisher.original = true;
-}
-
-function getAppearances(story: CrawlerStory, currentType: string, name: string, firstApp: boolean) {
-  let role = '';
-
-  if (
-    currentType.indexOf('FEATUREDCHARACTER') !== -1 ||
-    currentType.indexOf('WEDDINGGUEST') !== -1 ||
-    currentType.indexOf('FEATURED') !== -1 ||
-    currentType.indexOf('VISION') !== -1 ||
-    currentType.indexOf('FEATUREDCHARACTER') !== -1
-  ) {
-    role = 'FEATURED';
-    currentType = 'CHARACTER';
-  } else if (
-    currentType.indexOf('ANTAGONIST') !== -1 ||
-    currentType.indexOf('ANAGONIST') !== -1 ||
-    currentType.indexOf('ANGATONIST') !== -1 ||
-    currentType.indexOf('ANTAGONGIST') !== -1 ||
-    currentType.indexOf('ANTAGONIS') !== -1 ||
-    currentType.indexOf('ANTAGONIT') !== -1 ||
-    currentType.indexOf('ANTAGONSIST') !== -1 ||
-    currentType.indexOf('ANTAGONSIT') !== -1 ||
-    currentType.indexOf('MAINCHARACTER') !== -1 ||
-    currentType.indexOf('ANTAOGNIST') !== -1 ||
-    currentType.indexOf('ANTAONIST') !== -1 ||
-    currentType.indexOf('VILLAI') !== -1 ||
-    currentType.indexOf('VILLAIN') !== -1 ||
-    currentType.indexOf('VILLIA') !== -1 ||
-    currentType.indexOf('VILLIAN') !== -1 ||
-    currentType.indexOf('ANTAGONOIST') !== -1
-  ) {
-    role = 'ANTAGONIST';
-    currentType = 'CHARACTER';
-  } else if (
-    currentType.indexOf('SUPPORITINGCHARACTER') !== -1 ||
-    currentType.indexOf('SUPPORTIN') !== -1
-  ) {
-    role = 'SUPPORTING';
-    currentType = 'CHARACTER';
-  } else if (currentType.indexOf('GROUP') !== -1 || currentType.indexOf('TEAM') !== -1) {
-    currentType = 'GROUP';
-  } else if (
-    currentType.indexOf('VEHICLE') !== -1 ||
-    currentType.indexOf('VECHILE') !== -1 ||
-    currentType.indexOf('VEHICE') !== -1 ||
-    currentType.indexOf('VEHICL') !== -1 ||
-    currentType.indexOf('VEHICLE') !== -1
-  ) {
-    currentType = 'VEHICLE';
-  } else if (currentType.indexOf('RACE') !== -1) {
-    currentType = 'RACE';
-  } else if (currentType.indexOf('LOCATI') !== -1) {
-    currentType = 'LOCATION';
-  } else if (currentType.indexOf('ANIMAL') !== -1) {
-    currentType = 'ANIMAL';
-  } else if (currentType.indexOf('ITE') !== -1) {
-    currentType = 'ITEM';
-  } else {
-    //FLASHBACK AND OTHER
-    role = 'OTHER';
-    currentType = 'CHARACTER';
-  }
-
-  let app: CrawlerAppearance = {
-    name: name,
-    type: currentType.trim(),
-    role: role.trim(),
+      const name = extractListItemText($$, li);
+      if (!name) return;
+      addUniqueAppearance(out, { name, type: category.type, role: category.role });
+    });
   };
-  if (firstApp) app.firstapp = firstApp;
 
-  if (app.name && app.name.indexOf('-->') === -1 && app.name.length > 0)
-    addAppearance(story.appearances, app);
-}
+  // Standard structure: bold label then list
+  $$("b, strong").each((_, el) => {
+    const lbl = ws($$(el).text());
+    if (!lbl) return;
 
-function generateIssueUrl(issue: CrawlerIssue) {
-  return generateSeriesUrl(issue.series) + encodeURIComponent('_') + issue.number.trim();
-}
+    const ul = $$(el).parent().nextAll("ul,ol").first();
+    if (!ul.length) return;
 
-function generateSeriesUrl(series: CrawlerIssue['series']) {
-  return encodeURIComponent(series.title.trim().replace(/\s/g, '_') + '_Vol_' + series.volume);
-}
+    const category = normalizeAppearanceCategory(lbl);
+    collectAppearanceListItems($$, ul, category);
+  });
 
-function generateIssueName(issue: CrawlerIssue) {
-  return generateSeriesName(issue.series) + ' ' + issue.number.trim();
-}
-
-function generateSeriesName(series: CrawlerIssue['series']) {
-  return series.title.trim() + ' Vol ' + series.volume;
-}
-
-async function asyncForEach<T>(
-  array: T[],
-  callback: (item: T, index: number, array: T[]) => Promise<void>,
-) {
-  for (let index = 0; index < array.length; index++) {
-    await callback(array[index], index, array);
+  // Fallback: any <li>
+  if (out.length === 0) {
+    const firstList = $$("ul, ol").first();
+    if (firstList.length) {
+      collectAppearanceListItems($$, firstList, { type: "OTHER" });
+    }
   }
+
+  return out;
 }
 
-function createStory(count: number, issue: CrawlerIssue) {
-  if (!issue.stories[count - 1]) {
-    issue.stories[count - 1] = {
-      title: '',
-      individuals: [],
-      appearances: [],
-      number: count,
-    };
+/* =========================
+ * Issue-level individuals
+ * ========================= */
+
+function parseIssueLevelIndividuals($: cheerio.CheerioAPI): CrawledIndividual[] {
+  const out: CrawledIndividual[] = [];
+
+  // "Art by: ..." line (body) exists on modern pages like Avengers (Vol 8 #9).
+  const artByLine = $("*")
+    .filter((_, el) => ws($(el).text()).startsWith("Art by:"))
+    .first();
+
+  if (artByLine.length) {
+    const links = artByLine.find("a[href^='/wiki/']");
+    if (links.length) {
+      links.each((_, a) => addUniqueIndividual(out, ws($(a).text()), "coverArtist"));
+    } else {
+      const raw = ws(artByLine.text()).replace(/^Art by:\s*/i, "");
+      for (const name of splitListNames(raw)) addUniqueIndividual(out, name, "coverArtist");
+    }
   }
+
+  // Editor-in-Chief (H3 block) appears on many modern pages.
+  for (const name of h3BlockLinksText($, "Editor-in-Chief"))
+    addUniqueIndividual(out, name, "editorInChief");
+
+  // Optional: plain text fallback if no links
+  const eicTxt = h3BlockValueText($, "Editor-in-Chief");
+  if (eicTxt && h3BlockLinksText($, "Editor-in-Chief").length === 0) {
+    for (const name of splitListNames(eicTxt)) addUniqueIndividual(out, name, "editorInChief");
+  }
+
+  return out;
 }
 
-function createCover(count: number, issue: CrawlerIssue) {
-  if (issue.variants && !issue.variants[count - 1]) {
-    issue.variants[count - 1] = {
-      number: issue.number,
-      format: issue.format,
-      currency: issue.currency,
-      releasedate: issue.releasedate,
-      series: JSON.parse(JSON.stringify(issue.series)),
-      cover: {
-        number: 0,
-        individuals: [],
+/* =======================
+ * Arcs from "Part of ..."
+ * ======================= */
+
+function parseArcsFromPartOf($: cheerio.CheerioAPI): CrawledArc[] {
+  const candidates = infoboxRows($)
+    .map((el) => {
+      const label = normalizeHeader($(el).find(".pi-data-label").text());
+      const value = ws($(el).find(".pi-data-value").text());
+      return { label, value };
+    })
+    .filter(({ label, value }) => label === "part of" || /^part of the\b/i.test(value))
+    .map(({ value }) => value)
+    .filter((text) => /part of the/i.test(text) && text.length <= 320);
+
+  const arcs: CrawledArc[] = [];
+  const addArc = (titleRaw: string, typeRaw?: string) => {
+    const title = ws(
+      titleRaw
+        .replace(/^Part of the\s+/i, "")
+        .replace(/\band\s*$/i, "")
+        .replace(/\.$/, "")
+        .replace(/\s+\((19|20)\d{2}\)\s*$/i, "")
+        .replace(/^["“]|["”]$/g, ""),
+    );
+    if (!title) return;
+    if (/\bseries$/i.test(title)) return;
+    if (arcs.some((arc) => normalizeLower(arc.title) === normalizeLower(title))) return;
+
+    const normalizedType = normalizeHeader(typeRaw || "");
+    const type =
+      normalizedType === "event" ? "EVENT" : "STORYARC";
+
+    arcs.push({ title, type });
+  };
+
+  for (const candidate of candidates) {
+    const text = ws(
+      candidate
+        .replace(/(event|arc|storyline)(?=Part of the)/gi, "$1 ")
+        .replace(/\s+/g, " "),
+    );
+    if (!text) continue;
+
+    const typedMatches = Array.from(text.matchAll(/Part of the\s+(.+?)\s+(event|arc|storyline)\b/gi));
+    if (typedMatches.length > 0) {
+      for (const match of typedMatches) {
+        addArc(match[1], match[2]);
+      }
+    }
+
+    const fallbackMatches = Array.from(text.matchAll(/Part of the\s+(.+?)(?=(?:Part of the|$))/gi));
+    for (const match of fallbackMatches) {
+      const rawTitle = ws(match[1].replace(/\b(event|arc|storyline)\b.*$/i, ""));
+      if (!rawTitle) continue;
+      addArc(rawTitle, "");
+    }
+  }
+
+  return arcs;
+}
+
+/* ====================
+ * Variants / alt covers
+ * ==================== */
+
+async function getImageOriginalUrls(fileTitles: string[]): Promise<Map<string, string>> {
+  const uniqueTitles = Array.from(new Set(fileTitles.filter(Boolean)));
+  if (uniqueTitles.length === 0) return new Map();
+
+  const data = await apiGet({
+    action: "query",
+    prop: "imageinfo",
+    titles: uniqueTitles.join("|"),
+    iiprop: "url",
+  });
+
+  const pages = data?.query?.pages || [];
+  const result = new Map<string, string>();
+  for (const page of pages) {
+    const title = ws(page?.title || "");
+    const url = normalizeImageUrl(page?.imageinfo?.[0]?.url);
+    if (!title || !url) continue;
+
+    const normalizedTitle = title.replace(/_/g, " ");
+    result.set(title, String(url));
+    result.set(normalizedTitle, String(url));
+    result.set(normalizedTitle.replace(/ /g, "_"), String(url));
+  }
+  return result;
+}
+
+async function getIssueCategoryImageFileTitles(pageTitle: string): Promise<string[]> {
+  const data = await apiGet({
+    action: "query",
+    list: "categorymembers",
+    cmtitle: `Category:${pageTitle}/Images`,
+    cmtype: "file",
+    cmlimit: "max",
+  });
+
+  const members = data?.query?.categorymembers || [];
+  return Array.from(
+    new Set(
+      members
+        .map((member: { title?: unknown }) => ws(String(member?.title || "")))
+        .filter((title: string) => title.startsWith("File:")),
+    ),
+  );
+}
+
+function buildVariantLabelFromFileTitle(pageTitle: string, fileTitle: string): string {
+  const normalizedTitle = ws(fileTitle).replace(/^File:/i, "");
+  const withoutExtension = normalizedTitle.replace(/\.(jpg|jpeg|png|gif|webp|svg)$/i, "");
+  const suffix = ws(withoutExtension.replace(new RegExp(`^${escapeRegExp(pageTitle)}`), ""));
+  return suffix.replace(/^[-_ ]+/, "");
+}
+
+function normalizeImageUrl(raw: unknown): string {
+  return ws(String(raw || ""))
+    .replace(/\/revision\/latest(?:\/scale-to-width-down\/\d+)?(?:\?cb=[^#]+)?$/i, "")
+    .replace(/\?cb=[^#]+$/i, "");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeFileTitleKey(value: string): string {
+  return normalizeLower(ws(value || "").replace(/^File:/i, ""));
+}
+
+async function parseAlternateCoversFromImageCategory(
+  pageTitle: string,
+  base: {
+    seriesTitle: string;
+    seriesVolume: number;
+    issueNumber: string;
+    legacyNumber?: string;
+    releasedate: string;
+    price: number;
+    currency: string;
+    issueIndividuals: CrawledIndividual[];
+  },
+): Promise<CrawledIssue[]> {
+  const fileTitles = await getIssueCategoryImageFileTitles(pageTitle);
+  if (fileTitles.length === 0) return [];
+
+  const coverFileTitles = fileTitles.filter((fileTitle) => {
+    const normalized = ws(fileTitle).replace(/^File:/i, "");
+    if (/ from /i.test(normalized)) return false;
+    return normalizeLower(normalized).startsWith(normalizeLower(pageTitle));
+  });
+
+  const variantFileTitles = coverFileTitles.filter((fileTitle) => {
+    const label = cleanVariantLabel(buildVariantLabelFromFileTitle(pageTitle, fileTitle).replace(/_/g, " "));
+    return label.length > 0 && !shouldExcludeVariant(fileTitle, label);
+  });
+
+  if (variantFileTitles.length === 0) return [];
+
+  const imageUrlMap = await getImageOriginalUrls(variantFileTitles);
+  const variants: CrawledIssue[] = [];
+
+  for (const fileTitle of variantFileTitles) {
+    const originalUrl = imageUrlMap.get(fileTitle);
+    if (!originalUrl) continue;
+    const variant = cleanVariantLabel(buildVariantLabelFromFileTitle(pageTitle, fileTitle).replace(/_/g, " "));
+    if (!variant) continue;
+
+    variants.push({
+      number: base.issueNumber,
+      legacyNumber: base.legacyNumber,
+      variant,
+      releasedate: formatReleaseDate(base.releasedate),
+      price: base.price,
+      currency: base.currency,
+      series: {
+        title: base.seriesTitle,
+        volume: base.seriesVolume,
       },
-      variants: [],
+      cover: { number: variants.length + 1, url: originalUrl, individuals: [] },
       stories: [],
-      individuals: [],
+      individuals: [...base.issueIndividuals],
       arcs: [],
+      variants: [],
+    });
+  }
+
+  return variants;
+}
+
+function getSeriesCacheKey(title: string, volume: number): string {
+  return `${normalizeLower(title)}::${volume}`;
+}
+
+function collectNodesUntilNextH2(startH2: Element): AnyNode[] {
+  const nodes: AnyNode[] = [];
+  let cur = (startH2 as any).nextSibling;
+  while (cur) {
+    if ((cur as any).name === "h2") break;
+    nodes.push(cur as any);
+    cur = (cur as any).nextSibling;
+  }
+  return nodes;
+}
+
+function getFileTitleFromLink($: cheerio.CheerioAPI, link: cheerio.Cheerio<any>): string {
+  const href = normalizeWikiHref(link.attr("href")).replace(/^\/wiki\//, "");
+  if (/^File:/i.test(href)) return href;
+  if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(href)) return `File:${href.replace(/^File:/i, "")}`;
+
+  const image = link.find("img").first();
+  const imageName = ws(
+    String(image.attr("data-image-name") || image.attr("data-image-key") || "").replace(/^File:/i, ""),
+  );
+  if (imageName) return `File:${imageName}`;
+
+  const linkText = ws(link.text());
+  if (/^Image:/i.test(linkText)) return linkText.replace(/^Image:/i, "File:");
+
+  return "";
+}
+
+
+function isExcludedVariantValue(value: string): boolean {
+  const normalized = normalizeLower(value).replace(/[_-]+/g, " ");
+  if (/\btextless\b/.test(normalized) || /\bvirgin\b/.test(normalized) || /\bvirigin\b/.test(normalized)) {
+    return true;
+  }
+  const compact = normalized.replace(/[^a-z0-9]+/g, "");
+  return compact.includes("textless") || compact.includes("virgin") || compact.includes("virigin");
+}
+
+function shouldExcludeVariant(fileTitle: string, variantLabel: string): boolean {
+  return isExcludedVariantValue(fileTitle) || isExcludedVariantValue(variantLabel);
+}
+
+function extractArtistsFromText(raw: string): string[] {
+  const match = ws(raw).match(/art by:\s*([^\n]+)/i);
+  if (!match) return [];
+  return splitListNames(match[1]).filter((name) => !isPlaceholderArtistName(name));
+}
+
+function cleanVariantLabel(raw: string): string {
+  const value = ws(String(raw || "").replace(/^\d+\s*-\s*/i, ""));
+  if (!value) return "";
+  return ws(
+    value
+      .replace(/\s*\(?art by:\s*.*$/i, "")
+      .replace(/\s+variant\b$/i, ""),
+  );
+}
+
+function isPlaceholderArtistName(value: string): boolean {
+  const normalized = normalizeLower(value);
+  return (
+    normalized === "" ||
+    normalized === "uncredited" ||
+    normalized === "not yet listed" ||
+    normalized === "cover artist credit needed"
+  );
+}
+
+function extractArtistsFromVariantTabContent(
+  $: cheerio.CheerioAPI,
+  content: cheerio.Cheerio<AnyNode>,
+): string[] {
+  const linkedArtists = Array.from(
+    new Set(
+      content
+        .find("figcaption a, .pi-caption a")
+        .filter((_, el) => isWikiHref($(el).attr("href")))
+        .map((_, el) => ws($(el).text()))
+        .get()
+        .filter((name) => !isPlaceholderArtistName(name)) as string[],
+    ),
+  );
+  if (linkedArtists.length > 0) return linkedArtists;
+
+  const captionText =
+    content.find("figcaption, .pi-caption").first().text() ||
+    content.text();
+
+  return Array.from(new Set(extractArtistsFromText(captionText).map(ws).filter(Boolean)));
+}
+
+function extractVariantEntriesFromWdsTabber(
+  $: cheerio.CheerioAPI,
+): Array<{ fileTitle: string; artists: string[]; variant: string }> {
+  const tabber = $("section.wds-tabber, .wds-tabber")
+    .filter((_, el) => $(el).find(".pi-item .pi-image").length > 0)
+    .first();
+
+  if (!tabber.length) return [];
+
+  const tabContents = tabber.find(".wds-tab__content").toArray();
+  if (tabContents.length === 0) return [];
+
+  const galleryIndex = tabContents.findIndex((content) => $(content).find(".wikia-gallery-item").length > 0);
+  if (galleryIndex < 0) return [];
+
+  const labelsByFileTitle = new Map<string, string>();
+  $(tabContents[galleryIndex])
+    .find(".wikia-gallery-item")
+    .each((_, galleryItem) => {
+      const item = $(galleryItem);
+      const image = item.find("img[data-image-name], img").first();
+      const imageName = ws(
+        String(image.attr("data-image-name") || image.attr("data-image-key") || "").replace(/^File:/i, ""),
+      );
+      const fileLink = item.find("a").first();
+      const fileTitle = imageName ? `File:${imageName}` : getFileTitleFromLink($, fileLink);
+      if (!fileTitle) return;
+
+      const variant = cleanVariantLabel(
+        item.find(".lightbox-caption").first().text() ||
+          image.attr("data-caption") ||
+          image.attr("alt") ||
+          fileLink.attr("title") ||
+          "",
+      );
+      if (!variant || normalizeLower(variant) === "all") return;
+      labelsByFileTitle.set(normalizeFileTitleKey(fileTitle), variant);
+    });
+
+  const entriesWithArtists = tabContents
+    .slice(galleryIndex + 1)
+    .map((content) => {
+      const figure = $(content).find("figure.pi-image, .pi-item.pi-image").first();
+      const fileLink = figure.find("a").first();
+      const image = figure.find("img").first();
+      const imageName = ws(
+        String(image.attr("data-image-name") || image.attr("data-image-key") || "").replace(/^File:/i, ""),
+      );
+      const fileTitle = imageName ? `File:${imageName}` : getFileTitleFromLink($, fileLink);
+      const variant = cleanVariantLabel(
+        labelsByFileTitle.get(normalizeFileTitleKey(fileTitle)) ||
+          image.attr("alt") ||
+          fileLink.attr("title") ||
+          "",
+      );
+      const artists = extractArtistsFromVariantTabContent($, $(content));
+      return {
+        fileTitle,
+        variant,
+        artists,
+      };
+    })
+    .filter((entry) => entry.fileTitle && entry.variant && normalizeLower(entry.variant) !== "all");
+
+  const seen = new Set<string>();
+  return entriesWithArtists.filter((entry) => {
+    if (shouldExcludeVariant(entry.fileTitle, entry.variant)) return false;
+    const key = `${normalizeFileTitleKey(entry.fileTitle)}::${normalizeLower(entry.variant)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function buildVariantIssuesFromEntries(
+  entries: Array<{ fileTitle: string; artists: string[]; variant: string }>,
+  base: {
+    seriesTitle: string;
+    seriesVolume: number;
+    issueNumber: string;
+    legacyNumber?: string;
+    releasedate: string;
+    price: number;
+    currency: string;
+    issueIndividuals: CrawledIndividual[];
+  },
+): Promise<CrawledIssue[]> {
+  const variants: CrawledIssue[] = [];
+  const imageUrlMap = await getImageOriginalUrls(entries.map((entry) => entry.fileTitle));
+
+  for (let idx = 0; idx < entries.length; idx++) {
+    const entry = entries[idx];
+    const originalUrl = imageUrlMap.get(entry.fileTitle);
+    if (!originalUrl) continue;
+
+    const coverIndividuals: CrawledIndividual[] = [];
+    for (const artist of entry.artists) addUniqueIndividual(coverIndividuals, artist, "coverArtist");
+
+    variants.push({
+      number: base.issueNumber,
+      legacyNumber: base.legacyNumber,
+      variant: entry.variant,
+      releasedate: formatReleaseDate(base.releasedate),
+      price: base.price,
+      currency: base.currency,
+      series: {
+        title: base.seriesTitle,
+        volume: base.seriesVolume,
+      },
+      cover: { number: idx + 1, url: originalUrl, individuals: coverIndividuals },
+      stories: [],
+      individuals: [...base.issueIndividuals],
+      arcs: [],
+      variants: [],
+    });
+  }
+
+  return variants;
+}
+
+async function parseAlternateCoversAsVariantIssues(
+  $: cheerio.CheerioAPI,
+  pageTitle: string,
+  base: {
+    seriesTitle: string;
+    seriesVolume: number;
+    issueNumber: string;
+    legacyNumber?: string;
+    releasedate: string;
+    price: number;
+    currency: string;
+    issueIndividuals: CrawledIndividual[];
+  }
+): Promise<CrawledIssue[]> {
+  const entries = extractVariantEntriesFromWdsTabber($);
+  if (entries.length === 0) return parseAlternateCoversFromImageCategory(pageTitle, base);
+  return buildVariantIssuesFromEntries(entries, base);
+}
+
+/* ==================
+ * Public: crawlSeries
+ * ================== */
+
+export async function crawlSeries(title: string, volume: number): Promise<CrawledSeries> {
+  const cacheKey = getSeriesCacheKey(title, volume);
+  const cached = seriesCache.get(cacheKey);
+  if (cached) return cached;
+
+  const pending = (async (): Promise<CrawledSeries> => {
+    const seriesPageTitle = buildSeriesPageTitle(title, volume);
+    const $ = await parsePageHtmlByTitle(seriesPageTitle);
+
+    const publisher =
+      h3BlockValueText($, "Publisher") ??
+      infoboxValueText($, "Publisher") ??
+      inlineLabelValueText($, "Publisher") ??
+      "";
+
+    const publicationDate =
+      h3BlockValueText($, "Publication Date") ??
+      infoboxValueText($, "Publication Date") ??
+      inlineLabelValueText($, "Publication Date");
+    const genre =
+      h3BlockValueText($, "Genre") ??
+      infoboxValueText($, "Genre") ??
+      inlineLabelValueText($, "Genre") ??
+      "";
+
+    const { startyear, endyear } = parseYearRange(publicationDate);
+
+    return {
+      title,
+      volume,
+      startyear,
+      endyear,
+      publisherName: publisher,
+      genre,
     };
+  })();
+
+  seriesCache.set(cacheKey, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    seriesCache.delete(cacheKey);
+    throw error;
   }
 }
 
-function addArc(title: string, type: string, arcs: CrawlerArc[]) {
-  let arc: CrawlerArc = {
-    title: title,
-    type: type,
+/* =================
+ * Public: crawlIssue
+ * ================= */
+
+export async function crawlIssue(
+  seriesTitle: string,
+  volume: number,
+  number: string,
+  options?: CrawlIssueOptions,
+): Promise<CrawledIssue> {
+  const issuePageTitle = buildIssuePageTitle(seriesTitle, volume, number);
+  const issuePageResolution = await resolvePageTitle(issuePageTitle, options?.pageTitleResolution);
+  const $ = await parsePageHtmlByTitle(issuePageTitle, issuePageResolution);
+
+  const releasedate =
+    h3BlockValueText($, "Release Date") ??
+    infoboxValueText($, "Release Date") ??
+    h3BlockValueText($, "Cover Date") ??
+    infoboxValueText($, "Cover Date") ??
+    "";
+  const legacyNumber = parseLegacyNumber($) ?? undefined;
+
+  const rawPrice =
+    h3BlockValueText($, "Original Price") ??
+    h3BlockValueText($, "Price") ??
+    infoboxValueText($, "Original Price") ??
+    infoboxValueText($, "Price");
+
+  const { price, currency } = parsePrice(rawPrice);
+
+  const coverFileTitle = infoboxTopImageFileTitle($);
+  const coverUrlMap = coverFileTitle ? await getImageOriginalUrls([coverFileTitle]) : new Map<string, string>();
+  const coverUrl =
+    (coverFileTitle ? coverUrlMap.get(coverFileTitle) : null) ??
+    infoboxTopImageUrl($) ??
+    "";
+
+  let seriesMeta: CrawledSeries | null = null;
+  try {
+    seriesMeta = await crawlSeries(seriesTitle, volume);
+  } catch {
+    seriesMeta = null;
+  }
+
+  const individuals = parseIssueLevelIndividuals($);
+  const issueIndividuals = individuals.filter((individual) => individual.type !== "ARTIST");
+  const arcs = parseArcsFromPartOf($);
+
+  const storyKeys = findStories($);
+  const stories: CrawledStory[] = storyKeys.map((sk) => {
+    const nodes = nextUntilH2Nodes(sk.h2El);
+    const fragment = nodes.map((n) => $.html(n)).join("");
+
+    const storyIndividuals = parseStoryIndividualsFromBlock(fragment);
+    const reprintOf = parseStoryReprintOfFromBlock(fragment);
+    const appearances = parseAppearancesForStory($, sk);
+
+    return {
+      number: sk.number,
+      title: sk.title,
+      reprintOf,
+      individuals: reprintOf ? [] : storyIndividuals,
+      appearances: reprintOf ? [] : appearances,
+    };
+  });
+
+  const variantIssues = await parseAlternateCoversAsVariantIssues($, issuePageResolution.resolvedPageTitle, {
+    seriesTitle,
+    seriesVolume: volume,
+    issueNumber: number,
+    legacyNumber,
+    releasedate,
+    price,
+    currency,
+    issueIndividuals,
+  });
+
+  const cover: CrawledCover = {
+    number: 1,
+    url: coverUrl,
+    individuals: individuals.filter((i) => i.type === "ARTIST"),
   };
 
-  if (arc.title.trim() === '') return;
-
-  if (arc.title.indexOf('|') !== -1) {
-    arc.title = arc.title.substring(0, arc.title.indexOf('|'));
-  }
-
-  arc.title = arc.title.replace('[[', '');
-  arc.title = arc.title.replace(']]', '');
-  arc.title = arc.title.replace('{{', '');
-  arc.title = arc.title.replace('}}', '');
-
-  if (arc.title.endsWith(')')) {
-    arc.title = arc.title.substring(0, arc.title.lastIndexOf('('));
-  }
-
-  arc.title = arc.title.trim();
-
-  let contains = arcs.find(
-    (i) => i.title.toLowerCase() === arc.title.toLowerCase() && i.type === arc.type,
-  );
-
-  if (!contains) arcs.push(arc);
-}
-
-function addAppearance(apps: CrawlerAppearance[], app: CrawlerAppearance) {
-  if (app.name.trim() === '' || app.name.trim().indexOf('|') === 0) return;
-
-  if (app.name.indexOf('|') !== -1) {
-    app.name = app.name.substring(0, app.name.indexOf('|'));
-  }
-
-  app.name = app.name.replace('[[', '');
-  app.name = app.name.replace(']]', '');
-  app.name = app.name.replace('{{', '');
-  app.name = app.name.replace('}}', '');
-  app.name = app.name.trim();
-
-  if (app.name === '' || app.name.indexOf('|') === 0) return;
-
-  let contains = apps.find(
-    (i) => i.name.toLowerCase() === app.name.toLowerCase() && i.type === app.type,
-  );
-
-  if (!contains) apps.push(app);
-}
-
-function addIndividual(name: string, type: string, individuals: CrawlerIndividual[]) {
-  if (name.indexOf('<!--') > -1) {
-    name = name.substring(0, name.indexOf('<!--'));
-    name = name.trim();
-  }
-
-  if (name.trim() === '') return;
-
-  if (name.indexOf('|') !== -1) {
-    name = name.substring(0, name.indexOf('|'));
-  }
-
-  name = name.replace('[[', '');
-  name = name.replace(']]', '');
-  name = name.replace('{{', '');
-  name = name.replace('}}', '');
-  name = name.trim();
-
-  if (name === '' || name.indexOf('|') === 0) return;
-
-  let contains = individuals.find(
-    (i) => i.name.toLowerCase() === name.toLowerCase() && i.type === type,
-  );
-
-  if (!contains) {
-    let i: CrawlerIndividual = {
-      name: name,
-      type: type,
-    };
-
-    individuals.push(i);
-  }
-}
-
-const alphabet = [
-  'A',
-  'B',
-  'C',
-  'D',
-  'E',
-  'F',
-  'G',
-  'H',
-  'I',
-  'J',
-  'K',
-  'L',
-  'M',
-  'N',
-  'O',
-  'P',
-  'Q',
-  'R',
-  'S',
-  'T',
-  'U',
-  'V',
-  'W',
-  'X',
-  'Y',
-  'Z',
-];
-
-function getFromAlphabet(idx: number): string {
-  let a = '';
-
-  if (idx > 25) {
-    idx -= 25;
-    return alphabet[idx % idx] + getFromAlphabet(idx) + a;
-  }
-
-  return alphabet[idx];
+  return {
+    number,
+    legacyNumber,
+    releasedate: formatReleaseDate(releasedate),
+    price,
+    currency,
+    series: {
+      title: seriesMeta?.title ?? seriesTitle,
+      volume: seriesMeta?.volume ?? volume,
+      startyear: seriesMeta?.startyear,
+      endyear: seriesMeta?.endyear,
+      genre: seriesMeta?.genre,
+      publisher: seriesMeta?.publisherName
+        ? { name: seriesMeta.publisherName }
+        : undefined,
+    },
+    cover,
+    stories,
+    variants: variantIssues,
+    individuals: issueIndividuals,
+    arcs,
+  };
 }
 
 export class MarvelCrawlerService {
   async crawlSeries(title: string, volume: number): Promise<CrawledSeries> {
-    const issue: CrawlerIssue = {
-      format: 'Heft',
-      currency: 'USD',
-      number: '1',
-      releasedate: new Date().toISOString().replace('T', ' ').replace('Z', ''),
-      series: {
-        title,
-        volume,
-        publisher: {},
-      },
-      cover: {
-        number: 0,
-        individuals: [],
-      },
-      variants: [],
-      stories: [],
-      individuals: [],
-      arcs: [],
-    };
-
-    await crawlSeries(issue);
-
-    return {
-      title: issue.series.title.trim(),
-      volume: Number(issue.series.volume || volume),
-      startyear: Number(issue.series.startyear || 0),
-      endyear: Number(issue.series.endyear || 0),
-      publisherName:
-        String(issue.series.publisher?.name || 'Marvel Comics').trim() || 'Marvel Comics',
-    };
+    return crawlSeries(title, volume);
   }
 
-  async crawlIssue(title: string, volume: number, number: string): Promise<CrawledIssue> {
-    const issue = await crawlIssue(
-      String(number || '').trim(),
-      String(title || '').trim(),
-      Number(volume || 0),
-    );
-
-    const fallbackStory: CrawledStory = {
-      number: 1,
-      title: '',
-      addinfo: '',
-      part: '',
-      individuals: [],
-      appearances: [],
-    };
-
-    const normalizedStories: CrawledStory[] = (issue.stories || []).map((story, index) => ({
-      number: Number(story.number || index + 1),
-      title: String(story.title || ''),
-      addinfo: String(story.addinfo || ''),
-      part: String(story.part || ''),
-      individuals: (story.individuals || []).map((entry) => ({
-        name: String(entry.name || ''),
-        type: String(entry.type || ''),
-      })),
-      appearances: (story.appearances || []).map((entry) => ({
-        name: String(entry.name || ''),
-        type: String(entry.type || ''),
-        role: String(entry.role || ''),
-        firstapp: Boolean(entry.firstapp),
-      })),
-    }));
-
-    return {
-      number: String(issue.number || number).trim(),
-      releasedate:
-        String(issue.releasedate || '').substring(0, 10) || new Date().toISOString().slice(0, 10),
-      price: Number(issue.price || 0),
-      currency: String(issue.currency || 'USD'),
-      seriesTitle: String(issue.series?.title || title).trim(),
-      seriesVolume: Number(issue.series?.volume || volume || 0),
-      seriesPublisherName:
-        String(issue.series?.publisher?.name || 'Marvel Comics').trim() || 'Marvel Comics',
-      seriesStartyear: Number(issue.series?.startyear || 0),
-      seriesEndyear: Number(issue.series?.endyear || 0),
-      coverUrl: String(issue.cover?.url || ''),
-      stories: normalizedStories.length > 0 ? normalizedStories : [fallbackStory],
-      cover: {
-        number: Number(issue.cover?.number || 0),
-        url: String(issue.cover?.url || ''),
-        individuals: (issue.cover?.individuals || []).map((entry) => ({
-          name: String(entry.name || ''),
-          type: String(entry.type || ''),
-        })),
-      },
-      variants: issue.variants || [],
-      individuals: (issue.individuals || []).map((entry) => ({
-        name: String(entry.name || ''),
-        type: String(entry.type || ''),
-      })),
-      arcs: (issue.arcs || []).map((entry) => ({
-        title: String(entry.title || ''),
-        type: String(entry.type || ''),
-      })),
-    };
+  async crawlIssue(title: string, volume: number, number: string, options?: CrawlIssueOptions): Promise<CrawledIssue> {
+    return crawlIssue(title, volume, number, options);
   }
 }

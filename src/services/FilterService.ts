@@ -692,9 +692,13 @@ export class FilterService {
         const rawNumber = n.number.trim();
 
         if (op === Op.eq) {
-          const equalCondition: Record<string, unknown> = { number: rawNumber };
-          if (hasVariant) equalCondition.variant = n.variant;
-          appendAndCondition(equalCondition);
+          const equalConditions: Record<string, unknown>[] = [{ number: rawNumber }, { legacy_number: rawNumber }];
+          if (hasVariant) {
+            equalConditions.forEach((condition) => {
+              condition.variant = n.variant;
+            });
+          }
+          appendAndCondition({ [Op.or]: equalConditions });
           return;
         }
 
@@ -703,11 +707,23 @@ export class FilterService {
           const numericIssueNumber = Sequelize.literal(
             `CASE WHEN "issue"."number" ~ '^[0-9]+(\\.[0-9]+)?$' THEN CAST("issue"."number" AS DECIMAL) END`,
           );
-          comparisonCondition = Sequelize.where(numericIssueNumber, {
-            [op]: Number(rawNumber),
-          });
+          const numericLegacyIssueNumber = Sequelize.literal(
+            `CASE WHEN "issue"."legacy_number" ~ '^[0-9]+(\\.[0-9]+)?$' THEN CAST("issue"."legacy_number" AS DECIMAL) END`,
+          );
+          comparisonCondition = {
+            [Op.or]: [
+              Sequelize.where(numericIssueNumber, {
+                [op]: Number(rawNumber),
+              }),
+              Sequelize.where(numericLegacyIssueNumber, {
+                [op]: Number(rawNumber),
+              }),
+            ],
+          };
         } else {
-          comparisonCondition = { number: { [op]: rawNumber } };
+          comparisonCondition = {
+            [Op.or]: [{ number: { [op]: rawNumber } }, { legacy_number: { [op]: rawNumber } }],
+          };
         }
 
         if (hasVariant) {

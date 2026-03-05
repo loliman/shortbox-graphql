@@ -1,5 +1,6 @@
 import { Task } from 'graphile-worker';
 import { runReimport } from '../../core/reimport';
+import { closeDbModels, createDbModels } from '../../core/db-model-factory';
 import { persistTaskResult } from '../task-results';
 import { ReimportUSTaskPayload } from '../task-registry';
 
@@ -12,10 +13,11 @@ const toPositiveInt = (value: unknown): number | null => {
 
 const normalizePayload = (rawPayload: ReimportUSTaskPayload): ReimportUSTaskPayload => {
   const dryRun = Boolean(rawPayload?.dryRun);
+  const enableTargetDeFastPath = Boolean(rawPayload?.enableTargetDeFastPath);
   const scope = rawPayload?.scope;
 
   if (!scope || scope.kind === 'all-us') {
-    return { dryRun, scope: { kind: 'all-us' } };
+    return { dryRun, enableTargetDeFastPath, scope: { kind: 'all-us' } };
   }
 
   if (scope.kind === 'publisher') {
@@ -23,7 +25,7 @@ const normalizePayload = (rawPayload: ReimportUSTaskPayload): ReimportUSTaskPayl
     if (!publisherId) {
       throw new Error('Invalid reimport payload: publisherId must be a positive integer.');
     }
-    return { dryRun, scope: { kind: 'publisher', publisherId } };
+    return { dryRun, enableTargetDeFastPath, scope: { kind: 'publisher', publisherId } };
   }
 
   if (scope.kind === 'series') {
@@ -31,24 +33,27 @@ const normalizePayload = (rawPayload: ReimportUSTaskPayload): ReimportUSTaskPayl
     if (!seriesId) {
       throw new Error('Invalid reimport payload: seriesId must be a positive integer.');
     }
-    return { dryRun, scope: { kind: 'series', seriesId } };
+    return { dryRun, enableTargetDeFastPath, scope: { kind: 'series', seriesId } };
   }
 
   const issueId = toPositiveInt(scope.issueId);
   if (!issueId) {
     throw new Error('Invalid reimport payload: issueId must be a positive integer.');
   }
-  return { dryRun, scope: { kind: 'issue', issueId } };
+  return { dryRun, enableTargetDeFastPath, scope: { kind: 'issue', issueId } };
 };
 
 const task: Task = async (rawPayload, helpers) => {
   const payload = normalizePayload((rawPayload ?? {}) as ReimportUSTaskPayload);
   const dryRun = payload.dryRun;
+  const targetModels = dryRun ? null : createDbModels('shortbox_migration');
 
   try {
     const report = await runReimport({
       dryRun,
+      enableTargetDeFastPath: payload.enableTargetDeFastPath,
       scope: payload?.scope,
+      targetModels: targetModels || undefined,
     });
 
     if (!report) {
@@ -59,17 +64,12 @@ const task: Task = async (rawPayload, helpers) => {
       status: 'SUCCESS',
       dryRun: report.dryRun,
       summary:
-        `changedPublishers=${report.result.changedPublishers}, ` +
-        `changedSeries=${report.result.changedSeries}, ` +
-        `changedIssues=${report.result.changedIssues}, ` +
-        `normalizedIssues=${report.result.normalizedIssues}, ` +
-        `updatedIssues=${report.result.updatedIssues}, ` +
-        `conflictIssues=${report.result.conflictIssues}, ` +
-        `failedIssues=${report.result.failedIssues}, ` +
-        `conflictSeries=${report.result.conflictSeries}, ` +
-        `notFoundSeries=${report.result.notFoundSeries}, ` +
-        `failedSeries=${report.result.failedSeries}, ` +
-        `failedPublishers=${report.result.failedPublishers}, ` +
+        `deSeries=${report.summary.totalDeSeries}, ` +
+        `deIssues=${report.summary.totalDeIssues}, ` +
+        `usIssues=${report.summary.totalMappedUsIssues}, ` +
+        `shortbox=${report.summary.results.shortbox}, ` +
+        `crawler=${report.summary.results.crawler}, ` +
+        `moved=${report.summary.results.moved}, ` +
         `dryRun=${report.dryRun}`,
       details: {
         result: report,
@@ -86,6 +86,8 @@ const task: Task = async (rawPayload, helpers) => {
       },
     });
     throw error;
+  } finally {
+    await closeDbModels(targetModels || undefined);
   }
 };
 

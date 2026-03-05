@@ -245,11 +245,15 @@ export const createNodeSeriesLabel = (
 export const createNodeIssueLabel = (
   seriesLabel: string,
   number: string,
+  legacyNumber: string,
   format: string,
   variant: string,
   issueTitle: string,
 ): string => {
   let label = `${seriesLabel} #${number}`;
+  if (toSafeString(legacyNumber) !== '') {
+    label += ` LGY #${toSafeString(legacyNumber)}`;
+  }
   let fmt = ` (${format}`;
   if (variant) {
     fmt += `/${variant}`;

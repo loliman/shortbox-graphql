@@ -7,7 +7,10 @@ import { Op } from 'sequelize';
 type IssueParent = {
   id: number;
   fk_series: number | null;
+  title?: unknown;
   number: string;
+  __coverIssueId?: unknown;
+  __coverComicguideId?: unknown;
   comicguideid?: unknown;
   variant?: string;
   createdAt?: unknown;
@@ -23,7 +26,7 @@ type IssueParent = {
   getArcs?: () => Promise<unknown[]>;
 };
 
-type IssueSibling = { id?: unknown; variant?: unknown };
+type IssueSibling = { id?: unknown; variant?: unknown; title?: unknown };
 
 type StoryResolutionState = {
   ownStories: unknown[];
@@ -148,6 +151,23 @@ const normalizeReleaseDate = (value: unknown): string | null => {
   if (!year || !month || !day) return null;
 
   return `${year}-${month}-${day}`;
+};
+
+const normalizeIssueTitle = (value: unknown): string => String(value ?? '').trim();
+
+const pickCanonicalIssueTitle = (
+  issues: Array<{ title?: unknown }>,
+  fallbackTitle: unknown,
+): string => {
+  const titles = issues
+    .map((issue) => normalizeIssueTitle(issue?.title))
+    .filter((title) => title.length > 0);
+
+  if (titles.length === 0) return normalizeIssueTitle(fallbackTitle);
+
+  return [...new Set(titles)].sort((left, right) =>
+    left.localeCompare(right, 'de-DE', { sensitivity: 'base', numeric: true }),
+  )[0];
 };
 
 const emptyStoryResolutionState: StoryResolutionState = {
@@ -413,6 +433,25 @@ export const resolvers: IssueResolvers = {
     },
   },
   Issue: {
+    title: async (parent, _, { issueVariantsLoader, models }) => {
+      const issueParent = parent as IssueParent;
+      const fallbackTitle = normalizeIssueTitle(issueParent.title);
+      const preloadedVariants = Array.isArray(issueParent.variants)
+        ? (issueParent.variants as IssueSibling[])
+        : [];
+
+      if (preloadedVariants.length > 0) {
+        return pickCanonicalIssueTitle([issueParent, ...preloadedVariants], fallbackTitle);
+      }
+
+      const issueId = toNumericLoaderId(issueParent.id);
+      if (issueId == null) return fallbackTitle;
+
+      const siblings = await loadSiblings(issueParent, issueId, issueVariantsLoader, models);
+      if (siblings.length === 0) return fallbackTitle;
+
+      return pickCanonicalIssueTitle([issueParent, ...siblings], fallbackTitle);
+    },
     releasedate: (parent: unknown) =>
       normalizeReleaseDate((parent as { releasedate?: unknown }).releasedate),
     createdat: (parent: unknown) => {
@@ -486,12 +525,14 @@ export const resolvers: IssueResolvers = {
       const issueParent = parent as IssueParent;
       if (issueParent.cover) return issueParent.cover;
       if (!hasLoad<number, unknown | null>(issueCoverLoader)) return null;
-      const issueId = toLoaderId(issueParent.id);
+      const issueId = toLoaderId(issueParent.__coverIssueId ?? issueParent.id);
       if (issueId == null) return null;
       const loadedCover = await issueCoverLoader.load(issueId as number);
       if (loadedCover) return loadedCover;
 
-      const comicguideId = resolveComicguideId(issueParent.comicguideid);
+      const comicguideId = resolveComicguideId(
+        issueParent.__coverComicguideId ?? issueParent.comicguideid,
+      );
       if (!comicguideId) return null;
 
       return {
