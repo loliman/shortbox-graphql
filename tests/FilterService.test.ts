@@ -322,6 +322,29 @@ describe('FilterService', () => {
     });
   });
 
+  it('adds genre filter conditions for comma-separated series genres', () => {
+    const { service } = createService();
+    const options = service.getFilterOptions(false, {
+      us: true,
+      genres: ['Sci-Fi', '  Super Hero  ', 'sci-fi'],
+    } as any);
+
+    const where = options.where as any;
+    const andConditions = where[Op.and];
+    expect(Array.isArray(andConditions)).toBe(true);
+
+    const genreCondition = andConditions.find(
+      (entry: any) =>
+        Array.isArray(entry[Op.or]) &&
+        entry[Op.or].every((condition: any) => condition?.logic?.[Op.like]),
+    );
+    expect(genreCondition).toBeTruthy();
+
+    const likePatterns = genreCondition[Op.or].map((condition: any) => condition.logic[Op.like]);
+    expect(likePatterns).toEqual(expect.arrayContaining(['%,sci-fi,%', '%,super hero,%']));
+    expect(likePatterns).toHaveLength(2);
+  });
+
   it('adds arc/noCover filters and export or custom sorting', () => {
     const { service } = createService();
     const exportOptions = service.getFilterOptions(

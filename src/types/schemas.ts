@@ -35,6 +35,7 @@ export const SeriesInputSchema = z.object({
   startyear: z.number().optional(),
   endyear: z.number().optional().nullable(),
   volume: z.number().int().min(1, 'Volume muss mindestens 1 sein'),
+  genre: z.string().optional(),
   addinfo: z.string().optional(),
   publisher: PublisherInputSchema.optional(),
 });
@@ -45,6 +46,7 @@ const SeriesFilterInputSchema = z.object({
   startyear: z.number().optional(),
   endyear: z.number().optional().nullable(),
   volume: z.number().int().optional(),
+  genre: z.string().optional(),
   addinfo: z.string().optional(),
   publisher: PublisherFilterInputSchema.optional(),
 });
@@ -87,6 +89,11 @@ export const AppearanceInputSchema = z.object({
   role: z.string().optional(),
 });
 
+export const RealityInputSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Name ist erforderlich'),
+});
+
 export const ArcInputSchema = z.object({
   id: z.string().optional(),
   title: z.string().min(1, 'Titel ist erforderlich'),
@@ -127,10 +134,12 @@ export const FilterSchema = z
     releasedates: z.array(DateFilterSchema).optional(),
     publishers: z.array(PublisherFilterInputSchema).optional(),
     series: z.array(SeriesFilterInputSchema).optional(),
+    genres: z.array(z.string()).optional(),
     numbers: z.array(NumberFilterSchema).optional(),
     arcs: z.array(ArcInputSchema).optional(),
     individuals: z.array(IndividualInputSchema).optional(),
     appearances: z.array(AppearanceInputSchema).optional(),
+    realities: z.array(RealityInputSchema).optional(),
     firstPrint: z.boolean().optional(),
     notFirstPrint: z.boolean().optional(),
     onlyPrint: z.boolean().optional(),

@@ -26,6 +26,8 @@ const splitFilterTerms = (value: string | null | undefined): string[] => {
   return dedupeTerms(value.split(MULTI_FILTER_SEPARATOR_REGEX));
 };
 
+const escapeLikeValue = (value: string): string => value.replace(/[\\%_]/g, '\\$&');
+
 const isNumericFilterValue = (value: string): boolean => /^\d+(\.\d+)?$/.test(value.trim());
 const TRANSLATOR_STORY_INDIVIDUAL_TYPE = 'TRANSLATOR';
 
@@ -79,8 +81,10 @@ type RuntimeFilter = Filter & {
   notOtherOnlyTb?: boolean;
   notNoPrint?: boolean;
   notOnlyOnePrint?: boolean;
+  genres?: Array<string | null> | null;
   arcs?: Array<{ title?: string | null }> | string | null;
   appearances?: Array<{ name?: string | null }> | string | null;
+  realities?: Array<{ name?: string | null }> | string | null;
 };
 
 const buildSeriesExportLabel = async (series: ExportSeries): Promise<string> => {
@@ -361,6 +365,13 @@ export class FilterService {
             .filter((entry) => entry.length > 0),
         )
       : splitFilterTerms(runtimeFilter.appearances as string | null | undefined);
+    const realityTerms = Array.isArray(runtimeFilter.realities)
+      ? dedupeTerms(
+          runtimeFilter.realities
+            .map((entry) => String(entry?.name || '').trim())
+            .filter((entry) => entry.length > 0),
+        )
+      : splitFilterTerms(runtimeFilter.realities as string | null | undefined);
     let needsStoryIndividualJoin = false;
     let needsParentIndividualJoin = false;
 
@@ -373,6 +384,24 @@ export class FilterService {
           ];
           if (!us) {
             conditions.push({ '$stories.parent.appearances.name$': { [Op.iLike]: `%${term}%` } });
+          }
+          return conditions;
+        }),
+      });
+    }
+
+    if (realityTerms.length > 0) {
+      appendAndCondition({
+        [Op.or]: realityTerms.flatMap((term) => {
+          const realityMarker = `(${term})`;
+          const conditions: Array<Record<string, unknown>> = [
+            { '$stories.appearances.name$': { [Op.iLike]: `%${realityMarker}%` } },
+            { '$stories.children.appearances.name$': { [Op.iLike]: `%${realityMarker}%` } },
+          ];
+          if (!us) {
+            conditions.push({
+              '$stories.parent.appearances.name$': { [Op.iLike]: `%${realityMarker}%` },
+            });
           }
           return conditions;
         }),
@@ -500,7 +529,7 @@ export class FilterService {
       storySwitchOrConditions.push({ '$stories.onlyoneprint$': false });
 
     const needsStorySwitches = storySwitchOrConditions.length > 0;
-    const needsAppearanceJoin = appearanceTerms.length > 0;
+    const needsAppearanceJoin = appearanceTerms.length > 0 || realityTerms.length > 0;
     const needsIndividualJoin = needsStoryIndividualJoin || needsParentIndividualJoin;
     const needsParentJoinForExclusive = Boolean(
       (runtimeFilter.exclusive || runtimeFilter.notExclusive) && !us,
@@ -672,6 +701,41 @@ export class FilterService {
         })
         .filter((s): s is { '$series.title$': string; '$series.volume$': number } => Boolean(s));
       if (conditions.length > 0) appendAndCondition({ [Op.or]: conditions });
+    }
+
+    const genreTerms = (() => {
+      const uniqueTerms = new Map<string, string>();
+      (Array.isArray(runtimeFilter.genres) ? runtimeFilter.genres : []).forEach((genre) => {
+        const value = typeof genre === 'string' ? genre.trim() : '';
+        if (!value) return;
+
+        const key = value.toLowerCase();
+        if (!uniqueTerms.has(key)) uniqueTerms.set(key, value);
+      });
+      return [...uniqueTerms.values()];
+    })();
+
+    if (genreTerms.length > 0) {
+      const normalizedSeriesGenreWithDelimiters = Sequelize.fn(
+        'concat',
+        ',',
+        Sequelize.fn(
+          'regexp_replace',
+          Sequelize.fn('lower', Sequelize.fn('coalesce', Sequelize.col('series.genre'), '')),
+          '\\s*,\\s*',
+          ',',
+          'g',
+        ),
+        ',',
+      );
+
+      appendAndCondition({
+        [Op.or]: genreTerms.map((genre) =>
+          Sequelize.where(normalizedSeriesGenreWithDelimiters, {
+            [Op.like]: `%,${escapeLikeValue(genre.toLowerCase())},%`,
+          }),
+        ),
+      });
     }
 
     if (runtimeFilter.numbers && runtimeFilter.numbers.length > 0) {
@@ -898,6 +962,15 @@ export class FilterService {
       s = s.substr(0, s.length - 2) + '\n';
     }
 
+    if (runtimeFilter.genres && runtimeFilter.genres.length > 0) {
+      const genres = dedupeTerms(
+        runtimeFilter.genres
+          .map((genre) => (typeof genre === 'string' ? genre.trim() : ''))
+          .filter((genre) => genre.length > 0),
+      );
+      if (genres.length > 0) s += '\tGenre: ' + genres.join(', ') + '\n';
+    }
+
     if (runtimeFilter.numbers) {
       s += '\tNummer: ';
       runtimeFilter.numbers.forEach((n) => {
@@ -929,6 +1002,14 @@ export class FilterService {
       s += '\tAuftritte: ';
       runtimeFilter.appearances.forEach((appearance) => {
         if (appearance?.name) s += appearance.name + ', ';
+      });
+      s = s.substr(0, s.length - 2) + '\n';
+    }
+
+    if (Array.isArray(runtimeFilter.realities) && runtimeFilter.realities.length > 0) {
+      s += '\tRealität: ';
+      runtimeFilter.realities.forEach((reality) => {
+        if (reality?.name) s += reality.name + ', ';
       });
       s = s.substr(0, s.length - 2) + '\n';
     }

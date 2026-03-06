@@ -94,6 +94,26 @@ export type {
 type EmptyArgs = Record<string, never>;
 type MaybePromise<T> = T | Promise<T>;
 
+type QueryGenresArgs = {
+  pattern?: string | null;
+  first?: number | null;
+  after?: string | null;
+};
+
+type QueryRealitiesArgs = {
+  pattern?: string | null;
+  first?: number | null;
+  after?: string | null;
+};
+
+type QueryGenresResult = Query extends { genres?: infer TResult }
+  ? TResult
+  : Array<string | null> | null;
+
+type QueryRealitiesResult = Query extends { realities?: infer TResult }
+  ? TResult
+  : AppearanceConnection | null;
+
 export type ResolverResult<T> =
   T extends Array<infer Item> ? Array<ResolverResult<Item>> : T extends object ? unknown : T;
 
@@ -121,7 +141,9 @@ export type QueryResolverFields = {
   apps: ResolverFn<unknown, QueryAppsArgs, ResolverResult<Query['apps']>>;
   arcs: ResolverFn<unknown, QueryArcsArgs, ResolverResult<Query['arcs']>>;
   export: ResolverFn<unknown, QueryExportArgs, ResolverResult<Query['export']>>;
+  genres: ResolverFn<unknown, QueryGenresArgs, ResolverResult<QueryGenresResult>>;
   individuals: ResolverFn<unknown, QueryIndividualsArgs, ResolverResult<Query['individuals']>>;
+  realities: ResolverFn<unknown, QueryRealitiesArgs, ResolverResult<QueryRealitiesResult>>;
   issueDetails: ResolverFn<unknown, QueryIssueDetailsArgs, ResolverResult<Query['issueDetails']>>;
   issueList: ResolverFn<unknown, QueryIssueListArgs, ResolverResult<Query['issueList']>>;
   lastEdited: ResolverFn<unknown, QueryLastEditedArgs, ResolverResult<Query['lastEdited']>>;
@@ -216,7 +238,7 @@ export interface CoverResolvers {
 }
 
 export interface AppearanceResolvers {
-  Query?: Pick<QueryResolvers, 'apps'>;
+  Query?: Pick<QueryResolvers, 'apps' | 'realities'>;
   Appearance?: ObjectResolverFields<unknown, Appearance>;
 }
 
@@ -249,7 +271,7 @@ export interface UserResolvers {
 }
 
 export interface SeriesResolvers {
-  Query?: Pick<QueryResolvers, 'seriesList' | 'seriesDetails'>;
+  Query?: Pick<QueryResolvers, 'seriesList' | 'seriesDetails' | 'genres'>;
   Mutation?: Pick<MutationResolvers, 'deleteSeries' | 'createSeries' | 'editSeries'>;
   Series?: SeriesObjectResolverFields;
 }

@@ -8,6 +8,7 @@ export class Series extends Model {
   public startyear!: number;
   public endyear!: number | null;
   public volume!: number;
+  public genre!: string;
   public addinfo!: string;
   public fk_publisher!: number;
 
@@ -61,6 +62,11 @@ export default (sequelize: Sequelize) => {
       volume: {
         type: DataTypes.INTEGER,
         allowNull: false,
+      },
+      genre: {
+        type: DataTypes.STRING(255),
+        allowNull: false,
+        defaultValue: '',
       },
       addinfo: {
         type: DataTypes.STRING,

@@ -1,5 +1,6 @@
 import { SeriesService } from '../src/services/SeriesService';
 import logger from '../src/util/logger';
+import { Op } from 'sequelize';
 
 jest.mock('../src/util/logger', () => ({
   __esModule: true,
@@ -184,6 +185,34 @@ describe('SeriesService additional coverage', () => {
     expect(options.where['$series.publisher.original$']).toBeUndefined();
   });
 
+  it('returns unique, trimmed genres with stable sorting and cursor/limit support', async () => {
+    mockModels.Series.findAll.mockResolvedValue([
+      { genre: ' Superhero , Sci-Fi ' },
+      { genre: 'superhero' },
+      { genre: 'Action, Sci-Fi' },
+      { genre: '' },
+      { genre: null },
+      { genre: 'Fantasy' },
+    ]);
+
+    const allGenres = await service.findGenres(undefined, undefined, undefined);
+    const pagedGenres = await service.findGenres(undefined, 2, 'sci-fi');
+    const filteredGenres = await service.findGenres('hero', undefined, undefined);
+
+    expect(allGenres).toEqual(['Action', 'Fantasy', 'Sci-Fi', 'Superhero']);
+    expect(pagedGenres).toEqual(['Superhero']);
+    expect(filteredGenres).toEqual(['Superhero']);
+  });
+
+  it('applies pattern filter when querying genres', async () => {
+    mockModels.Series.findAll.mockResolvedValue([]);
+
+    await service.findGenres('science fiction', undefined, undefined);
+
+    const options = mockModels.Series.findAll.mock.calls[0][0];
+    expect(options.where.genre[Op.iLike]).toBe('%science%fiction%');
+  });
+
   it('keeps publisher context in filter-based series lookup when publisher is specific', async () => {
     mockModels.Issue.findAll.mockResolvedValue([]);
 
@@ -271,6 +300,7 @@ describe('SeriesService additional coverage', () => {
     expect(mockModels.Series.create).toHaveBeenCalledWith(
       expect.objectContaining({
         title: '',
+        genre: '',
         fk_publisher: 6,
       }),
       expect.anything(),
@@ -306,6 +336,7 @@ describe('SeriesService additional coverage', () => {
       volume: 1,
       startyear: 1900,
       endyear: 1901,
+      genre: '',
       addinfo: '',
       save,
     };
@@ -319,7 +350,7 @@ describe('SeriesService additional coverage', () => {
 
     const editResult = await service.editSeries(
       { title: 'Old Title', volume: 1, publisher: { name: 'Marvel' } } as any,
-      { title: ' New ', volume: 2, startyear: 2001, endyear: 2005, addinfo: 'note' } as any,
+      { title: ' New ', volume: 2, startyear: 2001, endyear: 2005, genre: 'Action', addinfo: 'note' } as any,
       {} as any,
     );
     const mapped = await service.getSeriesByIds([6, 8, 7]);
@@ -329,6 +360,7 @@ describe('SeriesService additional coverage', () => {
     expect(existing.volume).toBe(2);
     expect(existing.startyear).toBe(2001);
     expect(existing.endyear).toBe(2005);
+    expect(existing.genre).toBe('Action');
     expect(existing.addinfo).toBe('note');
     expect(mapped).toEqual([{ id: 6, title: 'A' }, null, { id: 7, title: 'B' }]);
   });
@@ -341,6 +373,7 @@ describe('SeriesService additional coverage', () => {
       volume: 9,
       startyear: 1999,
       endyear: 2000,
+      genre: 'Legacy',
       addinfo: 'x',
       save,
     };
@@ -365,6 +398,7 @@ describe('SeriesService additional coverage', () => {
     expect(existing.volume).toBe(0);
     expect(existing.startyear).toBe(0);
     expect(existing.endyear).toBe(0);
+    expect(existing.genre).toBe('');
     expect(existing.addinfo).toBe('');
   });
 });

@@ -34,6 +34,7 @@ export const typeDef = gql`
     startyear: Int
     endyear: Int
     volume: Int
+    genre: String
     addinfo: String
     publisher: PublisherInput
   }
@@ -44,6 +45,7 @@ export const typeDef = gql`
     startyear: Int
     endyear: Int
     volume: Int
+    genre: String
     issueCount: Int
     lastEdited(limit: Int): [Issue]
     active: Boolean

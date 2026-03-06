@@ -76,6 +76,7 @@ export type ReimportUsIssueResult = {
   status: 'ok' | 'check';
   reason:
     | 'ok'
+    | 'target-existing'
     | 'not-found'
     | 'story-count-mismatch'
     | 'story-count-mismatch-subset'
@@ -151,6 +152,7 @@ type SeriesWithPublisher = {
   id: number;
   title: string;
   volume: number;
+  genre?: string;
   publisher?: {
     id: number;
     name: string;
@@ -168,6 +170,7 @@ type DeIssueWithStories = {
     id: number;
     title: string;
     volume: number;
+    genre?: string;
     publisher?: {
       id: number;
       name: string;
@@ -195,6 +198,7 @@ type SourceUsIssue = {
     id: number;
     title: string;
     volume: number;
+    genre?: string;
     publisher?: {
       id: number;
       name: string;
@@ -251,6 +255,23 @@ type LoadedStory = {
   appearances?: LoadedAppearance[];
 };
 
+class MissingTargetParentStoryMappingError extends Error {
+  public readonly missingSourceStoryIds: number[];
+  public readonly deIssueLabel: string;
+
+  constructor(deIssueLabel: string, missingSourceStoryIds: number[]) {
+    const uniqueIds = Array.from(new Set(missingSourceStoryIds.map(toInt).filter((id) => id > 0)));
+    super(
+      `Missing target parent story mapping for DE issue ${deIssueLabel}${
+        uniqueIds.length > 0 ? ` (source stories ${uniqueIds.join(', ')})` : ''
+      }`,
+    );
+    this.name = 'MissingTargetParentStoryMappingError';
+    this.deIssueLabel = deIssueLabel;
+    this.missingSourceStoryIds = uniqueIds;
+  }
+}
+
 type LoadedIssueGraph = {
   id: number;
   title: string;
@@ -275,6 +296,35 @@ type LoadedIssueGraph = {
   arcs?: Array<{ id: number; title: string; type: string }>;
 };
 
+type SourceParentStoryLookup = {
+  id: number;
+  number: number;
+  title: string;
+  issue?: {
+    number: string;
+    variant: string;
+    series?: {
+      title: string;
+      volume: number;
+      publisher?: {
+        name: string;
+        original: boolean;
+      };
+    };
+  };
+};
+
+type TargetIssueWithStories = {
+  id: number;
+  number: string;
+  variant: string;
+  stories?: Array<{
+    id: number;
+    number: number;
+    title: string;
+  }>;
+};
+
 type EvaluatedUsIssue = {
   report: ReimportUsIssueResult;
   sourceIssue: SourceUsIssue;
@@ -295,22 +345,60 @@ const normalizeTargetDeFastPath = (options?: ReimportRunOptions): boolean => !no
 
 const normalizeCollectDetails = (options: ReimportRunOptions | undefined, dryRun: boolean): boolean => {
   if (typeof options?.collectDetails === 'boolean') return options.collectDetails;
-  return dryRun;
+  return true;
 };
 
 const normalizeString = (value: unknown): string => String(value || '').trim();
 const normalizeLower = (value: unknown): string => normalizeString(value).toLowerCase();
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-const LEGACY_DATE_PATTERN = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+const LEGACY_DATE_DOT_PATTERN = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+const LEGACY_DATE_DASH_PATTERN = /^(\d{2})-(\d{2})-(\d{4})$/;
+const LEGACY_DATE_SHORT_YEAR_PATTERN = /^(\d{2})-(\d{2})-(\d{2})$/;
 const RELEASE_DATE_TIMEZONE = 'Europe/Berlin';
+const RELEASE_DATE_FALLBACK = '1970-01-01';
 const NUMERIC_STRING_PATTERN = /^\d+$/;
 const ARC_TITLE_MAX_LENGTH = 255;
 const US_EVALUATION_CONCURRENCY = 3;
+const SOURCE_SERIES_ATTRIBUTES = [
+  'id',
+  'title',
+  'startyear',
+  'endyear',
+  'volume',
+  'addinfo',
+  'fk_publisher',
+];
 
 const truncateString = (value: unknown, maxLength: number): string => {
   const normalized = normalizeString(value);
   if (normalized.length <= maxLength) return normalized;
   return normalized.slice(0, maxLength);
+};
+
+const quoteSqlIdentifier = (value: string): string => `"${value.replace(/"/g, '""')}"`;
+
+const resolveSeriesTableReference = (targetModels: DbModels): { schema: string; table: string } | null => {
+  const seriesModel = targetModels.Series as unknown as { getTableName?: () => unknown };
+  if (!seriesModel || typeof seriesModel.getTableName !== 'function') return null;
+  const tableName = seriesModel.getTableName();
+  if (typeof tableName === 'string') {
+    return { schema: 'shortbox', table: normalizeString(tableName) || 'series' };
+  }
+  const resolved = tableName as { schema?: string; tableName?: string };
+  return {
+    schema: normalizeString(resolved.schema) || 'shortbox',
+    table: normalizeString(resolved.tableName) || 'series',
+  };
+};
+
+const ensureTargetSeriesGenreColumn = async (targetModels: DbModels): Promise<void> => {
+  if (typeof targetModels?.sequelize?.query !== 'function') return;
+  const tableRef = resolveSeriesTableReference(targetModels);
+  if (!tableRef) return;
+  const qualifiedTable = `${quoteSqlIdentifier(tableRef.schema)}.${quoteSqlIdentifier(tableRef.table)}`;
+  await targetModels.sequelize.query(
+    `ALTER TABLE ${qualifiedTable} ADD COLUMN IF NOT EXISTS genre VARCHAR(255) NOT NULL DEFAULT ''`,
+  );
 };
 
 const mapWithConcurrency = async <Input, Output>(
@@ -331,6 +419,8 @@ const mapWithConcurrency = async <Input, Output>(
 };
 
 const normalizeReleaseDateForDb = (value: unknown): string => {
+  const toFallback = (): string => RELEASE_DATE_FALLBACK;
+
   const toIsoDate = (date: Date): string => {
     const dateParts = new Intl.DateTimeFormat('en-CA', {
       timeZone: RELEASE_DATE_TIMEZONE,
@@ -346,37 +436,71 @@ const normalizeReleaseDateForDb = (value: unknown): string => {
     return year && month && day ? `${year}-${month}-${day}` : '';
   };
 
+  const fromDateParts = (year: number, month: number, day: number): string => {
+    const parsed = new Date(year, month - 1, day);
+    const isValid =
+      parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
+    if (!isValid) return toFallback();
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  };
+
+  const normalizeTwoDigitYear = (year: number): number => {
+    const now = new Date();
+    const currentYearTwoDigits = now.getFullYear() % 100;
+    return year <= currentYearTwoDigits + 1 ? 2000 + year : 1900 + year;
+  };
+
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? '' : toIsoDate(value);
+    return Number.isNaN(value.getTime()) ? toFallback() : toIsoDate(value);
   }
 
   if (typeof value === 'number') {
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? '' : toIsoDate(parsed);
+    return Number.isNaN(parsed.getTime()) ? toFallback() : toIsoDate(parsed);
   }
 
   const trimmed = normalizeString(value);
-  if (!trimmed) return '';
+  if (!trimmed) return toFallback();
+  if (normalizeLower(trimmed) === 'invalid date') return toFallback();
 
   const isoMatch = trimmed.match(ISO_DATE_PATTERN);
-  if (isoMatch) return trimmed;
+  if (isoMatch) {
+    return fromDateParts(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
+  }
 
-  const legacyMatch = trimmed.match(LEGACY_DATE_PATTERN);
-  if (!legacyMatch) return trimmed;
+  const dotMatch = trimmed.match(LEGACY_DATE_DOT_PATTERN);
+  if (dotMatch) {
+    return fromDateParts(Number(dotMatch[3]), Number(dotMatch[2]), Number(dotMatch[1]));
+  }
 
-  const [, dayRaw, monthRaw, yearRaw] = legacyMatch;
-  const day = Number(dayRaw);
-  const month = Number(monthRaw);
-  const year = Number(yearRaw);
-  const parsed = new Date(year, month - 1, day);
+  const dashMatch = trimmed.match(LEGACY_DATE_DASH_PATTERN);
+  if (dashMatch) {
+    return fromDateParts(Number(dashMatch[3]), Number(dashMatch[2]), Number(dashMatch[1]));
+  }
 
-  const isValid =
-    parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
-
-  if (isValid) return `${yearRaw}-${monthRaw}-${dayRaw}`;
+  const shortYearMatch = trimmed.match(LEGACY_DATE_SHORT_YEAR_PATTERN);
+  if (shortYearMatch) {
+    const year = normalizeTwoDigitYear(Number(shortYearMatch[3]));
+    return fromDateParts(year, Number(shortYearMatch[2]), Number(shortYearMatch[1]));
+  }
 
   const directDate = new Date(trimmed);
-  return Number.isNaN(directDate.getTime()) ? '' : toIsoDate(directDate);
+  return Number.isNaN(directDate.getTime()) ? toFallback() : toIsoDate(directDate);
+};
+
+const isValidIsoDateOnly = (value: string): boolean => {
+  const match = normalizeString(value).match(ISO_DATE_PATTERN);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(year, month - 1, day);
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
+};
+
+const coerceReleaseDateForDb = (value: unknown): string => {
+  const normalized = normalizeReleaseDateForDb(value);
+  return isValidIsoDateOnly(normalized) ? normalized : RELEASE_DATE_FALLBACK;
 };
 
 const normalizeNullableBigInt = (value: unknown): number | null => {
@@ -479,6 +603,13 @@ const formatUsIssueLog = (result: ReimportUsIssueResult): string => {
   return parts.join(' | ');
 };
 
+const shouldUseSourceIssuePayload = (result: ReimportUsIssueResult): boolean =>
+  result.reason === 'not-found' ||
+  (result.result === 'manual' && result.reason === 'story-count-mismatch');
+
+const shouldSkipUsIssuePersistence = (result: ReimportUsIssueResult): boolean =>
+  result.reason === 'target-existing';
+
 const normalizeStoryTitle = (value: unknown): string =>
   normalizeLower(
     normalizeString(value)
@@ -512,6 +643,73 @@ const storyTitlesLooselyMatch = (left: string, right: string): boolean => {
   return normalizedLeft === normalizedRight || normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft);
 };
 
+type StoryWithNumberAndTitle = {
+  number?: number;
+  title?: string;
+};
+
+type StoryNumberGroup<T extends StoryWithNumberAndTitle> = {
+  number: number;
+  representative: T;
+  representativeIndex: number;
+  members: Array<{ story: T; index: number }>;
+};
+
+const hasMeaningfulStoryTitle = (value: unknown): boolean =>
+  normalizeStoryTitleForComparison(value) !== 'Untitled';
+
+const shouldReplaceStoryRepresentative = <T extends StoryWithNumberAndTitle>(
+  currentRepresentative: T,
+  candidate: T,
+): boolean => {
+  const currentHasMeaningfulTitle = hasMeaningfulStoryTitle(currentRepresentative.title);
+  const candidateHasMeaningfulTitle = hasMeaningfulStoryTitle(candidate.title);
+  if (candidateHasMeaningfulTitle !== currentHasMeaningfulTitle) return candidateHasMeaningfulTitle;
+
+  const currentTitle = normalizeString(currentRepresentative.title);
+  const candidateTitle = normalizeString(candidate.title);
+  return Boolean(candidateTitle) && !currentTitle;
+};
+
+const groupStoriesByNumber = <T extends StoryWithNumberAndTitle>(
+  stories: T[] | undefined,
+): Array<StoryNumberGroup<T>> => {
+  if (!Array.isArray(stories)) return [];
+
+  const groupsByKey = new Map<string, StoryNumberGroup<T>>();
+  const groups: Array<StoryNumberGroup<T>> = [];
+
+  stories.forEach((story, index) => {
+    const number = toInt(story.number);
+    const key = number > 0 ? `number:${number}` : `index:${index}`;
+    const existingGroup = groupsByKey.get(key);
+
+    if (!existingGroup) {
+      const createdGroup: StoryNumberGroup<T> = {
+        number,
+        representative: story,
+        representativeIndex: index,
+        members: [{ story, index }],
+      };
+      groupsByKey.set(key, createdGroup);
+      groups.push(createdGroup);
+      return;
+    }
+
+    existingGroup.members.push({ story, index });
+    if (shouldReplaceStoryRepresentative(existingGroup.representative, story)) {
+      existingGroup.representative = story;
+      existingGroup.representativeIndex = index;
+    }
+  });
+
+  return groups;
+};
+
+const collectRepresentativeStoriesByNumber = <T extends StoryWithNumberAndTitle>(
+  stories: T[] | undefined,
+): T[] => groupStoriesByNumber(stories).map((group) => group.representative);
+
 const collectNormalizedStoryTitles = (stories: Array<{ title?: string }> | undefined): string[] =>
   Array.isArray(stories)
     ? stories
@@ -525,19 +723,23 @@ const buildStoryMappings = (
 ): StoryMapping[] => {
   if (!Array.isArray(sourceStories) || !Array.isArray(crawledStories)) return [];
 
-  const available = crawledStories.map((story, index) => ({
+  const sourceGroups = groupStoriesByNumber(sourceStories);
+  const crawledGroups = groupStoriesByNumber(crawledStories);
+
+  const available = crawledGroups.map((group) => ({
     used: false,
-    index,
-    normalizedTitle: normalizeStoryTitleForMatch(story.title),
-    number: toInt(story.number),
-    title: normalizeStoryTitleForStorage(story.title),
+    index: group.representativeIndex,
+    normalizedTitle: normalizeStoryTitleForMatch(group.representative.title),
+    number: toInt(group.number),
+    title: normalizeStoryTitleForStorage(group.representative.title),
   }));
 
   const mappings: StoryMapping[] = [];
-  for (const sourceStory of sourceStories) {
-    const normalizedSourceTitle = normalizeStoryTitleForMatch(sourceStory.title);
-    const sourceNumber = toInt(sourceStory.number);
-    const sourceDbTitle = normalizeStoryTitleForComparison(sourceStory.title);
+  for (const sourceGroup of sourceGroups) {
+    const representativeStory = sourceGroup.representative;
+    const normalizedSourceTitle = normalizeStoryTitleForMatch(representativeStory.title);
+    const sourceNumber = toInt(sourceGroup.number);
+    const sourceDbTitle = normalizeStoryTitleForComparison(representativeStory.title);
     const hasMeaningfulTitle = Boolean(normalizedSourceTitle) && sourceDbTitle !== 'Untitled';
     if (!hasMeaningfulTitle && sourceNumber <= 0) continue;
 
@@ -569,14 +771,16 @@ const buildStoryMappings = (
     if (!match) continue;
 
     match.used = true;
-    mappings.push({
-      sourceStoryId: toInt(sourceStory.id),
-      sourceStoryNumber: toInt(sourceStory.number),
-      sourceStoryTitle: normalizeString(sourceStory.title),
-      crawledStoryIndex: match.index,
-      crawledStoryNumber: match.number,
-      crawledStoryTitle: match.title,
-    });
+    for (const sourceMember of sourceGroup.members) {
+      mappings.push({
+        sourceStoryId: toInt(sourceMember.story.id),
+        sourceStoryNumber: toInt(sourceMember.story.number),
+        sourceStoryTitle: normalizeString(sourceMember.story.title),
+        crawledStoryIndex: match.index,
+        crawledStoryNumber: match.number,
+        crawledStoryTitle: match.title,
+      });
+    }
   }
 
   return mappings;
@@ -622,6 +826,7 @@ const loadSeriesBatchForScope = async (
     if (offset > 0) return [];
     return (await sourceModels.Series.findAll({
       where: { id: scope.seriesId },
+      attributes: SOURCE_SERIES_ATTRIBUTES,
       include: [{ model: sourceModels.Publisher, as: 'publisher', required: true, where: { original: false } }],
     })) as unknown as SeriesWithPublisher[];
   }
@@ -635,6 +840,7 @@ const loadSeriesBatchForScope = async (
     if (!seriesId) return [];
 
     const series = (await sourceModels.Series.findByPk(seriesId, {
+      attributes: SOURCE_SERIES_ATTRIBUTES,
       include: [
         {
           model: sourceModels.Publisher,
@@ -659,6 +865,7 @@ const loadSeriesBatchForScope = async (
 
   return (await sourceModels.Series.findAll({
     where,
+    attributes: SOURCE_SERIES_ATTRIBUTES,
     include,
     order: [['id', 'ASC']],
     offset,
@@ -674,6 +881,7 @@ const loadDeIssuesForSeries = async (sourceModels: DbModels, seriesId: number): 
         model: sourceModels.Series,
         as: 'series',
         required: true,
+        attributes: SOURCE_SERIES_ATTRIBUTES,
         include: [{ model: sourceModels.Publisher, as: 'publisher', required: true, where: { original: false } }],
       },
       {
@@ -925,6 +1133,7 @@ const loadSourceUsIssue = async (sourceModels: DbModels, issueId: number): Promi
         model: sourceModels.Series,
         as: 'series',
         required: true,
+        attributes: SOURCE_SERIES_ATTRIBUTES,
         include: [{ model: sourceModels.Publisher, as: 'publisher', required: true }],
       },
       {
@@ -944,6 +1153,7 @@ const loadIssueGraph = async (sourceModels: DbModels, issueId: number): Promise<
         model: sourceModels.Series,
         as: 'series',
         required: true,
+        attributes: SOURCE_SERIES_ATTRIBUTES,
         include: [{ model: sourceModels.Publisher, as: 'publisher', required: true }],
       },
       {
@@ -1017,6 +1227,7 @@ const loadIssueGroupByNumber = async (
         model: sourceModels.Series,
         as: 'series',
         required: true,
+        attributes: SOURCE_SERIES_ATTRIBUTES,
         include: [{ model: sourceModels.Publisher, as: 'publisher', required: true }],
       },
       {
@@ -1141,7 +1352,8 @@ const evaluateUsIssue = async (
     }
 
     const label = issueLabel(sourceIssue);
-    const sourceStoryCount = Array.isArray(sourceIssue.stories) ? sourceIssue.stories.length : 0;
+    const sourceStoriesForComparison = collectRepresentativeStoriesByNumber(sourceIssue.stories);
+    const sourceStoryCount = sourceStoriesForComparison.length;
     const requestedSeries = {
       title: normalizeString(sourceIssue.series.title),
       volume: toInt(sourceIssue.series.volume),
@@ -1167,7 +1379,7 @@ const evaluateUsIssue = async (
           label,
           result: 'shortbox',
           status: 'ok',
-          reason: 'ok',
+          reason: 'target-existing',
           moved: false,
           shortboxStoryCount: sourceStoryCount,
           crawledStoryCount: null,
@@ -1178,7 +1390,8 @@ const evaluateUsIssue = async (
 
     try {
       const crawled = await crawler.crawlIssue(requestedSeries.title, requestedSeries.volume, sourceIssue.number);
-      const crawledStoryCount = Array.isArray(crawled.stories) ? crawled.stories.length : 0;
+      const crawledStoriesForComparison = collectRepresentativeStoriesByNumber(crawled.stories);
+      const crawledStoryCount = crawledStoriesForComparison.length;
       const crawledSeries = {
         title: normalizeString(crawled.series?.title) || requestedSeries.title,
         volume: toInt(crawled.series?.volume) || requestedSeries.volume,
@@ -1187,8 +1400,8 @@ const evaluateUsIssue = async (
         normalizeLower(crawledSeries.title) !== normalizeLower(requestedSeries.title) ||
         crawledSeries.volume !== requestedSeries.volume;
       const crawlResult: ReimportUsIssueResult['result'] = moved ? 'moved' : 'crawler';
-      const shortboxStoryTitles = collectNormalizedStoryTitles(sourceIssue.stories);
-      const crawledStoryTitles = collectNormalizedStoryTitles(crawled.stories);
+      const shortboxStoryTitles = collectNormalizedStoryTitles(sourceStoriesForComparison);
+      const crawledStoryTitles = collectNormalizedStoryTitles(crawledStoriesForComparison);
       const storyMappings = buildStoryMappings(sourceIssue.stories, crawled.stories);
       const hasComparableTitleSets =
         sourceStoryCount > 0 &&
@@ -1414,7 +1627,7 @@ const syncIssueScalars = async (
     number: normalizeString(issueData.number),
     format: normalizeString(issueData.format),
     variant: normalizeString(issueData.variant),
-    releasedate: normalizeReleaseDateForDb(issueData.releasedate),
+    releasedate: coerceReleaseDateForDb(issueData.releasedate),
     legacy_number: normalizeString(issueData.legacy_number),
     pages: toInt(issueData.pages),
     price: Number(issueData.price || 0),
@@ -1510,6 +1723,7 @@ const findOrCreateTargetSeries = async (
     volume?: number;
     startyear?: number;
     endyear?: number | null;
+    genre?: string;
     addinfo?: string;
   },
 ) => {
@@ -1525,6 +1739,7 @@ const findOrCreateTargetSeries = async (
         volume,
         startyear: toInt(sourceSeries.startyear),
         endyear: sourceSeries.endyear == null ? 0 : toInt(sourceSeries.endyear),
+        genre: normalizeString(sourceSeries.genre),
         addinfo: normalizeString(sourceSeries.addinfo),
         fk_publisher: publisherId,
       },
@@ -1542,6 +1757,7 @@ const findOrCreateTargetSeries = async (
 
   series.startyear = toInt(sourceSeries.startyear);
   series.endyear = sourceSeries.endyear == null ? 0 : toInt(sourceSeries.endyear);
+  series.genre = normalizeString(sourceSeries.genre);
   series.addinfo = normalizeString(sourceSeries.addinfo);
   series.fk_publisher = publisherId;
   await series.save();
@@ -1877,6 +2093,191 @@ const matchExistingStory = (
   return candidates.find((candidate) => normalizeString(candidate.title) === exactDbTitle) || null;
 };
 
+const matchStoryFromIssueStories = (
+  stories: Array<{ id: number; number: number; title: string }> | undefined,
+  storyNumber: number,
+  title: string,
+): number | null => {
+  const sourceNumber = toInt(storyNumber);
+  const normalizedTitle = normalizeStoryTitleForMatch(title);
+  const exactDbTitle = normalizeStoryTitleForStorage(title);
+
+  const byNumber = Array.isArray(stories)
+    ? stories.filter((story) => toInt(story.number) === sourceNumber)
+    : [];
+  const numberScoped = byNumber.length > 0 ? byNumber : Array.isArray(stories) ? stories : [];
+
+  const normalizedMatch = numberScoped.find(
+    (candidate) => normalizeStoryTitleForMatch(candidate.title) === normalizedTitle,
+  );
+  if (normalizedMatch) return toInt(normalizedMatch.id);
+
+  const exactMatch = numberScoped.find((candidate) => normalizeString(candidate.title) === exactDbTitle);
+  if (exactMatch) return toInt(exactMatch.id);
+
+  if (numberScoped.length === 1) {
+    return toInt(numberScoped[0].id);
+  }
+
+  return null;
+};
+
+const loadSourceParentStoryLookups = async (
+  sourceModels: DbModels,
+  sourceStoryIds: number[],
+): Promise<SourceParentStoryLookup[]> => {
+  const uniqueSourceStoryIds = Array.from(new Set(sourceStoryIds.map(toInt).filter((id) => id > 0)));
+  if (uniqueSourceStoryIds.length === 0) return [];
+
+  const rows = await sourceModels.Story.findAll({
+    where: { id: { [Op.in]: uniqueSourceStoryIds } },
+    attributes: ['id', 'number', 'title'],
+    include: [
+      {
+        model: sourceModels.Issue,
+        as: 'issue',
+        required: true,
+        attributes: ['number', 'variant'],
+        include: [
+          {
+            model: sourceModels.Series,
+            as: 'series',
+            required: true,
+            attributes: ['title', 'volume'],
+            include: [
+              {
+                model: sourceModels.Publisher,
+                as: 'publisher',
+                required: true,
+                attributes: ['name', 'original'],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  return rows.map((row) =>
+    typeof row?.get === 'function'
+      ? (row.get({ plain: true }) as unknown as SourceParentStoryLookup)
+      : (row as unknown as SourceParentStoryLookup),
+  );
+};
+
+const loadTargetIssueWithStoriesForSourceParentStory = async (
+  targetModels: DbModels,
+  sourceStory: SourceParentStoryLookup,
+): Promise<TargetIssueWithStories | null> => {
+  const issueNumber = normalizeString(sourceStory.issue?.number);
+  const issueVariant = normalizeString(sourceStory.issue?.variant);
+  const seriesTitle = normalizeString(sourceStory.issue?.series?.title);
+  const seriesVolume = toInt(sourceStory.issue?.series?.volume);
+  const publisherName = normalizeString(sourceStory.issue?.series?.publisher?.name);
+  const publisherOriginal = Boolean(sourceStory.issue?.series?.publisher?.original);
+
+  if (!issueNumber || !seriesTitle || !seriesVolume || !publisherName) return null;
+
+  const findByVariant = async (variant: string): Promise<TargetIssueWithStories | null> => {
+    const issue = (await targetModels.Issue.findOne({
+      where: {
+        number: issueNumber,
+        variant: normalizeString(variant),
+      },
+      include: [
+        {
+          model: targetModels.Series,
+          as: 'series',
+          required: true,
+          where: {
+            title: seriesTitle,
+            volume: seriesVolume,
+          },
+          include: [
+            {
+              model: targetModels.Publisher,
+              as: 'publisher',
+              required: true,
+              where: {
+                name: publisherName,
+                original: publisherOriginal,
+              },
+            },
+          ],
+        },
+        {
+          model: targetModels.Story,
+          as: 'stories',
+          required: false,
+          attributes: ['id', 'number', 'title'],
+        },
+      ],
+      order: [[{ model: targetModels.Story, as: 'stories' }, 'number', 'ASC']],
+    })) as unknown as { get?: (options?: { plain?: boolean }) => unknown } | null;
+
+    if (!issue) return null;
+    return typeof issue.get === 'function'
+      ? (issue.get({ plain: true }) as unknown as TargetIssueWithStories)
+      : (issue as unknown as TargetIssueWithStories);
+  };
+
+  const exactVariantMatch = await findByVariant(issueVariant);
+  if (exactVariantMatch) return exactVariantMatch;
+  if (!issueVariant) return null;
+  return await findByVariant('');
+};
+
+const hydrateTargetParentStoryMappingsFromTarget = async (
+  sourceModels: DbModels,
+  targetModels: DbModels,
+  sourceStoryToTargetStoryId: Map<number, number>,
+  sourceStoryIds: number[],
+) => {
+  const unresolvedSourceStoryIds = Array.from(
+    new Set(
+      sourceStoryIds
+        .map(toInt)
+        .filter((sourceStoryId) => sourceStoryId > 0 && !sourceStoryToTargetStoryId.has(sourceStoryId)),
+    ),
+  );
+  if (unresolvedSourceStoryIds.length === 0) return;
+
+  const sourceStories = await loadSourceParentStoryLookups(sourceModels, unresolvedSourceStoryIds);
+  const targetIssueCache = new Map<string, Promise<TargetIssueWithStories | null>>();
+
+  for (const sourceStory of sourceStories) {
+    const sourceStoryId = toInt(sourceStory.id);
+    if (!sourceStoryId || sourceStoryToTargetStoryId.has(sourceStoryId)) continue;
+
+    const issueKey = [
+      normalizeString(sourceStory.issue?.series?.publisher?.name),
+      sourceStory.issue?.series?.publisher?.original ? 'us' : 'de',
+      normalizeString(sourceStory.issue?.series?.title),
+      toInt(sourceStory.issue?.series?.volume),
+      normalizeString(sourceStory.issue?.number),
+      normalizeString(sourceStory.issue?.variant),
+    ].join('::');
+
+    let targetIssuePromise = targetIssueCache.get(issueKey);
+    if (!targetIssuePromise) {
+      targetIssuePromise = loadTargetIssueWithStoriesForSourceParentStory(targetModels, sourceStory);
+      targetIssueCache.set(issueKey, targetIssuePromise);
+    }
+
+    const targetIssue = await targetIssuePromise;
+    if (!targetIssue) continue;
+
+    const matchedTargetStoryId = matchStoryFromIssueStories(
+      targetIssue.stories,
+      toInt(sourceStory.number),
+      sourceStory.title,
+    );
+    if (!matchedTargetStoryId) continue;
+
+    sourceStoryToTargetStoryId.set(sourceStoryId, matchedTargetStoryId);
+  }
+};
+
 const buildImplicitStoryMappings = (
   sourceStories: Array<{ id?: number; number?: number; title?: string }> | undefined,
   crawledStories: Array<{ number?: number; title?: string }> | undefined,
@@ -1976,6 +2377,10 @@ const loadResolvableSourceStoryIdsForEvaluatedIssue = async (
   sourceModels: DbModels,
   evaluated: EvaluatedUsIssue,
 ): Promise<Set<number>> => {
+  if (evaluated.report.reason === 'crawl-failed') {
+    return new Set();
+  }
+
   if (evaluated.report.result === 'crawler' || evaluated.report.result === 'moved') {
     if (evaluated.report.reason === 'ok' && Array.isArray(evaluated.sourceIssue.stories)) {
       return new Set(
@@ -2081,6 +2486,7 @@ const loadOrCreateTargetIssueGroupContext = async (
     volume?: number;
     startyear?: number;
     endyear?: number | null;
+    genre?: string;
     addinfo?: string;
   },
 ) => {
@@ -2249,6 +2655,7 @@ const persistCrawledUsIssueGroup = async (
     volume: evaluated.report.requestedSeries.volume,
     startyear: 0,
     endyear: 0,
+    genre: '',
     publisher: { name: 'Marvel Comics' },
   };
   const { targetSeries } = await loadOrCreateTargetIssueGroupContext(
@@ -2266,6 +2673,7 @@ const persistCrawledUsIssueGroup = async (
       volume: series.volume,
       startyear: series.startyear,
       endyear: series.endyear,
+      genre: series.genre,
       addinfo: '',
     },
   );
@@ -2469,6 +2877,28 @@ const persistDeIssue = async (
     throw new Error(`Could not load DE issue ${deIssueId} for persistence`);
   }
 
+  const requiredParentStoryIds = Array.from(
+    new Set((deIssue.stories || []).map((story) => toInt(story.fk_parent)).filter((storyId) => storyId > 0)),
+  );
+  const missingParentStoryIds = requiredParentStoryIds.filter(
+    (sourceStoryId) => !sourceStoryToTargetStoryId.has(sourceStoryId),
+  );
+  if (missingParentStoryIds.length > 0) {
+    await hydrateTargetParentStoryMappingsFromTarget(
+      sourceModels,
+      targetModels,
+      sourceStoryToTargetStoryId,
+      missingParentStoryIds,
+    );
+  }
+
+  const unresolvedParentStoryIds = requiredParentStoryIds.filter(
+    (sourceStoryId) => !sourceStoryToTargetStoryId.has(sourceStoryId),
+  );
+  if (unresolvedParentStoryIds.length > 0) {
+    throw new MissingTargetParentStoryMappingError(issueLabel(deIssue), unresolvedParentStoryIds);
+  }
+
   const { targetSeries } = await loadOrCreateTargetIssueGroupContext(
     targetModels,
     targetEntityCache,
@@ -2529,9 +2959,7 @@ const persistDeIssue = async (
     const targetParentStoryId =
       sourceParentStoryId == null ? null : sourceStoryToTargetStoryId.get(sourceParentStoryId) || null;
     if (sourceParentStoryId != null && !targetParentStoryId) {
-      throw new Error(
-        `Missing target parent story mapping for DE issue ${issueLabel(deIssue)} story #${toInt(story.number)} (${normalizeStoryTitleForStorage(story.title)}) from source story ${sourceParentStoryId}`,
-      );
+      throw new MissingTargetParentStoryMappingError(issueLabel(deIssue), [sourceParentStoryId]);
     }
     targetStory.fk_parent = targetParentStoryId;
     await targetStory.save();
@@ -2560,6 +2988,9 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   const targetModels = dryRun ? null : options?.targetModels;
   if (!dryRun && !targetModels) {
     throw new Error('Prod mode requires targetModels.');
+  }
+  if (!dryRun && targetModels) {
+    await ensureTargetSeriesGenreColumn(targetModels);
   }
   const seriesResults: ReimportSeriesResult[] = [];
   const summaryCounters: SummaryCounters = {
@@ -2639,6 +3070,84 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   const targetEntityCache = createTargetEntityCache();
   const targetIssueGroupPresenceCache = createTargetIssueGroupPresenceCache();
   const processedUsIssueGroupKeys = new Set<string>();
+
+  const persistUsIssueGroupsForDeIssue = async (evaluatedUsIssues: EvaluatedUsIssue[]) => {
+    if (dryRun || !targetModels) return;
+
+    for (const evaluated of evaluatedUsIssues) {
+      const result = evaluated.report;
+      const groupKey = targetIssueGroupKey(
+        toInt(evaluated.sourceIssue.series?.id),
+        evaluated.sourceIssue.number,
+      );
+      if (persistedUsIssueGroupKeys.has(groupKey)) continue;
+
+      if (shouldSkipUsIssuePersistence(result)) {
+        persistedUsIssueGroupKeys.add(groupKey);
+        continue;
+      }
+
+      if (result.result === 'crawler' || result.result === 'moved') {
+        await persistCrawledUsIssueGroup(
+          sourceModels,
+          targetModels,
+          targetEntityCache,
+          targetIssueGroupPresenceCache,
+          evaluated,
+          sourceStoryToTargetStoryId,
+          pendingCrawledReprints,
+          targetStoryRefIndex,
+        );
+      } else if (shouldUseSourceIssuePayload(result)) {
+        await persistSourceUsIssueGroup(
+          sourceModels,
+          targetModels,
+          targetEntityCache,
+          targetIssueGroupPresenceCache,
+          evaluated,
+          sourceStoryToTargetStoryId,
+          pendingSourceReprintLinks,
+          targetStoryRefIndex,
+        );
+      } else {
+        persistedUsIssueGroupKeys.add(groupKey);
+        continue;
+      }
+      persistedUsIssueGroupKeys.add(groupKey);
+    }
+  };
+
+  const persistCurrentDeIssueFromSource = async (deIssueId: number) => {
+    if (dryRun || !targetModels) return { ok: true as const };
+
+    await flushPendingLinks(
+      targetModels,
+      sourceStoryToTargetStoryId,
+      pendingSourceReprintLinks,
+      pendingCrawledReprints,
+      targetStoryRefIndex,
+    );
+
+    try {
+      await persistDeIssue(
+        sourceModels,
+        targetModels,
+        targetEntityCache,
+        deIssueId,
+        sourceStoryToTargetStoryId,
+      );
+      return { ok: true as const };
+    } catch (error) {
+      if (error instanceof MissingTargetParentStoryMappingError) {
+        return {
+          ok: false as const,
+          missingSourceStoryIds: error.missingSourceStoryIds,
+          message: error.message,
+        };
+      }
+      throw error;
+    }
+  };
 
   try {
   while (true) {
@@ -2762,6 +3271,19 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
         const hasManual = evaluatedUsIssues.some((evaluated) => evaluated.report.result === 'manual');
         if (hasManual) {
           const manualCount = evaluatedUsIssues.filter((evaluated) => evaluated.report.result === 'manual').length;
+          let sourcePersistenceApplied = false;
+          let sourcePersistenceError: string | null = null;
+          if (!dryRun && targetModels) {
+            await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
+            const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
+            sourcePersistenceApplied = persistenceResult.ok;
+            if (!persistenceResult.ok) {
+              sourcePersistenceError =
+                persistenceResult.missingSourceStoryIds.length > 0
+                  ? `missing parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
+                  : persistenceResult.message;
+            }
+          }
           if (collectDetails) {
             issueResults.push({
               id: toInt(deIssue.id),
@@ -2772,12 +3294,16 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
             });
           }
           const issueDurationMs = finishDeIssue();
+          const manualExtras = [
+            `${manualCount}/${evaluatedUsIssues.length} linked US issues require manual review`,
+            sourcePersistenceApplied ? 'source persistence applied' : 'persistence skipped',
+            `duration=${formatIssueDuration(issueDurationMs)}`,
+          ];
+          if (sourcePersistenceError) {
+            manualExtras.splice(2, 0, sourcePersistenceError);
+          }
           console.log(
-            formatIssueLog('manual', 'manual', issueLabel(deIssue), [
-              `${manualCount}/${evaluatedUsIssues.length} linked US issues require manual review`,
-              'persistence skipped',
-              `duration=${formatIssueDuration(issueDurationMs)}`,
-            ]),
+            formatIssueLog('manual', 'manual', issueLabel(deIssue), manualExtras),
           );
           logProgress('issue-manual', `label=${issueLabel(deIssue)}`);
           continue;
@@ -2790,6 +3316,19 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
           sourceStoryToTargetStoryId,
         );
         if (missingParentStoryIds.length > 0) {
+          let sourcePersistenceApplied = false;
+          let sourcePersistenceError: string | null = null;
+          if (!dryRun && targetModels) {
+            await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
+            const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
+            sourcePersistenceApplied = persistenceResult.ok;
+            if (!persistenceResult.ok) {
+              sourcePersistenceError =
+                persistenceResult.missingSourceStoryIds.length > 0
+                  ? `missing parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
+                  : persistenceResult.message;
+            }
+          }
           if (collectDetails) {
             issueResults.push({
               id: toInt(deIssue.id),
@@ -2800,66 +3339,50 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
             });
           }
           const issueDurationMs = finishDeIssue();
+          const manualExtras = [
+            `unresolved parent story ids ${missingParentStoryIds.join(', ')}`,
+            sourcePersistenceApplied ? 'source persistence applied' : 'persistence skipped',
+            `duration=${formatIssueDuration(issueDurationMs)}`,
+          ];
+          if (sourcePersistenceError) {
+            manualExtras.splice(2, 0, sourcePersistenceError);
+          }
           console.log(
-            formatIssueLog('manual', 'manual', issueLabel(deIssue), [
-              `unresolved parent story ids ${missingParentStoryIds.join(', ')}`,
-              'persistence skipped',
-              `duration=${formatIssueDuration(issueDurationMs)}`,
-            ]),
+            formatIssueLog('manual', 'manual', issueLabel(deIssue), manualExtras),
           );
           logProgress('issue-manual', `label=${issueLabel(deIssue)} missingParents=${missingParentStoryIds.length}`);
           continue;
         }
 
         if (!dryRun && targetModels) {
-          for (const evaluated of evaluatedUsIssues) {
-            const result = evaluated.report;
-            const groupKey = targetIssueGroupKey(
-              toInt(evaluated.sourceIssue.series?.id),
-              evaluated.sourceIssue.number,
-            );
-            if (persistedUsIssueGroupKeys.has(groupKey)) continue;
-            if (result.result === 'crawler' || result.result === 'moved') {
-              await persistCrawledUsIssueGroup(
-                sourceModels,
-                targetModels,
-                targetEntityCache,
-                targetIssueGroupPresenceCache,
-                evaluated,
-                sourceStoryToTargetStoryId,
-                pendingCrawledReprints,
-                targetStoryRefIndex,
-              );
-            } else {
-              await persistSourceUsIssueGroup(
-                sourceModels,
-                targetModels,
-                targetEntityCache,
-                targetIssueGroupPresenceCache,
-                evaluated,
-                sourceStoryToTargetStoryId,
-                pendingSourceReprintLinks,
-                targetStoryRefIndex,
-              );
+          await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
+          const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
+          if (!persistenceResult.ok) {
+            if (collectDetails) {
+              issueResults.push({
+                id: toInt(deIssue.id),
+                label: issueLabel(deIssue),
+                status: 'manual',
+                linkedUsIssueIds: usIssueIds,
+                usIssues,
+              });
             }
-            persistedUsIssueGroupKeys.add(groupKey);
+            const issueDurationMs = finishDeIssue();
+            console.log(
+              formatIssueLog('manual', 'manual', issueLabel(deIssue), [
+                persistenceResult.missingSourceStoryIds.length > 0
+                  ? `unresolved parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
+                  : 'unresolved parent story ids',
+                'source persistence skipped',
+                `duration=${formatIssueDuration(issueDurationMs)}`,
+              ]),
+            );
+            logProgress(
+              'issue-manual',
+              `label=${issueLabel(deIssue)} missingParents=${persistenceResult.missingSourceStoryIds.length || 1}`,
+            );
+            continue;
           }
-
-          await flushPendingLinks(
-            targetModels,
-            sourceStoryToTargetStoryId,
-            pendingSourceReprintLinks,
-            pendingCrawledReprints,
-            targetStoryRefIndex,
-          );
-
-          await persistDeIssue(
-            sourceModels,
-            targetModels,
-            targetEntityCache,
-            toInt(deIssue.id),
-            sourceStoryToTargetStoryId,
-          );
         }
         if (collectDetails) {
           issueResults.push({

@@ -22,10 +22,12 @@ export const typeDef = gql`
     releasedates: [DateFilter]
     publishers: [PublisherInput]
     series: [SeriesInput]
+    genres: [String]
     numbers: [NumberFilter]
     arcs: [ArcInput]
     individuals: [IndividualInput]
     appearances: [AppearanceInput]
+    realities: [RealityInput]
     firstPrint: Boolean
     notFirstPrint: Boolean
     onlyPrint: Boolean

@@ -336,6 +336,103 @@ describe('reimport core', () => {
     expect(report.series[0].issues[0].status).toBe('ok');
   });
 
+  it('deduplicates source stories by number before comparing story counts', async () => {
+    const { runReimport, models, crawler } = loadModule();
+
+    models.Series.count.mockResolvedValueOnce(1);
+    models.Series.findAll.mockResolvedValueOnce([createDeSeries()]).mockResolvedValueOnce([]);
+    models.Issue.findAll.mockResolvedValueOnce([createDeIssue()]);
+    models.Story.findAll.mockResolvedValueOnce([{ id: 301, fk_issue: 500, fk_reprint: null }]);
+    models.Issue.findByPk.mockResolvedValueOnce(
+      createUsIssue({
+        stories: [
+          { id: 301, number: 1, title: 'Main Story', fk_parent: null, fk_reprint: null },
+          { id: 302, number: 2, title: 'Backup Story', fk_parent: null, fk_reprint: null },
+          { id: 303, number: 3, title: '3rd Story', fk_parent: null, fk_reprint: null },
+          { id: 304, number: 3, title: '3rd story', fk_parent: null, fk_reprint: null },
+        ],
+      }),
+    );
+
+    crawler.crawlIssue.mockResolvedValueOnce({
+      number: '1',
+      series: { title: 'Amazing Spider-Man', volume: 1 },
+      stories: [
+        { number: 1, title: 'Main Story' },
+        { number: 2, title: 'Backup Story' },
+        { number: 3, title: '' },
+      ],
+    });
+
+    const report = await runReimport({ dryRun: true, scope: { kind: 'all-us' } });
+    const usIssue = report.series[0].issues[0].usIssues[0];
+
+    expect(usIssue.result).toBe('crawler');
+    expect(usIssue.status).toBe('ok');
+    expect(usIssue.reason).toBe('ok');
+    expect(usIssue.shortboxStoryCount).toBe(3);
+    expect(usIssue.crawledStoryCount).toBe(3);
+  });
+
+  it('maps duplicate source story numbers to the same crawled story index', async () => {
+    const { runReimport, models, crawler } = loadModule();
+
+    models.Series.count.mockResolvedValueOnce(1);
+    models.Series.findAll.mockResolvedValueOnce([createDeSeries()]).mockResolvedValueOnce([]);
+    models.Issue.findAll.mockResolvedValueOnce([createDeIssue()]);
+    models.Story.findAll.mockResolvedValueOnce([{ id: 301, fk_issue: 500, fk_reprint: null }]);
+    models.Issue.findByPk.mockResolvedValueOnce(
+      createUsIssue({
+        stories: [
+          { id: 301, number: 1, title: 'Main Story', fk_parent: null, fk_reprint: null },
+          { id: 302, number: 3, title: '3rd Story', fk_parent: null, fk_reprint: null },
+          { id: 303, number: 3, title: '3rd story', fk_parent: null, fk_reprint: null },
+        ],
+      }),
+    );
+
+    crawler.crawlIssue.mockResolvedValueOnce({
+      number: '1',
+      series: { title: 'Amazing Spider-Man', volume: 1 },
+      stories: [
+        { number: 1, title: 'Main Story' },
+        { number: 2, title: 'Inserted Story' },
+        { number: 3, title: '' },
+      ],
+    });
+
+    const report = await runReimport({ dryRun: true, scope: { kind: 'all-us' } });
+    const usIssue = report.series[0].issues[0].usIssues[0];
+
+    expect(usIssue.reason).toBe('story-count-mismatch-subset');
+    expect(usIssue.storyMappings).toEqual([
+      {
+        sourceStoryId: 301,
+        sourceStoryNumber: 1,
+        sourceStoryTitle: 'Main Story',
+        crawledStoryIndex: 0,
+        crawledStoryNumber: 1,
+        crawledStoryTitle: 'Main Story',
+      },
+      {
+        sourceStoryId: 302,
+        sourceStoryNumber: 3,
+        sourceStoryTitle: '3rd Story',
+        crawledStoryIndex: 2,
+        crawledStoryNumber: 3,
+        crawledStoryTitle: 'Untitled',
+      },
+      {
+        sourceStoryId: 303,
+        sourceStoryNumber: 3,
+        sourceStoryTitle: '3rd story',
+        crawledStoryIndex: 2,
+        crawledStoryNumber: 3,
+        crawledStoryTitle: 'Untitled',
+      },
+    ]);
+  });
+
   it('chooses crawler and exposes direction when crawler has more stories', async () => {
     const { runReimport, models, crawler } = loadModule();
 
@@ -654,26 +751,55 @@ describe('reimport core', () => {
     expect(usIssue.moved).toBe(false);
   });
 
-  it('skips all persistence for a DE issue when any linked US issue is manual', async () => {
+  it('persists source data for a DE issue when any linked US issue is manual', async () => {
     const { runReimport, crawler } = loadModule();
+
+    const deSeries = createDeSeries();
+    const sourceUsIssue = createUsIssue({
+      stories: [
+        { id: 301, number: 1, title: 'Main Story', fk_parent: null, fk_reprint: null },
+        { id: 302, number: 2, title: 'Backup Story', fk_parent: null, fk_reprint: null },
+      ],
+    });
+    const sourceUsIssueGraph = createPersistableIssueGraph({
+      id: 500,
+      number: '1',
+      fk_series: 50,
+      series: sourceUsIssue.series,
+      stories: [
+        { id: 301, number: 1, title: 'Main Story', fk_parent: null, fk_reprint: null },
+        { id: 302, number: 2, title: 'Backup Story', fk_parent: null, fk_reprint: null },
+      ],
+    });
+    const deIssue = createDeIssue({
+      stories: [{ id: 201, number: 1, title: 'Story', fk_parent: 301 }],
+    });
+    const deIssueGraph = createPersistableIssueGraph({
+      id: 100,
+      fk_series: 10,
+      series: deSeries,
+      stories: [{ id: 201, number: 1, title: 'Story', fk_parent: 301 }],
+    });
 
     const sourceModels = {
       Series: {
         count: jest.fn().mockResolvedValue(1),
-        findAll: jest.fn().mockResolvedValueOnce([createDeSeries()]).mockResolvedValueOnce([]),
+        findAll: jest.fn().mockImplementation(async ({ offset }: { offset?: number }) => (offset && offset > 0 ? [] : [deSeries])),
       },
       Publisher: {},
       Issue: {
         count: jest.fn().mockResolvedValue(1),
-        findAll: jest.fn().mockResolvedValueOnce([createDeIssue()]),
-        findByPk: jest.fn().mockResolvedValueOnce(
-          createUsIssue({
-            stories: [
-              { id: 301, number: 1, title: 'Main Story', fk_parent: null, fk_reprint: null },
-              { id: 302, number: 2, title: 'Backup Story', fk_parent: null, fk_reprint: null },
-            ],
-          }),
-        ),
+        findAll: jest.fn().mockImplementation(async ({ where }: { where?: { fk_series?: number; number?: string } }) => {
+          if (where?.number === '1' && where?.fk_series === 50) {
+            return [createLoadedIssueRecord(sourceUsIssueGraph)];
+          }
+          return [deIssue];
+        }),
+        findByPk: jest.fn().mockImplementation(async (issueId: number) => {
+          if (issueId === 500) return sourceUsIssue;
+          if (issueId === 100) return createLoadedIssueRecord(deIssueGraph);
+          return null;
+        }),
       },
       Story: {
         findAll: jest.fn().mockResolvedValue([{ id: 301, fk_issue: 500, fk_reprint: null }]),
@@ -701,13 +827,13 @@ describe('reimport core', () => {
 
     expect(report.series[0].issues[0].usIssues[0].result).toBe('manual');
     expect(report.series[0].issues[0].status).toBe('manual');
-    expect(targetModels.Issue.findOrCreate).not.toHaveBeenCalled();
-    expect(targetModels.Publisher.findOrCreate).not.toHaveBeenCalled();
-    expect(targetModels.Series.findOrCreate).not.toHaveBeenCalled();
-    expect(targetModels.Story.create).not.toHaveBeenCalled();
+    expect(targetModels.Issue.findOrCreate).toHaveBeenCalled();
+    expect(targetModels.Publisher.findOrCreate).toHaveBeenCalled();
+    expect(targetModels.Series.findOrCreate).toHaveBeenCalled();
+    expect(targetModels.Story.create).toHaveBeenCalled();
   });
 
-  it('skips all persistence for a DE issue when a crawled US issue cannot resolve every parent story mapping', async () => {
+  it('persists source data for a DE issue when a crawled US issue cannot resolve every parent story mapping', async () => {
     const { runReimport, crawler } = loadModule();
 
     const deSeries = createDeSeries();
@@ -783,10 +909,11 @@ describe('reimport core', () => {
 
     expect(report.series[0].issues[0].usIssues[0].result).toBe('crawler');
     expect(report.series[0].issues[0].usIssues[0].reason).toBe('story-title-mismatch');
-    expect(targetModels.Issue.findOrCreate).not.toHaveBeenCalled();
-    expect(targetModels.Publisher.findOrCreate).not.toHaveBeenCalled();
-    expect(targetModels.Series.findOrCreate).not.toHaveBeenCalled();
-    expect(targetModels.Story.create).not.toHaveBeenCalled();
+    expect(report.series[0].issues[0].status).toBe('manual');
+    expect(targetModels.Issue.findOrCreate).toHaveBeenCalled();
+    expect(targetModels.Publisher.findOrCreate).toHaveBeenCalled();
+    expect(targetModels.Series.findOrCreate).toHaveBeenCalled();
+    expect(targetModels.Story.create).toHaveBeenCalled();
   });
 
   it('persists a DE issue as check when linked US issues only differ by same-number story titles', async () => {
@@ -914,7 +1041,7 @@ describe('reimport core', () => {
       targetModels: targetModels as never,
     });
 
-    expect(report.summary.totalMappedUsIssues).toBe(0);
+    expect(report.summary.totalMappedUsIssues).toBe(1);
     expect(report.series[0].issues[0].linkedUsIssueIds).toEqual([]);
     expect(report.series[0].issues[0].usIssues).toEqual([]);
     expect(targetModels.Issue.findOne).toHaveBeenCalledTimes(1);
@@ -942,7 +1069,7 @@ describe('reimport core', () => {
       targetModels: targetModels as never,
     });
 
-    expect(report.summary.totalMappedUsIssues).toBe(0);
+    expect(report.summary.totalMappedUsIssues).toBe(1);
     expect(report.series[0].issues[0].linkedUsIssueIds).toEqual([]);
     expect(report.series[0].issues[0].usIssues).toEqual([]);
     expect(targetModels.Issue.findOne).toHaveBeenCalledTimes(1);
@@ -1212,6 +1339,9 @@ describe('reimport core', () => {
 
     expect(report.series[0].issues[0].usIssues).toHaveLength(2);
     expect(report.series[0].issues[0].usIssues.every((issue) => issue.result === 'shortbox')).toBe(true);
+    expect(report.series[0].issues[0].usIssues.every((issue) => issue.reason === 'target-existing')).toBe(
+      true,
+    );
     expect(targetModels.Issue.count).toHaveBeenCalledTimes(1);
     expect(crawler.crawlIssue).not.toHaveBeenCalled();
   });
@@ -1578,6 +1708,7 @@ describe('reimport core', () => {
     });
 
     expect(firstReport.series[0].issues[0].usIssues[0].result).toBe('shortbox');
+    expect(firstReport.series[0].issues[0].usIssues[0].reason).toBe('target-existing');
     expect(secondReport.series[0].issues[0].usIssues[0].result).toBe('crawler');
     expect(existingTargetModels.Issue.count).toHaveBeenCalledTimes(1);
     expect(missingTargetModels.Issue.count).toHaveBeenCalledTimes(1);

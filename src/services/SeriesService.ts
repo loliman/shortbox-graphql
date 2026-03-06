@@ -4,6 +4,41 @@ import logger from '../util/logger';
 import type { Filter, PublisherInput, SeriesInput } from '@loliman/shortbox-contract';
 import { buildConnectionFromNodes } from '../core/cursor';
 
+type SeriesInputWithGenre = SeriesInput & { genre?: string | null };
+
+const normalizeSeriesGenre = (item: SeriesInput | undefined): string => {
+  const genre = (item as SeriesInputWithGenre | undefined)?.genre;
+  return typeof genre === 'string' ? genre.trim() : '';
+};
+
+const splitGenres = (value: unknown): string[] =>
+  String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+const matchesGenrePattern = (genre: string, pattern: string): boolean => {
+  if (!pattern) return true;
+
+  const normalizedGenre = genre.toLowerCase();
+  const parts = pattern
+    .toLowerCase()
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  if (parts.length === 0) return true;
+
+  let index = 0;
+  for (const part of parts) {
+    const next = normalizedGenre.indexOf(part, index);
+    if (next < 0) return false;
+    index = next + part.length;
+  }
+
+  return true;
+};
+
 export class SeriesService {
   constructor(
     private models: typeof import('../models').default,
@@ -38,6 +73,7 @@ export class SeriesService {
         volume: number;
         startyear: number;
         endyear: number;
+        genre: string;
         fk_publisher: number;
       };
     };
@@ -104,6 +140,7 @@ export class SeriesService {
           'volume',
           'startyear',
           'endyear',
+          'genre',
           'fk_publisher',
         ];
       }
@@ -122,11 +159,55 @@ export class SeriesService {
           volume: issueNode.series.volume,
           startyear: issueNode.series.startyear,
           endyear: issueNode.series.endyear,
+          genre: issueNode.series.genre,
           fk_publisher: issueNode.series.fk_publisher,
         }))
         .sort((left, right) => left.title.localeCompare(right.title) || left.volume - right.volume);
       return buildConnectionFromNodes(nodes, nodes.length, undefined);
     }
+  }
+
+  async findGenres(pattern: string | undefined, first: number | undefined, after: string | undefined) {
+    type GenreRow = { genre?: string | null };
+
+    const limit = typeof first === 'number' && first > 0 ? first : 50;
+    const normalizedPattern = typeof pattern === 'string' ? pattern.trim() : '';
+    const normalizedAfter = typeof after === 'string' ? after.trim().toLowerCase() : '';
+
+    const where: Record<string | symbol, unknown> = {};
+    if (normalizedPattern !== '') {
+      where.genre = { [Op.iLike]: '%' + normalizedPattern.replace(/\s/g, '%') + '%' };
+    }
+
+    const rows = (await this.models.Series.findAll({
+      attributes: ['genre'],
+      where,
+      order: [
+        ['genre', 'ASC'],
+        ['id', 'ASC'],
+      ],
+      raw: true,
+    })) as GenreRow[];
+
+    const unique = new Map<string, string>();
+    rows.forEach((row) => {
+      splitGenres(row.genre).forEach((genre) => {
+        if (!matchesGenrePattern(genre, normalizedPattern)) return;
+
+        const key = genre.toLowerCase();
+        if (!unique.has(key)) unique.set(key, genre);
+      });
+    });
+
+    const sortedGenres = [...unique.values()].sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: 'base' }),
+    );
+
+    if (!normalizedAfter) {
+      return sortedGenres.slice(0, limit);
+    }
+
+    return sortedGenres.filter((genre) => genre.toLowerCase() > normalizedAfter).slice(0, limit);
   }
 
   async deleteSeries(item: SeriesInput, transaction: Transaction) {
@@ -165,6 +246,7 @@ export class SeriesService {
         volume: item.volume,
         startyear: item.startyear,
         endyear: item.endyear,
+        genre: normalizeSeriesGenre(item),
         addinfo: item.addinfo,
         fk_publisher: pub.id,
       },
@@ -205,6 +287,7 @@ export class SeriesService {
     res.volume = item.volume || 0;
     res.startyear = item.startyear || 0;
     res.endyear = item.endyear || 0;
+    res.genre = normalizeSeriesGenre(item);
     res.addinfo = item.addinfo || '';
     res.fk_publisher = newPublisher.id;
     return await res.save({ transaction });

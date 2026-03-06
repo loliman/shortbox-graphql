@@ -31,6 +31,8 @@ export const resolvers: SeriesResolvers = {
         validatedFilter as any,
       );
     },
+    genres: async (_, { pattern, first, after }, { seriesService }) =>
+      await seriesService.findGenres(pattern || undefined, first || undefined, after || undefined),
     seriesDetails: async (_, { series }, { models }) => {
       SeriesInputSchema.parse(series);
       return await models.Series.findOne({

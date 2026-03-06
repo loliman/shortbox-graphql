@@ -1,6 +1,7 @@
 import type {
   CleanupTaskPayload,
   ReimportUSTaskPayload,
+  UpdateDeSeriesGenresTaskPayload,
   UpdateStoryFiltersTaskPayload,
 } from '../worker/task-registry';
 
@@ -10,6 +11,7 @@ declare global {
       cleanup: CleanupTaskPayload;
       'update-story-badges': UpdateStoryFiltersTaskPayload;
       'reimport-us': ReimportUSTaskPayload;
+      'update-de-series-genres': UpdateDeSeriesGenresTaskPayload;
     }
   }
 }

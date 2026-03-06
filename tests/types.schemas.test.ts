@@ -25,8 +25,13 @@ describe('schemas', () => {
     });
     expect(PublisherInputSchema.parse({ name: 'Marvel' })).toEqual({ name: 'Marvel' });
     expect(
-      SeriesInputSchema.parse({ title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } }),
-    ).toMatchObject({ title: 'Spider-Man', volume: 1 });
+      SeriesInputSchema.parse({
+        title: 'Spider-Man',
+        volume: 1,
+        genre: 'Superhero',
+        publisher: { name: 'Marvel' },
+      }),
+    ).toMatchObject({ title: 'Spider-Man', volume: 1, genre: 'Superhero' });
     expect(
       IssueInputSchema.parse({
         number: '1',
@@ -67,6 +72,7 @@ describe('schemas', () => {
     expect(
       FilterSchema.parse({
         us: true,
+        genres: ['Superhelden', 'Fantasy'],
         publishers: [{ name: 'Marvel' }],
         series: [{ title: 'Spider-Man', volume: 1, publisher: { name: 'Marvel' } }],
       }),

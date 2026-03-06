@@ -399,6 +399,7 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
     } as any;
     const seriesService = {
       findSeries: jest.fn().mockResolvedValue([]),
+      findGenres: jest.fn().mockResolvedValue(['Superhero']),
       deleteSeries: jest.fn().mockResolvedValue(undefined),
       createSeries: jest.fn().mockResolvedValue({ id: 2 }),
       editSeries: jest.fn().mockResolvedValue({ id: 3 }),
@@ -410,11 +411,17 @@ describe('Publisher/Series/Issue resolver additional coverage', () => {
       { pattern: '', publisher: { name: 'Marvel' }, first: 10, after: '', filter: null } as any,
       { loggedIn: true, seriesService } as any,
     );
+    await seriesResolvers.Query.genres(
+      {},
+      { pattern: 'hero', first: 10, after: '' } as any,
+      { seriesService } as any,
+    );
     await seriesResolvers.Query.seriesDetails(
       {},
       { series: { title: 'SM', volume: 1, publisher: { name: 'Marvel' } } } as any,
       { models } as any,
     );
+    expect(seriesService.findGenres).toHaveBeenCalled();
     expect(SeriesInputSchema.parse).toHaveBeenCalled();
 
     await expect(

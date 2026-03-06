@@ -128,6 +128,26 @@ function ws(s: string) {
   return s.replace(/\s+/g, " ").trim();
 }
 
+function normalizeCrawlerEntityValue(raw: string): string {
+  const normalized = ws(
+    String(raw || "")
+      .replace(/[\u00A0\u2007\u202F]/g, " ")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/[‘’`´]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/[‐‑–—]/g, "-")
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .replace(/\(\s+/g, "(")
+      .replace(/\s+\)/g, ")"),
+  );
+  if (!normalized) return "";
+
+  return normalized
+    .split(" ")
+    .map((token) => (token && /^[a-z]/.test(token) ? `${token[0].toUpperCase()}${token.slice(1)}` : token))
+    .join(" ");
+}
+
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -184,6 +204,62 @@ function isWikiHref(value: string | null | undefined): boolean {
   return normalizeWikiHref(value).startsWith("/wiki/");
 }
 
+function extractWikiTitleFromHref(value: string | null | undefined): string {
+  const normalizedHref = normalizeWikiHref(value);
+  if (!normalizedHref.startsWith("/wiki/")) return "";
+
+  const withoutPrefix = normalizedHref.replace(/^\/wiki\//, "");
+  const withoutFragment = withoutPrefix.split("#")[0];
+  const withoutQuery = withoutFragment.split("?")[0];
+  if (!withoutQuery) return "";
+
+  let decoded = withoutQuery.replace(/_/g, " ");
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    decoded = withoutQuery.replace(/_/g, " ");
+  }
+  return ws(decoded);
+}
+
+function normalizeEntityNameFromWikiHref(value: string | null | undefined): string {
+  const title = extractWikiTitleFromHref(value);
+  if (!title) return "";
+  if (title.includes(":")) return "";
+  if (!/[A-Za-z0-9]/.test(title)) return "";
+  return normalizeCrawlerEntityValue(title);
+}
+
+function collectNormalizedEntityNamesFromLinks(
+  $: cheerio.CheerioAPI,
+  scope: cheerio.Cheerio<AnyNode>,
+): string[] {
+  const deduped = new Map<string, string>();
+
+  scope.find("a[href^='/wiki/']").each((_, el) => {
+    const linkText = ws($(el).text());
+    if (linkText && !/[A-Za-z0-9]/.test(linkText)) return;
+
+    const normalizedName = normalizeEntityNameFromWikiHref($(el).attr("href"));
+    if (!normalizedName) return;
+    const key = normalizedName.toLowerCase();
+    if (!deduped.has(key)) deduped.set(key, normalizedName);
+  });
+
+  return Array.from(deduped.values());
+}
+
+function extractPrimaryEntityNameFromListItem($: cheerio.CheerioAPI, li: AnyNode): string {
+  const item = $(li).clone();
+  item.find("ul, ol").remove();
+  const eligibleLinks = item.find("a[href^='/wiki/']");
+  if (!eligibleLinks.length) return "";
+
+  const textPreferred = eligibleLinks.filter((_, el) => /[A-Za-z0-9]/.test(ws($(el).text()))).first();
+  const primary = textPreferred.length ? textPreferred : eligibleLinks.first();
+  return normalizeEntityNameFromWikiHref(primary.attr("href"));
+}
+
 function normalizeHeader(s: string) {
   // "Writer(s)" => "writer", "Original Price" => "original price"
   return ws(s)
@@ -203,6 +279,36 @@ function normalizeIndividualType(type: string) {
   if (normalized === "coverartist") return "ARTIST";
   if (normalized === "editorinchief") return "EDITOR";
   return normalized.replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizeAppearanceType(typeRaw: string): string {
+  const normalized = normalizeHeader(typeRaw).replace(/:$/, "");
+  if (!normalized) return "CHARACTER";
+
+  if (/(realit|dimension|timeline|multiverse|earth-\d+)/i.test(normalized)) return "REALITY";
+  if (/(location|place|setting|city|country|planet|world|realm)/i.test(normalized)) return "LOCATION";
+  if (/(item|object|artifact|weapon|device|accessor|iten)/i.test(normalized)) return "ITEM";
+  if (/(vehicle|ship|aircraft|car|truck|train|jet|vechi)/i.test(normalized)) return "VEHICLE";
+  if (/(race|species|peoples|races)/i.test(normalized)) return "RACE";
+  if (/(organization|organisation|agency|corporation|guild|order|syndicate)/i.test(normalized))
+    return "ORGANIZATION";
+  if (/(group|team|allies|foes|villains|heroes|guests|crew|droids|robots)/i.test(normalized))
+    return "GROUP";
+  if (/(event|storyline|arc|saga)/i.test(normalized)) return "EVENT";
+  if (/(animal|animals|beast|creature)/i.test(normalized)) return "ANIMAL";
+
+  return "CHARACTER";
+}
+
+function normalizeAppearanceRole(roleRaw: string): string | undefined {
+  const normalized = normalizeHeader(roleRaw).replace(/:$/, "");
+  if (!normalized) return undefined;
+
+  if (/(featured|main)/i.test(normalized)) return "FEATURED";
+  if (/(support)/i.test(normalized)) return "SUPPORTING";
+  if (/(antagon|villain)/i.test(normalized)) return "ANTAGONIST";
+  if (/(other)/i.test(normalized)) return "OTHER";
+  return undefined;
 }
 
 function toUnderscoreTitle(s: string) {
@@ -356,21 +462,25 @@ async function parsePageHtmlByTitle(
 }
 
 function addUniqueIndividual(out: CrawledIndividual[], name: string, type: string) {
+  const normalizedName = normalizeCrawlerEntityValue(name);
+  if (!normalizedName) return;
   const normalizedType = normalizeIndividualType(type);
-  const k = `${normalizedType}::${name}`.toLowerCase();
+  const k = `${normalizedType}::${normalizedName}`.toLowerCase();
   if (!out.some((i) => `${i.type}::${i.name}`.toLowerCase() === k)) {
-    out.push({ name, type: normalizedType });
+    out.push({ name: normalizedName, type: normalizedType });
   }
 }
 
 function addUniqueAppearance(out: CrawledAppearance[], a: CrawledAppearance) {
-  const name = ws(a.name);
+  const name = normalizeCrawlerEntityValue(a.name);
   if (!name || name.length > APPEARANCE_NAME_MAX_LENGTH) return;
-  if (a.type === "REALITY" || a.type === "REALITIES") return;
+  const normalizedType = normalizeAppearanceType(a.type);
+  if (normalizedType === "REALITY") return;
   const candidate: CrawledAppearance = {
     ...a,
     name,
-    role: a.role ? ws(a.role) : undefined,
+    type: normalizedType,
+    role: normalizedType === "CHARACTER" && a.role ? normalizeAppearanceRole(a.role) : undefined,
   };
   const k = `${candidate.type}::${candidate.role || ""}::${candidate.name}`.toLowerCase();
   if (!out.some((x) => `${x.type}::${x.role || ""}::${x.name}`.toLowerCase() === k)) {
@@ -382,9 +492,15 @@ function splitListNames(raw: string | null): string[] {
   if (!raw) return [];
   const parts = raw
     .split(/\n|,|•|·| and /gi)
-    .map(ws)
+    .map(normalizeCrawlerEntityValue)
     .filter(Boolean);
-  return Array.from(new Set(parts));
+
+  const deduped = new Map<string, string>();
+  for (const part of parts) {
+    const key = part.toLowerCase();
+    if (!deduped.has(key)) deduped.set(key, part);
+  }
+  return Array.from(deduped.values());
 }
 
 function cleanAppearanceName(raw: string): string {
@@ -607,13 +723,7 @@ function h3BlockLinksText($: cheerio.CheerioAPI, headerWanted: string): string[]
   if (!h3.length) return [];
 
   const chunk = h3.nextUntil("h3, h2");
-  const names = chunk
-    .find("a[href^='/wiki/']")
-    .map((_, a) => ws($(a).text()))
-    .get()
-    .filter(Boolean) as string[];
-
-  return Array.from(new Set(names));
+  return collectNormalizedEntityNamesFromLinks($, chunk);
 }
 
 /* =====================================
@@ -782,23 +892,11 @@ function parseStoryIndividualsFromBlock(htmlFragment: string): CrawledIndividual
     if (!h.length) return;
 
     const chunk = h.nextUntil("h3, h2");
-    const linkNames = Array.from(
-      new Set(
-        chunk
-          .find("a[href^='/wiki/']")
-          .map((_, el) => ws($$(el).text()))
-          .get()
-          .filter(Boolean) as string[],
-      ),
-    );
+    const linkNames = collectNormalizedEntityNamesFromLinks($$, chunk);
 
     if (linkNames.length > 0) {
       for (const name of linkNames) addUniqueIndividual(individuals, name, type);
-      return;
     }
-
-    const txt = ws(chunk.text());
-    for (const name of splitListNames(txt)) addUniqueIndividual(individuals, name, type);
   };
 
   capture("Writer", "writer");
@@ -861,25 +959,15 @@ function parseAppearancesForStory($: cheerio.CheerioAPI, story: StoryKey): Crawl
   const out: CrawledAppearance[] = [];
 
   const normalizeAppearanceCategory = (lbl: string): { type: string; role?: string } => {
-    const l = normalizeHeader(lbl).replace(/:$/, "");
-    if (l.includes("featured")) return { type: "CHARACTER", role: "FEATURED" };
-    if (l.includes("supporting")) return { type: "CHARACTER", role: "SUPPORTING" };
-    if (l.includes("antagonist")) return { type: "CHARACTER", role: "ANTAGONIST" };
-    if (l.includes("other")) return { type: "CHARACTER", role: "OTHER" };
-    if (l.includes("location")) return { type: "LOCATION" };
-    if (l.includes("item")) return { type: "ITEM" };
-    if (l.includes("vehicle")) return { type: "VEHICLE" };
-    if (l.includes("organization")) return { type: "ORGANIZATION" };
-    if (l.includes("race")) return { type: "RACE" };
-    if (l.includes("event")) return { type: "EVENT" };
-    if (l.includes("realit")) return { type: "REALITY" };
-    return { type: ws(lbl.replace(/:$/, "")).replace(/\s+/g, "_").toUpperCase() };
+    const type = normalizeAppearanceType(lbl);
+    const role = type === "CHARACTER" ? normalizeAppearanceRole(lbl) : undefined;
+    return { type, role };
   };
 
   const extractListItemText = ($$: cheerio.CheerioAPI, li: AnyNode): string => {
-    const item = $$(li).clone();
-    item.find("ul, ol").remove();
-    return cleanAppearanceName(item.text());
+    const linked = extractPrimaryEntityNameFromListItem($$, li);
+    if (!linked) return "";
+    return cleanAppearanceName(linked);
   };
 
   const collectAppearanceListItems = (
@@ -938,24 +1026,13 @@ function parseIssueLevelIndividuals($: cheerio.CheerioAPI): CrawledIndividual[] 
     .first();
 
   if (artByLine.length) {
-    const links = artByLine.find("a[href^='/wiki/']");
-    if (links.length) {
-      links.each((_, a) => addUniqueIndividual(out, ws($(a).text()), "coverArtist"));
-    } else {
-      const raw = ws(artByLine.text()).replace(/^Art by:\s*/i, "");
-      for (const name of splitListNames(raw)) addUniqueIndividual(out, name, "coverArtist");
-    }
+    const linkNames = collectNormalizedEntityNamesFromLinks($, artByLine);
+    for (const name of linkNames) addUniqueIndividual(out, name, "coverArtist");
   }
 
   // Editor-in-Chief (H3 block) appears on many modern pages.
   for (const name of h3BlockLinksText($, "Editor-in-Chief"))
     addUniqueIndividual(out, name, "editorInChief");
-
-  // Optional: plain text fallback if no links
-  const eicTxt = h3BlockValueText($, "Editor-in-Chief");
-  if (eicTxt && h3BlockLinksText($, "Editor-in-Chief").length === 0) {
-    for (const name of splitListNames(eicTxt)) addUniqueIndividual(out, name, "editorInChief");
-  }
 
   return out;
 }
@@ -969,53 +1046,78 @@ function parseArcsFromPartOf($: cheerio.CheerioAPI): CrawledArc[] {
     .map((el) => {
       const label = normalizeHeader($(el).find(".pi-data-label").text());
       const value = ws($(el).find(".pi-data-value").text());
-      return { label, value };
+      const valueNode = $(el).find(".pi-data-value").first();
+      return { label, value, valueNode };
     })
     .filter(({ label, value }) => label === "part of" || /^part of the\b/i.test(value))
-    .map(({ value }) => value)
-    .filter((text) => /part of the/i.test(text) && text.length <= 320);
+    .filter(({ value }) => /part of the/i.test(value) && value.length <= 320);
 
   const arcs: CrawledArc[] = [];
+  const stripTrailingArcMetadata = (value: string): string => {
+    let cleaned = value;
+
+    while (true) {
+      const match = cleaned.match(/\s+\(([^()]+)\)\s*$/);
+      if (!match) break;
+
+      const meta = normalizeHeader(match[1]);
+      const hasArcMeta =
+        /\bstory\s*arc\b/i.test(meta) ||
+        /\bstoryline\b/i.test(meta) ||
+        /\bevent\b/i.test(meta) ||
+        /^arc$/i.test(meta);
+      if (!hasArcMeta) break;
+
+      cleaned = ws(cleaned.slice(0, cleaned.length - match[0].length));
+    }
+
+    return cleaned;
+  };
+
   const addArc = (titleRaw: string, typeRaw?: string) => {
-    const title = ws(
+    const title = normalizeCrawlerEntityValue(
       titleRaw
         .replace(/^Part of the\s+/i, "")
         .replace(/\band\s*$/i, "")
         .replace(/\.$/, "")
         .replace(/\s+\((19|20)\d{2}\)\s*$/i, "")
+        .replace(/\s+\((event|storyline|arc)\)\s*$/i, "")
         .replace(/^["“]|["”]$/g, ""),
     );
-    if (!title) return;
-    if (/\bseries$/i.test(title)) return;
-    if (arcs.some((arc) => normalizeLower(arc.title) === normalizeLower(title))) return;
+    const normalizedTitle = stripTrailingArcMetadata(title);
+    if (!normalizedTitle) return;
+    if (/\bseries$/i.test(normalizedTitle)) return;
+    if (arcs.some((arc) => normalizeLower(arc.title) === normalizeLower(normalizedTitle))) return;
 
     const normalizedType = normalizeHeader(typeRaw || "");
-    const type =
-      normalizedType === "event" ? "EVENT" : "STORYARC";
+    const type = /\bevents?\b/i.test(normalizedType) ? "EVENT" : "STORYARC";
 
-    arcs.push({ title, type });
+    arcs.push({ title: normalizedTitle, type });
   };
 
   for (const candidate of candidates) {
-    const text = ws(
-      candidate
-        .replace(/(event|arc|storyline)(?=Part of the)/gi, "$1 ")
-        .replace(/\s+/g, " "),
-    );
-    if (!text) continue;
+    const html = candidate.valueNode.html() || "";
+    if (!html) continue;
 
-    const typedMatches = Array.from(text.matchAll(/Part of the\s+(.+?)\s+(event|arc|storyline)\b/gi));
-    if (typedMatches.length > 0) {
-      for (const match of typedMatches) {
-        addArc(match[1], match[2]);
+    const segments = html
+      .split(/<br\s*\/?>/i)
+      .map((segment) => ws(segment))
+      .filter(Boolean);
+    if (segments.length === 0) continue;
+
+    for (const segment of segments) {
+      const $$ = cheerio.load(`<root>${segment}</root>`);
+      const root = $$("root");
+      const segmentText = ws(root.text());
+      if (!/part of the/i.test(segmentText)) continue;
+
+      const segmentTypeMatch = segmentText.match(/\b(event|events|arc|arcs|storyline|storylines)\b/i);
+      const segmentType = segmentTypeMatch ? segmentTypeMatch[1] : "";
+      const linkedArcs = collectNormalizedEntityNamesFromLinks($$, root);
+
+      for (const arcTitle of linkedArcs) {
+        addArc(arcTitle, segmentType);
       }
-    }
-
-    const fallbackMatches = Array.from(text.matchAll(/Part of the\s+(.+?)(?=(?:Part of the|$))/gi));
-    for (const match of fallbackMatches) {
-      const rawTitle = ws(match[1].replace(/\b(event|arc|storyline)\b.*$/i, ""));
-      if (!rawTitle) continue;
-      addArc(rawTitle, "");
     }
   }
 
@@ -1228,23 +1330,11 @@ function extractArtistsFromVariantTabContent(
   $: cheerio.CheerioAPI,
   content: cheerio.Cheerio<AnyNode>,
 ): string[] {
-  const linkedArtists = Array.from(
-    new Set(
-      content
-        .find("figcaption a, .pi-caption a")
-        .filter((_, el) => isWikiHref($(el).attr("href")))
-        .map((_, el) => ws($(el).text()))
-        .get()
-        .filter((name) => !isPlaceholderArtistName(name)) as string[],
-    ),
+  const linkedArtists = collectNormalizedEntityNamesFromLinks($, content.find("figcaption, .pi-caption")).filter(
+    (name) => !isPlaceholderArtistName(name),
   );
   if (linkedArtists.length > 0) return linkedArtists;
-
-  const captionText =
-    content.find("figcaption, .pi-caption").first().text() ||
-    content.text();
-
-  return Array.from(new Set(extractArtistsFromText(captionText).map(ws).filter(Boolean)));
+  return [];
 }
 
 function extractVariantEntriesFromWdsTabber(

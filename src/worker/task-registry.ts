@@ -23,11 +23,16 @@ export type RebuildSearchIndexTaskPayload = {
   dryRun?: boolean;
 };
 
+export type UpdateDeSeriesGenresTaskPayload = {
+  dryRun?: boolean;
+};
+
 export type AdminTaskPayloads = {
   'cleanup-db': CleanupTaskPayload;
   'update-story-badges': UpdateStoryFiltersTaskPayload;
   'reimport-us': ReimportUSTaskPayload;
   'rebuild-search-index': RebuildSearchIndexTaskPayload;
+  'update-de-series-genres': UpdateDeSeriesGenresTaskPayload;
 };
 
 export type AdminTaskName = keyof AdminTaskPayloads;
@@ -60,6 +65,11 @@ export const ADMIN_TASK_DEFINITIONS: AdminTaskDefinition[] = [
     label: 'Rebuild Search Index',
     description: 'Baut den QuickSearch-Index aus Publishern, Serien und Ausgaben neu auf.',
   },
+  {
+    name: 'update-de-series-genres',
+    label: 'Update DE Series Genres',
+    description: 'Leitet Genres fuer DE-Serien aus verknuepften US-Stories und deren US-Serien ab.',
+  },
 ];
 
 export const ADMIN_TASK_DEFINITION_BY_NAME: Record<AdminTaskName, AdminTaskDefinition> = {
@@ -67,6 +77,7 @@ export const ADMIN_TASK_DEFINITION_BY_NAME: Record<AdminTaskName, AdminTaskDefin
   'update-story-badges': ADMIN_TASK_DEFINITIONS[1],
   'reimport-us': ADMIN_TASK_DEFINITIONS[2],
   'rebuild-search-index': ADMIN_TASK_DEFINITIONS[3],
+  'update-de-series-genres': ADMIN_TASK_DEFINITIONS[4],
 };
 
 export const isAdminTaskName = (value: string): value is AdminTaskName =>
