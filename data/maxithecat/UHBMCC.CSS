@@ -1,0 +1,256 @@
+
+/* Die Grundeinstellungen für alle Links */
+/* Keine speziellen Attribute notwendig
+a:link		{ }
+a:visited	{ }
+a:hover	{ }
+a:active 	{ } */
+
+/* Das "Grundelement" der Seite, diese Attribute vererben sich auf alle anderen */
+body		{ margin:0px; font-family:Arial; }
+
+/* Dieses DIV definiert das "Papier" für alle allgemeinen Seiten (data). Das "Papier" ist etwas kleiner als das Fenster, sodaß der Hintergund des Fensters noch etwas durchschaut.
+Auf dem Papier steht der Inhalt der HTML Seite, jedoch nicht die Menüs und die Fußzeile. */
+div.d	{ margin-top:0px; margin-left:4px; margin-right:4px; margin-bottom:4px; font-size:12pt; padding:4px; }
+div.d li	{ font-size:12pt; }
+div.d ht	{ margin:0px; }
+
+/* Dieses DIV definiert das "Papier" für alle Seiten, die die Auswahl für Charaktere, Serien, Datum, Geschichten etc. enthalten. (selection) */
+div.s			{ margin-top:4px; margin-left:4px; margin-right:4px; margin-bottom:4px; font-size:9pt; padding:0px; }
+div.s a:link		{ text-decoration:none; }
+div.s a:visited	{ text-decoration:none; }
+div.s a:hover		{ text-decoration:none; }
+div.s a:active 	{ text-decoration:none; }
+div.s p			{ margin-left:0px; margin-right:0px; margin-top:4px; margin-bottom:0px; }
+
+/* Dieses DIV definiert das "Papier" für alle Seiten, die die Daten der Comics enthalten. (info) */
+div.i	{ margin-top:8px; margin-left:8px; margin-right:8px; margin-bottom:8px; font-size:9pt; padding-top:4px; padding-left:0px; padding-right:0px; padding-bottom:4px; }
+div.i p	{ margin:0px; }
+div.i ht	{ margin:0px; }
+
+/* Die Überschriftszeilen werden normalerweise nicht benutzt, du kannst die aber verwenden, wo die abgerundeten Rechtecke nicht willst. */
+h1, h2, h3, h4
+	{ font-weight:bold; border-style:none; border-width:thin; padding-left:8px; padding-right:8px; background-repeat:repeat-x; }
+h1	{ font-size:12pt; }
+h2	{ font-size:11pt; }
+h3	{ font-size:10pt; }
+h4	{ font-size:9pt; margin-bottom:0px; }
+
+/* Definiert das Aussehen der Credits, die hervorgehoben sind (jedes zweite) */
+/* Keine speziellen Attribute notwendig
+span.m		{} */
+
+/* Definiert das Aussehen das Such/Filter Kastens bei den Serien/Geschichten/Namen etc. */
+form			{ margin-left:0px; margin-right:0px; margin-top:8px; margin-bottom:0px; }
+input.txt		{ padding-left:2px; padding-right:2px; }
+
+/* Definiert das allgemeine Aussehen von Bildern */
+img		{ vertical-align:text-top; border:0px; }
+
+/* Definiert das Aussehen der Bilder, die bei der Vergrößerung mitwachsen (für FF2); dazu zählen auch die Knöpfe */
+img.g, img.bb	{ vertical-align:middle; height:1.33em; width:auto; }	/* growing images with 9pt font*/
+img.g2			{ vertical-align:middle; height:1em; width:auto; }	/* growing images with 12pt font */
+img.bb			{ background-repeat: no-repeat; }	/* button background */
+
+/* Definiert das Aussehen der normalen Tabelle, d.h. jeder Tabelle, die keinen speziellen Inhalt hat */
+table.n		{ margin-top:8px; margin-left:8px; margin-right:8px; margin-bottom:0px; }
+table.n th		{ vertical-align:top; text-align:center; font-weight:bold; background-repeat:repeat-x; padding-top:0px; padding-left:4px; padding-right:4px; padding-bottom:0px; }
+table.n td		{ vertical-align:top; text-align:left; font-weight:normal; padding-top:0px; padding-left:4px; padding-right:4px; padding-bottom:0px; }
+
+/* Definiert das Aussehen der Tabelle, die für die Daten der Hefte benutzt wird */
+/* Die Tabelle bekommt links, rechts und unten einen dickeren Rahmen. Der Rahmen oben wird von der ersten Zeile erledigt. */
+table.i		{ margin-top:4px; margin-bottom:0px; }
+
+/* Die nächsten Attribute gelten für alle Zellen dieser Tabelle, können aber von spezielleren Klassen noch verändert werden */
+table.i td		{ text-align:left; vertical-align:top; font-weight:normal; font-size:9pt; padding-top:0px; padding-left:4px; padding-right:4px; padding-bottom:0px; }
+
+/* Erste Zeile des Hefts: h1=Nummer, h2=Datum, h3=Genre/Format, h4=Preis */
+/* Keine speziellen Attribute notwendig
+table.i td.h1, table.i td.h2, table.i td.h3	{  }	*/
+table.i td.h4		{ text-align:right; }
+
+/* Erste Zeile des Covers: c1=leer, c2=Label, c3=CoverArt, c4=Seiten */
+/* Keine speziellen Attribute notwendig
+table.i td.c1, table.i td.c2, table.i td.c3	{  }	 */
+table.i td.c4		{ text-align:right; }
+
+/* Zweite + folgende Zeile(n) des Covers: c5=leer, c6=leer, c7=CoverAnmerkung, c8=leer */
+/* Keine speziellen Attribute notwendig
+table.i td.c5, table.i td.c6, table.i td.c7, table.i td.c8	{  }	 */
+
+/* Erste Zeile der Story: o1,e1,p1,f1=leer, o2,e2,p2,f2=Label, o3,e3,p3,f3=Titel, o4,e4,p4,f4=Seiten;  o=ungerade Stories, e=gerade Stories, p=alternative Daten ungerade Stories, f=alternative Daten gerade Stories */
+/* Keine speziellen Attribute notwendig
+table.i td.o1, table.i td.o2,
+table.i td.e1, table.i td.e2,
+table.i td.p1, table.i td.p2,
+table.i td.f1, table.i td.f2
+	{  }	 */
+table.i td.o3, table.i td.e3, table.i td.p3, table.i td.f3		{ font-weight:bold; }
+table.i td.o4, table.i td.e4, table.i td.p4, table.i td.f4		{ text-align:right; }
+
+/* Zweite + folgende Zeile(n) der Story: o5,e5,p5,f5=leer, o6,e6,p6,f6=Label, o7,e7,p7,f7=Text, o8,e8,p8,f8=leer */
+/* Keine speziellen Attribute notwendig
+table.i td.o1, table.i td.o2, table.i td.o3, table.i td.o4,
+table.i td.e1, table.i td.e2, table.i td.e3, table.i td.e4,
+table.i td.p1, table.i td.p2, table.i td.p3, table.i td.p4,
+table.i td.f1, table.i td.f2, table.i td.f3 table.i td.f4
+	{  }	 */
+
+/* Definiert das Aussehen der Tabelle, die für die Jahrgänge benutzt wird */
+table.d		{ margin-top:8px; margin-left:0px; margin-right:0px; margin-bottom:0px; padding:0px; }			
+table.d th		{ vertical-align:top; text-align:center; font-weight:bold; font-size:10pt; padding-top:2px; padding-left:2px; padding-right:2px; padding-bottom:2px; }
+table.d td		{ vertical-align:top; text-align:left; font-weight:normal; font-size:9pt; padding-top:1px; padding-left:2px; padding-right:2px; padding-bottom:1px; }
+table.d tr.b, table.d td.fl, table.d td.fr, table.d td.bl, table.d td.br
+			{ margin:0px; padding:0px; font-size:1pt; }
+
+/* l)eft c)enter justified ... l)ight gray, d)ark gray ... s)eries */
+table.d td.l, table.d td.ll, table.d td.ls, table.d td.lls
+			{ text-align:left; }
+table.d td.c, table.d td.cl, table.d td.cd
+			{ text-align:center; }
+
+/* Definiert das Aussehen der Tabelle, die für die Nachdrucke benutzt wird */
+table.r		{ margin-top:0px; margin-left:0px; margin-right:0px; margin-bottom:0px; }
+table.r td		{ vertical-align:top; text-align:left; font-size:9pt; font-weight:normal; padding-top:0px; padding-left:4px; padding-right:4px; padding-bottom:0px; }
+table.r td.n	{ text-align:right; }
+
+/* Definiert das Aussehen der Tabelle, die für die Geschichten benutzt wird */
+table.s		{ margin-top:0px; margin-left:0px; margin-right:0px; margin-bottom:0px; }
+table.s td		{ vertical-align:top; text-align:left; font-size:9pt; font-weight:normal; padding-top:0px; padding-left:4px; padding-right:4px; padding-bottom:0px; }
+table.s td.n	{ text-align:right; }
+
+/* Definiert das Aussehen der Tabelle, die für die Details und Features benutzt wird */
+table.f		{ margin-top:0px; margin-left:0px; margin-right:0px; margin-bottom:4px; }
+table.f th		{ vertical-align:top; text-align:center; font-weight:bold; background-repeat:repeat-x; padding-top:0px; padding-left:4px; padding-right:4px; padding-bottom:0px; font-size:9pt; }
+table.f td		{ vertical-align:top; text-align:left; font-weight:normal; padding-top:0px; padding-left:4px; padding-right:4px; padding-bottom:0px; font-size:9pt; }
+table.f p, li	{ font-size:9pt; }
+
+/* Definiert das Aussehen des Menüs oben auf der Seite. */
+/* Adapted from http://www.alistapart.com/d/slidingdoors2/v1/ex8a.html */
+.mn		{ float:left; width:100%; line-height:normal; margin-bottom:8px; }
+
+/* Das Menü wird als "unnumbered list" definiert */
+.mn ul 	{ margin:0; padding:0; list-style:none; }
+.mn li 	{ display:inline; margin:0; padding:0; }
+
+/* Der erste Menüeintrag (menu start) wird nur für die abgerundete Ecke verwendet. */
+.mn span.ms 	{ float:left; display:block; padding:0 8px 0 0; }
+
+/* Definitionen für die Menüeinträge (menu items) */
+.mn a.mi			{ float:left; margin:0; padding:0 0 0 16px; text-decoration:none; }
+.mn a.mi span 	{ float:left; display:block; padding:5px 16px 4px 0px; font-weight:bold; font-size:14pt; }
+/* Commented Backslash Hack hides rule from IE5-Mac \*/
+.mn a.mi span 	{ float:none; }
+/* End IE5-Mac hack */
+
+/* Definitionen für den gerade aktiven Menüeintrag (menu active) */
+.mn a.ma			{ float:left; margin:0; padding:0 0 0 16px; text-decoration:none; }
+.mn a.ma span 	{ float:left; display:block; padding:5px 16px 4px 0px; font-weight:bold; font-size:14pt; }
+/* Commented Backslash Hack hides rule from IE5-Mac \*/
+.mn a.ma span 	{ float:none; }
+/* End IE5-Mac hack */
+
+/* Der letzte Menüeintrag (menu end) wird für die abgerundete Ecke und das Logo verwendet. */
+.mn a.me 		{ float:right; padding:0 0 0 0; }
+.mn a.me span 	{ float:right; display:block; padding:0px 10px 0px 0px; }
+.mn a.me span img 	{ width:50px; height:32px; }
+
+/* Definiert das Aussehen der Navigationsleisten. */
+/* Adapted from http://www.alistapart.com/d/slidingdoors2/v1/ex8a.html */
+.nv		{ float:left; width:100%; line-height:normal; }
+
+/* Die Navigation wird als "unnumbered list" definiert */
+.nv ul 	{ margin:0; padding:0; list-style:none; }
+.nv li 	{ display:inline; margin:0; padding:0; }
+
+/* Definitionen für die Navigationseinträge (navi items) */
+.nv a.ni			{ float:left; margin:0; padding:0 0 0 16px; text-decoration:none; }
+.nv a.ni span 	{ float:left; display:block; padding:4px 16px 0px 0px; font-weight:bold; font-size:12pt; }
+/* Commented Backslash Hack hides rule from IE5-Mac \*/
+.nv a.ni span 	{ float:none; }
+/* End IE5-Mac hack */
+.nv a.ni span img 		{ width:36px; height:16px; padding-bottom:4px; }
+
+/* Definitionen für den gerade aktiven Navigationseintrag (navi active) */
+.nv a.na			{ float:left; margin:0; padding:0 0 0 16px; text-decoration:none; }
+.nv a.na span 	{ float:left; display:block; padding:4px 16px 0px 0px; font-weight:bold; font-size:12pt; }
+/* Commented Backslash Hack hides rule from IE5-Mac \*/
+.nv a.na span 	{ float:none; }
+/* End IE5-Mac hack */
+
+/* Definiert das Aussehen der Leisten mit den Buchstaben. */
+div.lt		{ width:100%; font-weight:bold; font-size:16pt; }
+div.lt img 	{ width:1px; height:24px; }
+a.lt		{ padding:2px 2px 4px 2px; font-size:12pt; vertical-align:top; text-decoration:none; }
+
+/* Definiert das Aussehen der Fußzeile. */
+/* Adapted from http://www.alistapart.com/d/slidingdoors2/v1/ex8a.html */
+.ft		{ float:left; width:100%; line-height:normal; }
+
+/* Die Fußzeile wird als "unnumbered list" definiert */
+.ft ul 	{ margin:0; padding:0; list-style:none; }
+.ft li 	{ display:inline; margin:0; padding:0; }
+
+/* Fixer Text in der Fußzeile (Datum) */
+.ft span	{ float:right; display:block; padding:4px 8px 0 0; font-weight:bold; font-size:11pt; }
+
+/* Button in der Fußzeile */
+.ft a		{ float:left; margin:0; padding:0 0 0 16px; text-decoration:none; }
+.ft a span 	{ float:left; display:block; padding:5px 16px 4px 0px; font-weight:bold; font-size:11pt; }
+/* Commented Backslash Hack hides rule from IE5-Mac \*/
+.ft a span 	{ float:none; }
+/* End IE5-Mac hack */
+
+/* Definiert das Aussehen der Tabelle, in die das Eingabe-Formular für Suche/Filter eingebettet ist */
+table.fm		{ margin:0px; padding:0px; }
+table.fm td	{ font-size:9pt; margin:0px; padding:0px; }
+
+/* Definiert das Aussehen der abgerundeten Rechtecke "liquid round corners" (liquid weil sie sich der Größe der Seite und des Inhalt anpassen, sie quasi umfließen). */
+/* Es gibt vier verschiedene Kopfzeilen für die Rechtecke, mit je einer definierten Schriftgröße - so wie es auch h1, h2, h3 und h4 Kopfzeilen gibt. */
+.lqt1		{ width:100%; margin-bottom:0px; font-size:20px; font-weight:bold; clear:both; }
+.lqt2		{ width:100%; margin-bottom:0px; font-size:16px; font-weight:bold; clear:both; }
+.lqt3		{ width:100%; margin-bottom:0px; font-size:14px; font-weight:bold; clear:both; }
+.lqt4		{ width:100%; margin-bottom:0px; font-size:12px; font-weight:bold; clear:both; height:1.8em; }
+
+/* Definiert das Aussehen der Links in der Kopfzeile - sollen sich nicht vom restlichen Text unterscheiden */
+a.lqt:link		{ text-decoration:none; }
+a.lqt:visited	{ text-decoration:none; }
+a.lqt:hover		{ text-decoration:none; }
+a.lqt:active 	{ text-decoration:none; }
+
+/* Die Rechtecke bestehen aus mehreren ineinander geschachtelte DIVs. Jedes definiert eine Ecke oder einen Rand des Rechtecks:
+tl = top left, top wird vomTitel übernommen, tr = top right, l=left, r = right, bl = bottom left, b = bottom, br = bottom right */
+/*.lqtl	{} */
+.lqtr		{ padding:4px 10px 4px 10px; }
+.lqb, .lql , .lqr , .lqbl
+			{ margin-top:0px; }
+.lqbr		{ margin-top:0px; padding:4px 10px 10px 8px; }
+
+/* Definiert das Aussehen des Inhalts (contents) des Rechtecks - also der Teil der in der Mitte der obigen Rahmendefinitionen steht */
+.cto		{ margin-left:0px; margin-right:0px; margin-top:0px; margin-bottom:0px; }
+
+/* Definiert das Aussehen der Titel am Anfang der Comics Seiten */
+div.ti 		{ width:100%; margin-top:0px; margin-left:0px; margin-right:0px; margin-bottom:4px; font-size:20px; font-weight:bold; clear:both; }
+div.ti span.h	{ float:left; padding-left:12px; padding-top:5px; position:relative; z-index:2; }
+div.ti span.r	{ display:block; position:relative; z-index:1; height:1.6em; text-align:right; padding-right:12px; }
+div.ti img	{ height:1.6em; width:auto; }
+
+/* Definiert das Aussehen der Knöpfe, die schattierte Schrift haben (z.B: "Anfang") . Diese Definitionen gibt es nur einmal für alle Farbschemen, daher enthalten sie auch
+Farbdefinitionen. Da sich die Hintergundgrafik nicht an den Text anpassen kann, gibt es drei verschiedene Grafiken mit verschiedenen Button-Breiten, von denen die gewählt werden muss,
+die halt am besten passt. */
+div.bu				{ position:relative; margin:0px; padding:0px; }
+div.bu span.i			{ position:relative; }
+div.bu span.t1		{ position:absolute; top:2px; left:0px; width:1.5em; text-align:center; font-weight:bold; font-size:10pt; cursor:pointer; }
+div.bu span.s1		{ position:absolute; top:3px; left:1px; width:1.5em; text-align:center; font-weight:bold; font-size:10pt; color:#e2e2e2; cursor:pointer; }
+div.bu span.t2		{ position:absolute; top:2px; left:0px; width:3.3em; text-align:center; font-weight:bold; font-size:10pt; cursor:pointer; }
+div.bu span.s2		{ position:absolute; top:3px; left:1px; width:3.3em; text-align:center; font-weight:bold; font-size:10pt; color:#e2e2e2; cursor:pointer; }
+div.bu span.t3		{ position:absolute; top:2px; left:0px; width:6.8em; text-align:center; font-weight:bold; font-size:10pt; cursor:pointer; }
+div.bu span.s3		{ position:absolute; top:3px; left:1px; width:6.8em; text-align:center; font-weight:bold; font-size:10pt; color:#e2e2e2; cursor:pointer; }
+div.bu img			{ height:1.33em; width:auto; }
+div.bu a:link			{ text-decoration:none; color:#575757; }
+div.bu a:visited		{ text-decoration:none; color:#575757; }
+div.bu a:hover		{ text-decoration:none; color:orange; }
+div.bu a:active		{ text-decoration:none; color:red; }
+
+table.i tr.c      { background-image:url(CANCELLD.GIF); }
+table.i tr.s      { background-image:url(SOLICITD.GIF); }

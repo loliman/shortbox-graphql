@@ -47,6 +47,88 @@ const UNICODE_FRACTION_VALUES: Record<string, number> = {
   '½': 0.5,
   '¾': 0.75,
 };
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const LEGACY_DATE_DOT_PATTERN = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+const LEGACY_DATE_DASH_PATTERN = /^(\d{2})-(\d{2})-(\d{4})$/;
+const LEGACY_DATE_SHORT_YEAR_PATTERN = /^(\d{2})-(\d{2})-(\d{2})$/;
+const RELEASE_DATE_TIMEZONE = 'Europe/Berlin';
+const RELEASE_DATE_FALLBACK = '1970-01-01';
+
+const normalizeString = (value: unknown): string => String(value ?? '').trim();
+const normalizeLower = (value: unknown): string => normalizeString(value).toLowerCase();
+const hasOwn = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key);
+
+const coerceReleaseDateForDb = (value: unknown): string => {
+  const toFallback = (): string => RELEASE_DATE_FALLBACK;
+
+  const toIsoDate = (date: Date): string => {
+    const dateParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: RELEASE_DATE_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+
+    const year = dateParts.find((part) => part.type === 'year')?.value;
+    const month = dateParts.find((part) => part.type === 'month')?.value;
+    const day = dateParts.find((part) => part.type === 'day')?.value;
+
+    return year && month && day ? `${year}-${month}-${day}` : toFallback();
+  };
+
+  const fromDateParts = (year: number, month: number, day: number): string => {
+    const parsed = new Date(year, month - 1, day);
+    const isValid =
+      parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
+    if (!isValid) return toFallback();
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  };
+
+  const normalizeTwoDigitYear = (year: number): number => {
+    const now = new Date();
+    const currentYearTwoDigits = now.getFullYear() % 100;
+    return year <= currentYearTwoDigits + 1 ? 2000 + year : 1900 + year;
+  };
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? toFallback() : toIsoDate(value);
+  }
+
+  if (typeof value === 'number') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? toFallback() : toIsoDate(parsed);
+  }
+
+  const trimmed = normalizeString(value);
+  if (!trimmed || normalizeLower(trimmed) === 'invalid date') return toFallback();
+
+  const isoMatch = trimmed.match(ISO_DATE_PATTERN);
+  if (isoMatch) {
+    return fromDateParts(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
+  }
+
+  const dotMatch = trimmed.match(LEGACY_DATE_DOT_PATTERN);
+  if (dotMatch) {
+    return fromDateParts(Number(dotMatch[3]), Number(dotMatch[2]), Number(dotMatch[1]));
+  }
+
+  const dashMatch = trimmed.match(LEGACY_DATE_DASH_PATTERN);
+  if (dashMatch) {
+    return fromDateParts(Number(dashMatch[3]), Number(dashMatch[2]), Number(dashMatch[1]));
+  }
+
+  const shortYearMatch = trimmed.match(LEGACY_DATE_SHORT_YEAR_PATTERN);
+  if (shortYearMatch) {
+    return fromDateParts(
+      normalizeTwoDigitYear(Number(shortYearMatch[3])),
+      Number(shortYearMatch[2]),
+      Number(shortYearMatch[1]),
+    );
+  }
+
+  const directDate = new Date(trimmed);
+  return Number.isNaN(directDate.getTime()) ? toFallback() : toIsoDate(directDate);
+};
 
 const parseSortableIssueNumber = (value: string): number | null => {
   const trimmed = value.trim();
@@ -366,7 +448,7 @@ export class IssueService {
         number: (item.number || '').trim(),
         format: item.format,
         variant: (item.variant || '').trim(),
-        releasedate: item.releasedate,
+        releasedate: coerceReleaseDateForDb(item.releasedate),
         legacy_number: issueInput.legacy_number || '',
         pages: item.pages,
         price: item.price,
@@ -454,7 +536,7 @@ export class IssueService {
     res.number = (item.number || '').trim();
     res.format = item.format || '';
     res.variant = (item.variant || '').trim();
-    res.releasedate = item.releasedate ?? '';
+    res.releasedate = coerceReleaseDateForDb(item.releasedate);
     const issueUpdateInput = item as IssueInput & { legacy_number?: string };
     res.legacy_number = issueUpdateInput.legacy_number || '';
     res.pages = item.pages || 0;
@@ -486,7 +568,10 @@ export class IssueService {
         await siblingIssue.save({ transaction });
       }
     }
-    if (!oldPublisher.original) {
+    const shouldSyncStories =
+      typeof item === 'object' && item !== null && hasOwn(item as Record<string, unknown>, 'stories');
+
+    if (!oldPublisher.original && shouldSyncStories) {
       const removedUsParentStoryIds = await this.syncStoriesFromParentRefs(
         savedIssue.id,
         item,
@@ -970,7 +1055,7 @@ export class IssueService {
           number,
           format: 'Heft',
           variant: '',
-          releasedate: crawledIssue.releasedate,
+          releasedate: coerceReleaseDateForDb(crawledIssue.releasedate),
           legacy_number: String(crawledIssue.legacyNumber || ''),
           pages: 0,
           price: crawledIssue.price || 0,
@@ -1044,7 +1129,7 @@ export class IssueService {
             number: variantNumber,
             format: String(crawledVariant.format || issue.format || 'Heft'),
             variant: variantName,
-            releasedate: String(
+            releasedate: coerceReleaseDateForDb(
               crawledVariant.releasedate || issue.releasedate || crawledIssue.releasedate || '',
             ),
             legacy_number: String(crawledVariant.legacyNumber || crawledIssue.legacyNumber || ''),

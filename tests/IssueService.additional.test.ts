@@ -253,6 +253,41 @@ describe('IssueService additional coverage', () => {
     expect(save).toHaveBeenCalledWith({ transaction: tx });
   });
 
+  it('does not touch stories for DE status-only edits without stories payload', async () => {
+    const oldItem = {
+      ...baseItem,
+      collected: false,
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      collected: true,
+    } as any;
+    delete newItem.stories;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(existing.collected).toBe(true);
+    expect(save).toHaveBeenCalledWith({ transaction: tx });
+    expect(mockModels.Story.destroy).not.toHaveBeenCalled();
+    expect(mockModels.Story.findAll).not.toHaveBeenCalled();
+  });
+
   it('clears parent links when edited stories omit parent references', async () => {
     const oldItem = {
       ...baseItem,
@@ -374,6 +409,94 @@ describe('IssueService additional coverage', () => {
         fk_parent: 777,
         number: 1,
         title: 'Story',
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('coerces invalid crawled release dates while linking US parent stories', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          number: 25,
+          title: 'Story',
+          addinfo: '',
+          part: '',
+          parent: {
+            number: 1,
+            issue: {
+              series: { title: 'Marvel Super Heroes', volume: 1 },
+              number: '12',
+            },
+          },
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce(null);
+    mockModels.Series.create = jest.fn().mockResolvedValue({ id: 99 });
+    mockModels.Publisher.findOrCreate = jest.fn().mockResolvedValue([{ id: 55 }]);
+    mockModels.Issue.findOne
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(null);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Issue.create = jest.fn().mockResolvedValue({ id: 500, format: 'Heft' });
+    mockModels.Story.findAll
+      .mockResolvedValueOnce([{ id: 901, number: 25, fk_parent: 902 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 777, number: 1 }]);
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+    mockModels.Cover.findOrCreate = jest.fn().mockResolvedValue([{ id: 600, url: '' }]);
+
+    (issueService as any).crawler = {
+      crawlSeries: jest.fn().mockResolvedValue({
+        title: 'Marvel Super Heroes',
+        volume: 1,
+        startyear: 1967,
+        endyear: 0,
+        publisherName: 'Marvel Comics',
+      }),
+      crawlIssue: jest.fn().mockResolvedValue({
+        releasedate: 'Invalid date',
+        legacyNumber: '',
+        price: 0,
+        currency: 'USD',
+        cover: { number: 0, url: '', individuals: [] },
+        stories: [],
+        individuals: [],
+        arcs: [],
+        variants: [],
+      }),
+    };
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Issue.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        number: '12',
+        fk_series: 99,
+        releasedate: '1970-01-01',
       }),
       { transaction: tx },
     );

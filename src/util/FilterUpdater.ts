@@ -9,6 +9,7 @@ type StoryWithIssue = Story & {
 
 type StoryWithRelations = Story & {
   fk_reprint?: number | null;
+  part?: string | null;
 };
 
 const toPositiveInt = (value: unknown): number | null => {
@@ -39,6 +40,33 @@ const isPocketBookFormat = (format: unknown): boolean =>
   String(format || '')
     .trim()
     .toLowerCase() === 'taschenbuch';
+
+const PART_PATTERN = /^(\d+)\s*\/\s*(\d+)$/;
+
+const parseStoryPart = (value: unknown): { current: number; total: number } | null => {
+  const match = String(value || '')
+    .trim()
+    .match(PART_PATTERN);
+  if (!match) return null;
+
+  const current = Number(match[1]);
+  const total = Number(match[2]);
+  if (!Number.isFinite(current) || !Number.isFinite(total) || current <= 0 || total <= 0) {
+    return null;
+  }
+
+  return { current, total };
+};
+
+const isPartialPublicationStart = (part: unknown): boolean => {
+  const parsed = parseStoryPart(part);
+  return Boolean(parsed && parsed.current === 1 && parsed.total > 1);
+};
+
+const isCompletePublication = (part: unknown): boolean => {
+  const parsed = parseStoryPart(part);
+  return !parsed || parsed.total <= 1;
+};
 
 const resolveRecursiveRelatedParentIds = async (
   models: DbModels,
@@ -213,8 +241,10 @@ async function updateStoryFilterFlagsForParents(
       (parentId) => childrenByParent.get(parentId) || [],
     );
 
-    let firstAppChildId: number | null = null;
-    let firstAppTimestamp = Number.POSITIVE_INFINITY;
+    let firstPartialChildId: number | null = null;
+    let firstPartialTimestamp = Number.POSITIVE_INFINITY;
+    let firstFullChildId: number | null = null;
+    let firstFullTimestamp = Number.POSITIVE_INFINITY;
     let tbCount = 0;
     let notTbCount = 0;
 
@@ -226,12 +256,24 @@ async function updateStoryFilterFlagsForParents(
 
       const releaseTimestamp = toDateTimestamp(childIssue?.releasedate);
       const childId = toPositiveInt(child.id) || Number.MAX_SAFE_INTEGER;
-      const bestId = firstAppChildId ?? Number.MAX_SAFE_INTEGER;
-      if (releaseTimestamp < firstAppTimestamp) {
-        firstAppTimestamp = releaseTimestamp;
-        firstAppChildId = child.id;
-      } else if (releaseTimestamp === firstAppTimestamp && childId < bestId) {
-        firstAppChildId = child.id;
+      if (isPartialPublicationStart(child.part)) {
+        const bestId = firstPartialChildId ?? Number.MAX_SAFE_INTEGER;
+        if (releaseTimestamp < firstPartialTimestamp) {
+          firstPartialTimestamp = releaseTimestamp;
+          firstPartialChildId = child.id;
+        } else if (releaseTimestamp === firstPartialTimestamp && childId < bestId) {
+          firstPartialChildId = child.id;
+        }
+      }
+
+      if (isCompletePublication(child.part)) {
+        const bestId = firstFullChildId ?? Number.MAX_SAFE_INTEGER;
+        if (releaseTimestamp < firstFullTimestamp) {
+          firstFullTimestamp = releaseTimestamp;
+          firstFullChildId = child.id;
+        } else if (releaseTimestamp === firstFullTimestamp && childId < bestId) {
+          firstFullChildId = child.id;
+        }
       }
     }
 
@@ -261,7 +303,9 @@ async function updateStoryFilterFlagsForParents(
       const isPocketBook = isPocketBookFormat(childIssue?.format);
 
       const nextOnlyApp = singleRelease;
-      const nextFirstApp = firstAppChildId != null && child.id === firstAppChildId;
+      const nextFirstApp =
+        (firstPartialChildId != null && child.id === firstPartialChildId) ||
+        (firstFullChildId != null && child.id === firstFullChildId);
       const nextOtherOnlyTb = hasOnlyOneNonTb && !isPocketBook;
 
       let childChanged = false;

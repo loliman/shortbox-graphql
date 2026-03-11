@@ -152,6 +152,31 @@ describe('SeriesService additional coverage', () => {
     expect(options.where['$publisher.original$']).toBe(false);
   });
 
+  it('sorts non-filter results while ignoring leading articles', async () => {
+    mockModels.Series.findAll.mockResolvedValue([
+      { id: 3, title: 'The Amazing Spider-Man', volume: 1 },
+      { id: 2, title: 'Batman', volume: 1 },
+      { id: 1, title: 'Die Spinne', volume: 1 },
+      { id: 4, title: 'Amazing Spider-Man', volume: 2 },
+    ]);
+
+    const result = await service.findSeries(
+      undefined,
+      { name: '*' } as any,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges.map((edge) => edge.node.title)).toEqual([
+      'The Amazing Spider-Man',
+      'Amazing Spider-Man',
+      'Batman',
+      'Die Spinne',
+    ]);
+  });
+
   it('uses filter-based lookup path and maps issue series nodes', async () => {
     mockModels.Issue.findAll.mockResolvedValue([
       {
@@ -183,6 +208,144 @@ describe('SeriesService additional coverage', () => {
     expect(options.attributes).toEqual(['id', 'fk_series']);
     expect(options.where['$series.publisher.name$']).toBeUndefined();
     expect(options.where['$series.publisher.original$']).toBeUndefined();
+  });
+
+  it('sorts filter-based results while ignoring leading articles', async () => {
+    mockModels.Issue.findAll.mockResolvedValue([
+      {
+        series: {
+          id: 3,
+          title: 'The Amazing Spider-Man',
+          volume: 1,
+          startyear: 1963,
+          endyear: 0,
+          genre: '',
+          fk_publisher: 1,
+        },
+      },
+      {
+        series: {
+          id: 2,
+          title: 'Batman',
+          volume: 1,
+          startyear: 1940,
+          endyear: 0,
+          genre: '',
+          fk_publisher: 1,
+        },
+      },
+      {
+        series: {
+          id: 1,
+          title: 'Die Spinne',
+          volume: 1,
+          startyear: 1974,
+          endyear: 0,
+          genre: '',
+          fk_publisher: 2,
+        },
+      },
+      {
+        series: {
+          id: 4,
+          title: 'Amazing Spider-Man',
+          volume: 2,
+          startyear: 1999,
+          endyear: 0,
+          genre: '',
+          fk_publisher: 1,
+        },
+      },
+    ]);
+
+    const result = await service.findSeries(
+      undefined,
+      { name: '*' } as any,
+      undefined,
+      undefined,
+      true,
+      { us: true, and: true } as any,
+    );
+
+    expect(result.edges.map((edge) => edge.node.title)).toEqual([
+      'The Amazing Spider-Man',
+      'Amazing Spider-Man',
+      'Batman',
+      'Die Spinne',
+    ]);
+  });
+
+  it('sorts umlauts like their base letters', async () => {
+    mockModels.Series.findAll.mockResolvedValue([
+      { id: 3, title: 'Oz', volume: 1 },
+      { id: 1, title: 'Ärger', volume: 1 },
+      { id: 4, title: 'Uber', volume: 1 },
+      { id: 2, title: 'Apfel', volume: 1 },
+      { id: 5, title: 'Überfall', volume: 1 },
+    ]);
+
+    const result = await service.findSeries(
+      undefined,
+      { name: '*' } as any,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges.map((edge) => edge.node.title)).toEqual([
+      'Apfel',
+      'Ärger',
+      'Oz',
+      'Uber',
+      'Überfall',
+    ]);
+  });
+
+  it('ignores punctuation in series sort keys', async () => {
+    mockModels.Series.findAll.mockResolvedValue([
+      { id: 3, title: 'Spider-Man', volume: 1 },
+      { id: 4, title: 'Spider Man', volume: 2 },
+      { id: 2, title: 'Spider: Man', volume: 1 },
+      { id: 1, title: "Spider-Man!", volume: 1 },
+    ]);
+
+    const result = await service.findSeries(
+      undefined,
+      { name: '*' } as any,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges.map((edge) => `${edge.node.title}|${edge.node.volume}`)).toEqual([
+      'Spider-Man!|1',
+      'Spider: Man|1',
+      'Spider-Man|1',
+      'Spider Man|2',
+    ]);
+  });
+
+  it('treats hyphens as word separators for sorting', async () => {
+    mockModels.Series.findAll.mockResolvedValue([
+      { id: 2, title: 'Marvel Comic Sonderausgabe', volume: 1 },
+      { id: 1, title: 'Marvel Comic-Hits', volume: 1 },
+    ]);
+
+    const result = await service.findSeries(
+      undefined,
+      { name: '*' } as any,
+      undefined,
+      undefined,
+      false,
+      undefined,
+    );
+
+    expect(result.edges.map((edge) => edge.node.title)).toEqual([
+      'Marvel Comic-Hits',
+      'Marvel Comic Sonderausgabe',
+    ]);
   });
 
   it('returns unique, trimmed genres with stable sorting and cursor/limit support', async () => {

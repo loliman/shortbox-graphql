@@ -6,6 +6,46 @@ import { buildConnectionFromNodes } from '../core/cursor';
 
 type SeriesInputWithGenre = SeriesInput & { genre?: string | null };
 
+const LEADING_ARTICLE_REGEX = /^(der|die|das|the)\s+/i;
+const SPECIAL_SORT_CHARACTERS_REGEX = /[^\p{L}\p{N}\s]/gu;
+
+const normalizeGermanSortLetters = (value: string): string =>
+  value
+    .replace(/ä/gi, 'a')
+    .replace(/ö/gi, 'o')
+    .replace(/ü/gi, 'u')
+    .replace(/ß/g, 'ss')
+    .replace(/ẞ/g, 'ss');
+
+const normalizeSeriesTitleForSort = (value: string | null | undefined): string =>
+  normalizeGermanSortLetters(
+    String(value || '')
+      .trim()
+      .replace(LEADING_ARTICLE_REGEX, '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(SPECIAL_SORT_CHARACTERS_REGEX, ' ')
+      .replace(/\s+/g, ' '),
+  )
+    .trim()
+    .toLocaleLowerCase('de-DE');
+
+const normalizeSeriesTitleForTieBreak = (value: string | null | undefined): string =>
+  normalizeSeriesTitleForSort(value);
+
+const compareSeriesTitles = (
+  left: { title?: string | null; volume?: number | null; id?: number | null },
+  right: { title?: string | null; volume?: number | null; id?: number | null },
+): number =>
+  normalizeSeriesTitleForSort(left.title).localeCompare(normalizeSeriesTitleForSort(right.title), 'de-DE', {
+    sensitivity: 'base',
+  }) ||
+  normalizeSeriesTitleForTieBreak(left.title).localeCompare(normalizeSeriesTitleForTieBreak(right.title), 'de-DE', {
+    sensitivity: 'base',
+  }) ||
+  Number(left.volume || 0) - Number(right.volume || 0) ||
+  Number(left.id || 0) - Number(right.id || 0);
+
 const normalizeSeriesGenre = (item: SeriesInput | undefined): string => {
   const genre = (item as SeriesInputWithGenre | undefined)?.genre;
   return typeof genre === 'string' ? genre.trim() : '';
@@ -112,6 +152,7 @@ export class SeriesService {
       const loadSeries = async (currentOptions: FindOptions) =>
         await this.models.Series.findAll(currentOptions);
       let results = await loadSeries(options);
+      results = [...results].sort((left, right) => compareSeriesTitles(left, right));
 
       return buildConnectionFromNodes(results, results.length, undefined);
     } else {
@@ -162,7 +203,7 @@ export class SeriesService {
           genre: issueNode.series.genre,
           fk_publisher: issueNode.series.fk_publisher,
         }))
-        .sort((left, right) => left.title.localeCompare(right.title) || left.volume - right.volume);
+        .sort((left, right) => compareSeriesTitles(left, right));
       return buildConnectionFromNodes(nodes, nodes.length, undefined);
     }
   }

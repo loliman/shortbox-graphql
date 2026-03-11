@@ -4,6 +4,7 @@ type MutableStory = {
   id: number;
   fk_parent: number | null;
   fk_reprint: number | null;
+  part?: string | null;
   onlyapp: boolean;
   firstapp: boolean;
   otheronlytb: boolean;
@@ -17,6 +18,7 @@ const createStory = (seed: Partial<MutableStory> & Pick<MutableStory, 'id'>): Mu
   id: seed.id,
   fk_parent: seed.fk_parent ?? null,
   fk_reprint: seed.fk_reprint ?? null,
+  part: seed.part ?? null,
   onlyapp: seed.onlyapp ?? false,
   firstapp: seed.firstapp ?? false,
   otheronlytb: seed.otheronlytb ?? false,
@@ -190,5 +192,45 @@ describe('FilterUpdater', () => {
     expect(childOnA.firstapp).toBe(false);
     expect(childOnA.otheronlytb).toBe(true);
     expect(childOnC.otheronlytb).toBe(false);
+  });
+
+  it('marks first partial and first complete publication separately via firstapp', async () => {
+    const parent = createStory({ id: 400 });
+    const firstPartial = createStory({
+      id: 41,
+      fk_parent: 400,
+      part: '1/3',
+      issue: { format: 'Heft', releasedate: '1965-01-01' },
+    });
+    const secondPartial = createStory({
+      id: 42,
+      fk_parent: 400,
+      part: '2/3',
+      issue: { format: 'Heft', releasedate: '1965-02-01' },
+    });
+    const firstComplete = createStory({
+      id: 43,
+      fk_parent: 400,
+      issue: { format: 'Taschenbuch', releasedate: '1975-01-01' },
+    });
+
+    const models = {
+      Story: {
+        findAll: createStoryFindAllMock([parent], [firstPartial, secondPartial, firstComplete], {
+          9004: [{ id: 41, fk_parent: 400 }],
+        }),
+      },
+      Issue: {
+        findByPk: jest.fn().mockResolvedValue({ series: { publisher: { original: false } } }),
+      },
+      Series: {},
+      Publisher: {},
+    } as any;
+
+    await updateStoryFilterFlagsForIssue(models, 9004, {} as any);
+
+    expect(firstPartial.firstapp).toBe(true);
+    expect(secondPartial.firstapp).toBe(false);
+    expect(firstComplete.firstapp).toBe(true);
   });
 });

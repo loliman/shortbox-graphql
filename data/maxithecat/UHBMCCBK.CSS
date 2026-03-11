@@ -1,0 +1,248 @@
+ 
+/* Die Grundeinstellungen für alle Links */
+a:link		{ color:blue; }
+a:visited	{ color:navy; }
+a:hover		{ color:red; }
+a:active 	{ color:red; }
+
+/* Das "Grundelement" der Seite, diese Attribute vererben sich auf alle anderen */
+body		{ background-image:url(BKP.GIF); }
+
+/* Dieses DIV definiert das "Papier" für alle allgemeinen HTML Seiten. Das "Papier" ist etwas kleiner als das Fenster, sodaß der Hintergund des Fensters noch etwas durchschaut.
+Auf dem Papier steht der Inhalt der HTML Seite, jedoch nicht die Menüs und die Fußzeile. */
+div.d	{ background-color:white; }
+
+/* Dieses DIV definiert das "Papier" für alle Seiten, die die Auswahl für Charaktere, Serien, Datum, Geschichten etc. enthalten. */
+div.s	{ background-color:white; }
+
+/* Dieses DIV definiert das "Papier" für alle Seiten, die die Daten der Comics enthalten. (info) */
+div.i	{ background-color:white; }
+
+/* Die Überschriftszeilen werden normalerweise nicht benutzt, du kannst die aber verwenden, wo die abgerundeten Rechtecke nicht willst. */
+h1, h2, h3	{ color:#fffffe; background-color:black; }
+h1, h2, h3	{ background-image:url(BKTB.GIF); }
+h4			{ color:#fffffe; background-image:url(BKH4.GIF); background-color:#f8f8f8; border:1px solid black; background-repeat:repeat-y; }
+
+/* Definiert das Aussehen der Credits, die hervorgehoben sind (jedes zweite) */
+span.m		{ background-color:#f0f0f0; }
+
+/* Definiert das Aussehen das Such/Filter Kastens bei den Serien/Geschichten/Namen etc. */
+/* Keine speziellen Attribute notwendig
+form		{} */
+input.txt		{ border:2px inset gray; background:white url(FMIB.GIF) repeat-x; }
+
+/* Definiert das Aussehen der Bilder, die bei der Vergrößerung mitwachsen (für FF2); dazu zählen auch die Knöpfe */
+/* Keine speziellen Attribute notwendig
+img.g, img.g2		{} */
+img.bb		{ background-image:url(BKBB.GIF); }		/* button background */
+
+/* Definiert das Aussehen der normalen Tabelle, d.h. jeder Tabelle, die keinen speziellen Inhalt hat */
+table.n		{ border-top:0px; border-left:0px; border-right:1px solid black; border-bottom:1px solid black; }
+table.n th		{ color:#fffffe; background-color:#3c3c3c; background-image:url(BKTB.GIF); border-top:1px solid black; border-left:1px solid black; border-right:0px; border-bottom:0px; }
+table.n td		{ color:black; background-color:white; border-top:1px solid black; border-left:1px solid black; border-right:0px; border-bottom:0px; }
+
+/* Definiert das Aussehen der Tabelle, die für die Daten der Hefte benutzt wird */
+/* Die Tabelle bekommt links, rechts und unten einen dickeren Rahmen. Der Rahmen oben wird von der ersten Zeile erledigt. */
+table.i		{ border-top:0px; border-left:2px solid black; border-right:2px solid black; border-bottom:2px solid black; }
+
+/* Die nächsten Attribute gelten für alle Zellen dieser Tabelle, können aber von spezielleren Klassen noch verändert werden */
+table.i td	{ border:0px; }
+
+/* Erste Zeile des Hefts: h1=Nummer, h2=Datum, h3=Genre/Format, h4=Preis */
+table.i td.h1, table.i td.h2, table.i td.h3, table.i td.h4
+		{ border-top:2px solid black; background-color:#f0f0f0; }
+table.i td.h1		{ background-image:url(BKGR.GIF); background-repeat:repeat-y; }
+
+/* Erste Zeile des Covers: c1=leer, c2=Label, c3=CoverArt, c4=Seiten */
+/* Kein oberer Rand für die erste Spalte, aber einen Hintergrund */
+table.i td.c1 	{ background-color:#f0f0f0; background-image:url(BKGR.GIF); background-repeat:repeat-y; }
+table.i td.c2, table.i td.c3, table.i td.c4
+		{ border-top:1px solid black; }
+
+/* Zweite + folgende Zeile(n) des Covers: c5=leer, c6=leer, c7=CoverAnmerkung, c8=leer */
+/* Erste Spalte hat einen Hintergrund */
+table.i td.c5 	{ background-color:#f0f0f0; background-image:url(BKGR.GIF); background-repeat:repeat-y; }
+/* Keine speziellen Attribute notwendig
+table.i td.c6, table.i td.c7, table.i td.c8	{  }	 */
+
+/* Erste Zeile der Story: o1,e1,p1,f1=leer, o2,e2,p2,f2=Label, o3,e3,p3,f3=Titel, o4,e4,p4,f4=Seiten;  o=ungerade Stories, e=gerade Stories, p=alternative Daten ungerade Stories, f=alternative Daten gerade Stories */
+/* Kein oberer Rand für die erste Spalte, aber einen Hintergrund */
+table.i td.o1, table.i td.e1, table.i td.p1, table.i td.f1
+		{ background-color:#f0f0f0; background-image:url(BKGR.GIF); background-repeat:repeat-y; }
+table.i td.o2, table.i td.o3, table.i td.o4,
+table.i td.e2, table.i td.e3, table.i td.e4,
+table.i td.p2, table.i td.p3, table.i td.p4,
+table.i td.f2, table.i td.f3, table.i td.f4
+		{ border-top:1px solid black; }
+
+/* Die geraden Stories bekommen noch einen Hintergund */
+table.i td.e2, table.i td.e3, table.i td.e4,
+table.i td.f2, table.i td.f3, table.i td.f4
+		{ background-color:#ffffd0; }
+
+/* Zweite + folgende Zeile(n) der Story: o5,e5,p5,f5=leer, o6,e6,p6,f6=Label, o7,e7,p7,f7=Text, o8,e8,p8,f8=leer */
+/* Erste Spalte hat einen Hintergrund */
+table.i td.o5, table.i td.e5, table.i td.p5, table.i td.f5
+		{ background-color:#f0f0f0; background-image:url(BKGR.GIF); background-repeat:repeat-y; }
+/* Keine speziellen Attribute notwendig
+table.i td.o6, table.i td.o7, table.i td.o8,
+table.i td.e6, table.i td.e7, table.i td.e8,
+table.i td.p6, table.i td.p7, table.i td.p8,
+table.i td.f6, table.i td.f7 table.i td.f8
+	{  }	 */
+
+/* Die geraden Stories bekommen noch einen Hintergund */
+table.i td.e6, table.i td.e7, table.i td.e8,
+table.i td.f6, table.i td.f7, table.i td.f8
+		{ background-color:#ffffd0; }
+
+/* Definiert das Aussehen der Tabelle, die für die Jahrgänge benutzt wird */
+table.d			{ color:black; background-color:white; }
+table.d th.l		{ background:black url(BKTL.GIF) no-repeat left top; }
+table.d th			{ color:#fffffe; background:black url(BKMM.GIF) repeat-x left top; }
+table.d th.r		{ background:url(BKTR.GIF) no-repeat left top; }
+table.d td.fl		{ background:url(FML.GIF) repeat-y left top; }
+table.d td.fr		{ background:url(FMR.GIF) repeat-y left top; }
+/*table.d tr.b		{ background:url(FMBL2.GIF) no-repeat left top; }*/
+table.d td.bl		{ background:url(FMBL2.GIF) no-repeat left top; }
+table.d td.br		{ background:url(FMBR.GIF) no-repeat left top; }
+
+/* l)eft c)enter justified ... l)ight gray, d)ark gray ... s)eries */
+table.d td.l, table.d td.ll, table.d td.c, table.d td.cl, table.d td.cd
+				{ border-top:1px solid black; border-left:1px solid black; border-right:0px; border-bottom:0px; }
+table.d td.ls, table.d td.lls
+				{ border-top:1px solid black; border-left:0px; border-right:0px; border-bottom:0px; }
+table.d td.ll, table.d td.lls, table.d td.cl
+				{ background-color:#f0f0f0; }
+table.d td.cd		{ background-color:#e0e0e0; }
+
+/* Definiert das Aussehen der Tabelle, die für die Nachdrucke benutzt wird */
+/* Keine speziellen Attribute notwendig
+table.r 	{  }	 */
+table.r td		{ color:black; background-color:white; }
+
+/* table.s used for displaying the storyarcs */
+/* Keine speziellen Attribute notwendig
+table.s 	{  }	 */
+table.s td		{ color:black; background-color:white; }
+
+/* Definiert das Aussehen der Tabelle, die für die Details und Features benutzt wird */
+table.f		{ border-top:0px; border-left:0px; border-right:1px solid black; border-bottom:1px solid black; }
+table.f th		{ color:#fffffe; background-color:#3c3c3c; background-image:url(BKTB.GIF); border-top:1px solid black; border-left:1px solid black; border-right:0px; border-bottom:0px; }
+table.f td		{ color:black; background-color:white; border-top:1px solid black; border-left:1px solid black; border-right:0px; border-bottom:0px; }
+
+/* Definiert das Aussehen des Menüs oben auf der Seite */
+/* Adapted from http://www.alistapart.com/d/slidingdoors2/v1/ex8a.html */
+.mn		{ background: black url(BKMM.GIF) 0 0; }
+
+/* Das Menü wird als "unnumbered list" definiert */
+/* Keine speziellen Attribute notwendig
+.mn ul 	{}
+.mn li 	{ } */
+
+/* Der erste Menüeintrag (menu start) wird nur für die abgerundete Ecke verwendet. */
+.mn span.ms 	{ background:url(BKMS.GIF) no-repeat left top; }
+
+/* Definitionen für die Menüeinträge (menu items) */
+.mn a.mi				{ background:url(BKMNB1.GIF) no-repeat left top; }
+.mn a.mi span 		{ background:url(BKMNB2.GIF) no-repeat right top; color:white; }
+.mn a.mi:hover 		{ background:url(BKMNH1.GIF) no-repeat left top; }
+.mn a.mi:hover span 	{ background:url(BKMNH2.GIF) no-repeat right top; color:yellow; }
+
+/* Definitionen für den gerade aktiven Menüeintrag (menu active) */
+.mn a.ma				{ background:url(BKMNA1.GIF) no-repeat left top; }
+.mn a.ma span 		{ background:url(BKMNA2.GIF) no-repeat right top; color:yellow; }
+.mn a.ma:hover 		{ background:url(BKMNA1.GIF) no-repeat left top; }
+.mn a.ma:hover span 	{ background:url(BKMNA2.GIF) no-repeat right top; color:yellow; }
+
+/* Der letzte Menüeintrag (menu end) wird für die abgerundete Ecke und das Logo verwendet. */
+.mn a.me span 	{ background:url(BKME.GIF) no-repeat right top; }
+
+/* Definiert das Aussehen der Navigationsleisten. */
+/* Adapted from http://www.alistapart.com/d/slidingdoors2/v1/ex8a.html */
+.nv		{ background: black url(BKTB.GIF) 0 0; }
+
+/* Die Navigation wird als "unnumbered list" definiert */
+/* Keine speziellen Attribute notwendig
+.nv ul 	{}
+.nv li 	{ } */
+
+/* Definitionen für die Navigationseinträge (navi items) */
+.nv a.ni				{ background:url(BKNVB1.GIF) no-repeat left top; }
+.nv a.ni span 		{ background:url(BKNVB2.GIF) no-repeat right top; color:white; }
+.nv a.ni:hover 		{ background:url(BKNVH1.GIF) no-repeat left top; }
+.nv a.ni:hover span 	{ background:url(BKNVH2.GIF) no-repeat right top; color:yellow; }
+
+/* Definitionen für den gerade aktiven Navigationseintrag (navi active) */
+.nv a.na				{ background:url(BKNVA1.GIF) no-repeat left top; }
+.nv a.na span 		{ background:url(BKNVA2.GIF) no-repeat right top; color:yellow; }
+.nv a.na:hover 		{ background:url(BKNVA1.GIF) no-repeat left top; }
+.nv a.na:hover span 	{ background:url(BKNVA2.GIF) no-repeat right top; color:yellow; }
+
+/* Definiert das Aussehen der Leisten mit den Buchstaben. */
+div.lt			{ background: black url(BKTB.GIF) 0 0; }
+a.lt:link		{ color:white; }
+a.lt:visited	{ color:white; }
+a.lt:hover		{ color:yellow; background-image:url(BKHM.GIF); }
+a.lt:active		{ color:red; }
+
+/* Definiert das Aussehen der Fußzeile. */
+/* Adapted from http://www.alistapart.com/d/slidingdoors2/v1/ex8a.html */
+.ft		{ background: black url(BKTB.GIF) 0 0; }
+
+/* Die Fußzeile wird als "unnumbered list" definiert */
+/* Keine speziellen Attribute notwendig
+.ft ul 	{}
+.ft li 	{ } */
+
+/* Fixer Text in der Fußzeile (Datum) */
+.ft span	{ color:white; }
+
+/* Button in der Fußzeile */
+.ft a			{ background:url(BKNVB1.GIF) no-repeat left top; }
+.ft a span 		{ background:url(BKNVB2.GIF) no-repeat right top; color:white; }
+.ft a:hover 		{ background:url(BKNVH1.GIF) no-repeat left top; }
+.ft a:hover span 	{ background:url(BKNVH2.GIF) no-repeat right top; color:yellow; }
+
+/* Definiert das Aussehen der Tabelle, in die das Eingabe-Formular für Suche/Filter eingebettet ist */
+table.fm			{ color:black; background-image:url(FMBG.GIF); background-repeat:repeat-x; background-color:#cfcfcf; }
+table.fm td.fmtl	{ font-size:1pt; background-image:url(FMTL.GIF); background-repeat:no-repeat; }
+table.fm td.fmt	{ font-size:1pt; background-image:url(FMT.GIF); background-repeat:repeat-x; }
+table.fm td.fmtr	{ font-size:1pt; background-image:url(FMTR.GIF); background-repeat:no-repeat; }
+table.fm td.fml	{ font-size:1pt; background-image:url(FML.GIF); background-repeat:repeat-y; }
+table.fm td.fmr	{ font-size:1pt; background-image:url(FMR.GIF); background-repeat:repeat-y; }
+table.fm td.fmbl	{ font-size:1pt; background-image:url(FMBL.GIF); background-repeat:no-repeat; }
+table.fm td.fmb	{ font-size:1pt; background-image:url(FMB.GIF); background-repeat:repeat-x; }
+table.fm td.fmbr	{ font-size:1pt; background-image:url(FMBR.GIF); background-repeat:no-repeat; }
+
+/* Definiert das Aussehen der abgerundeten Rechtecke "liquid round corners" (liquid weil sie sich der Größe der Seite und des Inhalt anpassen, sie quasi umfließen). */
+/* Es gibt vier verschiedene Kopfzeilen für die Rechtecke, mit je einer definierten Schriftgröße - so wie es auch h1, h2, h3 und h4 Kopfzeilen gibt. */
+.lqt1		{ background: black url(BKTL.GIF) 0 0 repeat-x;  color:#fffffe; }
+.lqt2		{ background: black url(BKTL.GIF) 0 0 repeat-x;  color:#fffffe; }
+.lqt3		{ background: black url(BKTL.GIF) 0 0 repeat-x;  color:#fffffe; }
+.lqt4		{ background: black url(BKTL.GIF) 0 0 repeat-x;  color:#fffffe; }
+
+/* Definiert das Aussehen der Links in der Kopfzeile - sollen sich nicht vom restlichen Text unterscheiden */
+a.lqt:link		{ color:#fffffe; }
+a.lqt:visited	{ color:#fffffe; }
+a.lqt:hover		{ color:#fffffe; }
+a.lqt:active 	{ color:#fffffe; }
+
+/* Die Rechtecke bestehen aus mehreren ineinander geschachtelte DIVs. Jedes definiert eine Ecke oder einen Rand des Rechtecks:
+tl = top left, top wird vomTitel übernommen, tr = top right, l=left, r = right, bl = bottom left, b = bottom, br = bottom right */
+.lqtl		{ background: url(FMTL.GIF) 0 0 no-repeat; }
+.lqtr		{ background: url(FMTR.GIF) 100% 0 no-repeat; }
+.lqb		{ background: url(FMB.GIF) 0 100% repeat-x; }
+.lql		{ background: url(FML.GIF) 0 0 repeat-y; }
+.lqr		{ background: url(FMR.GIF) 100% 0 repeat-y; }
+.lqbl		{ background: url(FMBL.GIF) 0 100% no-repeat; }
+.lqbr		{ background: url(FMBR.GIF) 100% 100% no-repeat; }
+
+/* Definiert das Aussehen des Inhalts (contents) des Rechtecks - also der Teil der in der Mitte der obigen Rahmendefinitionen steht */
+/* Keine speziellen Attribute notwendig
+.cto	{} */
+
+/* Definiert das Aussehen der Titel am Anfang der Comics Seiten */
+div.ti		{ background:black url(BKMM.GIF) repeat-x left top; }
+div.ti span.h	{ background:url(BKMS.GIF) no-repeat left top; color:#fffffe; }
+div.ti span.r	{ background:url(BKME.GIF) no-repeat right top; }
