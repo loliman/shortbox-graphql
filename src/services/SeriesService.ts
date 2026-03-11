@@ -167,7 +167,11 @@ export class SeriesService {
     }
   }
 
-  async findGenres(pattern: string | undefined, first: number | undefined, after: string | undefined) {
+  async findGenres(
+    pattern: string | undefined,
+    first: number | undefined,
+    after: string | undefined,
+  ) {
     type GenreRow = { genre?: string | null };
 
     const limit = typeof first === 'number' && first > 0 ? first : 50;

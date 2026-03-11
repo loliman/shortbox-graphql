@@ -1,6 +1,6 @@
-import * as cheerio from "cheerio";
-import type { AnyNode, Element } from "domhandler";
-import { request } from "undici";
+import * as cheerio from 'cheerio';
+import type { AnyNode, Element } from 'domhandler';
+import { request } from 'undici';
 
 /* =====================
  * Public (your) types
@@ -97,9 +97,9 @@ type CrawlIssueOptions = {
  * Internal constants
  * ================== */
 
-const WIKI_BASE = "https://marvel.fandom.com";
+const WIKI_BASE = 'https://marvel.fandom.com';
 const API = `${WIKI_BASE}/api.php`;
-const USER_AGENT = "shortbox-crawler/1.1 (+https://shortbox.de)";
+const USER_AGENT = 'shortbox-crawler/1.1 (+https://shortbox.de)';
 const seriesCache = new Map<string, Promise<CrawledSeries>>();
 const pageTitleResolutionCache = new Map<string, Promise<PageTitleResolution>>();
 const HTTP_MAX_ATTEMPTS = 2;
@@ -108,16 +108,16 @@ const STORY_TITLE_MAX_LENGTH = 255;
 const APPEARANCE_NAME_MAX_LENGTH = 255;
 const RETRYABLE_HTTP_STATUS_CODES = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
 const RETRYABLE_HTTP_ERROR_CODES = new Set([
-  "ECONNABORTED",
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "EAI_AGAIN",
-  "ENOTFOUND",
-  "ETIMEDOUT",
-  "UND_ERR_BODY_TIMEOUT",
-  "UND_ERR_CONNECT_TIMEOUT",
-  "UND_ERR_HEADERS_TIMEOUT",
-  "UND_ERR_SOCKET",
+  'ECONNABORTED',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
 ]);
 
 /* =========
@@ -125,27 +125,29 @@ const RETRYABLE_HTTP_ERROR_CODES = new Set([
  * ========= */
 
 function ws(s: string) {
-  return s.replace(/\s+/g, " ").trim();
+  return s.replace(/\s+/g, ' ').trim();
 }
 
 function normalizeCrawlerEntityValue(raw: string): string {
   const normalized = ws(
-    String(raw || "")
-      .replace(/[\u00A0\u2007\u202F]/g, " ")
-      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    String(raw || '')
+      .replace(/[\u00A0\u2007\u202F]/g, ' ')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
       .replace(/[‘’`´]/g, "'")
       .replace(/[“”]/g, '"')
-      .replace(/[‐‑–—]/g, "-")
-      .replace(/\s+([,.;:!?])/g, "$1")
-      .replace(/\(\s+/g, "(")
-      .replace(/\s+\)/g, ")"),
+      .replace(/[‐‑–—]/g, '-')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .replace(/\(\s+/g, '(')
+      .replace(/\s+\)/g, ')'),
   );
-  if (!normalized) return "";
+  if (!normalized) return '';
 
   return normalized
-    .split(" ")
-    .map((token) => (token && /^[a-z]/.test(token) ? `${token[0].toUpperCase()}${token.slice(1)}` : token))
-    .join(" ");
+    .split(' ')
+    .map((token) =>
+      token && /^[a-z]/.test(token) ? `${token[0].toUpperCase()}${token.slice(1)}` : token,
+    )
+    .join(' ');
 }
 
 function wait(ms: number) {
@@ -153,9 +155,9 @@ function wait(ms: number) {
 }
 
 function getErrorCode(error: unknown): string {
-  if (!error || typeof error !== "object") return "";
+  if (!error || typeof error !== 'object') return '';
   const code = (error as { code?: unknown }).code;
-  return typeof code === "string" ? code : "";
+  return typeof code === 'string' ? code : '';
 }
 
 function isRetryableHttpStatus(statusCode: number): boolean {
@@ -197,36 +199,36 @@ async function requestTextWithRetry(
 }
 
 function normalizeWikiHref(value: string | null | undefined): string {
-  return ws(String(value || "")).replace(/^https?:\/\/[^/]+/i, "");
+  return ws(String(value || '')).replace(/^https?:\/\/[^/]+/i, '');
 }
 
 function isWikiHref(value: string | null | undefined): boolean {
-  return normalizeWikiHref(value).startsWith("/wiki/");
+  return normalizeWikiHref(value).startsWith('/wiki/');
 }
 
 function extractWikiTitleFromHref(value: string | null | undefined): string {
   const normalizedHref = normalizeWikiHref(value);
-  if (!normalizedHref.startsWith("/wiki/")) return "";
+  if (!normalizedHref.startsWith('/wiki/')) return '';
 
-  const withoutPrefix = normalizedHref.replace(/^\/wiki\//, "");
-  const withoutFragment = withoutPrefix.split("#")[0];
-  const withoutQuery = withoutFragment.split("?")[0];
-  if (!withoutQuery) return "";
+  const withoutPrefix = normalizedHref.replace(/^\/wiki\//, '');
+  const withoutFragment = withoutPrefix.split('#')[0];
+  const withoutQuery = withoutFragment.split('?')[0];
+  if (!withoutQuery) return '';
 
-  let decoded = withoutQuery.replace(/_/g, " ");
+  let decoded = withoutQuery.replace(/_/g, ' ');
   try {
     decoded = decodeURIComponent(decoded);
   } catch {
-    decoded = withoutQuery.replace(/_/g, " ");
+    decoded = withoutQuery.replace(/_/g, ' ');
   }
   return ws(decoded);
 }
 
 function normalizeEntityNameFromWikiHref(value: string | null | undefined): string {
   const title = extractWikiTitleFromHref(value);
-  if (!title) return "";
-  if (title.includes(":")) return "";
-  if (!/[A-Za-z0-9]/.test(title)) return "";
+  if (!title) return '';
+  if (title.includes(':')) return '';
+  if (!/[A-Za-z0-9]/.test(title)) return '';
   return normalizeCrawlerEntityValue(title);
 }
 
@@ -240,7 +242,7 @@ function collectNormalizedEntityNamesFromLinks(
     const linkText = ws($(el).text());
     if (linkText && !/[A-Za-z0-9]/.test(linkText)) return;
 
-    const normalizedName = normalizeEntityNameFromWikiHref($(el).attr("href"));
+    const normalizedName = normalizeEntityNameFromWikiHref($(el).attr('href'));
     if (!normalizedName) return;
     const key = normalizedName.toLowerCase();
     if (!deduped.has(key)) deduped.set(key, normalizedName);
@@ -251,22 +253,24 @@ function collectNormalizedEntityNamesFromLinks(
 
 function extractPrimaryEntityNameFromListItem($: cheerio.CheerioAPI, li: AnyNode): string {
   const item = $(li).clone();
-  item.find("ul, ol").remove();
+  item.find('ul, ol').remove();
   const eligibleLinks = item.find("a[href^='/wiki/']");
-  if (!eligibleLinks.length) return "";
+  if (!eligibleLinks.length) return '';
 
-  const textPreferred = eligibleLinks.filter((_, el) => /[A-Za-z0-9]/.test(ws($(el).text()))).first();
+  const textPreferred = eligibleLinks
+    .filter((_, el) => /[A-Za-z0-9]/.test(ws($(el).text())))
+    .first();
   const primary = textPreferred.length ? textPreferred : eligibleLinks.first();
-  return normalizeEntityNameFromWikiHref(primary.attr("href"));
+  return normalizeEntityNameFromWikiHref(primary.attr('href'));
 }
 
 function normalizeHeader(s: string) {
   // "Writer(s)" => "writer", "Original Price" => "original price"
   return ws(s)
     .toLowerCase()
-    .replace(/\(s\)/g, "") // writer(s) -> writer
-    .replace(/[:\[\]]/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/\(s\)/g, '') // writer(s) -> writer
+    .replace(/[:\[\]]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -276,43 +280,44 @@ function normalizeLower(s: string) {
 
 function normalizeIndividualType(type: string) {
   const normalized = normalizeHeader(type);
-  if (normalized === "coverartist") return "ARTIST";
-  if (normalized === "editorinchief") return "EDITOR";
-  return normalized.replace(/\s+/g, "").toUpperCase();
+  if (normalized === 'coverartist') return 'ARTIST';
+  if (normalized === 'editorinchief') return 'EDITOR';
+  return normalized.replace(/\s+/g, '').toUpperCase();
 }
 
 function normalizeAppearanceType(typeRaw: string): string {
-  const normalized = normalizeHeader(typeRaw).replace(/:$/, "");
-  if (!normalized) return "CHARACTER";
+  const normalized = normalizeHeader(typeRaw).replace(/:$/, '');
+  if (!normalized) return 'CHARACTER';
 
-  if (/(realit|dimension|timeline|multiverse|earth-\d+)/i.test(normalized)) return "REALITY";
-  if (/(location|place|setting|city|country|planet|world|realm)/i.test(normalized)) return "LOCATION";
-  if (/(item|object|artifact|weapon|device|accessor|iten)/i.test(normalized)) return "ITEM";
-  if (/(vehicle|ship|aircraft|car|truck|train|jet|vechi)/i.test(normalized)) return "VEHICLE";
-  if (/(race|species|peoples|races)/i.test(normalized)) return "RACE";
+  if (/(realit|dimension|timeline|multiverse|earth-\d+)/i.test(normalized)) return 'REALITY';
+  if (/(location|place|setting|city|country|planet|world|realm)/i.test(normalized))
+    return 'LOCATION';
+  if (/(item|object|artifact|weapon|device|accessor|iten)/i.test(normalized)) return 'ITEM';
+  if (/(vehicle|ship|aircraft|car|truck|train|jet|vechi)/i.test(normalized)) return 'VEHICLE';
+  if (/(race|species|peoples|races)/i.test(normalized)) return 'RACE';
   if (/(organization|organisation|agency|corporation|guild|order|syndicate)/i.test(normalized))
-    return "ORGANIZATION";
+    return 'ORGANIZATION';
   if (/(group|team|allies|foes|villains|heroes|guests|crew|droids|robots)/i.test(normalized))
-    return "GROUP";
-  if (/(event|storyline|arc|saga)/i.test(normalized)) return "EVENT";
-  if (/(animal|animals|beast|creature)/i.test(normalized)) return "ANIMAL";
+    return 'GROUP';
+  if (/(event|storyline|arc|saga)/i.test(normalized)) return 'EVENT';
+  if (/(animal|animals|beast|creature)/i.test(normalized)) return 'ANIMAL';
 
-  return "CHARACTER";
+  return 'CHARACTER';
 }
 
 function normalizeAppearanceRole(roleRaw: string): string | undefined {
-  const normalized = normalizeHeader(roleRaw).replace(/:$/, "");
+  const normalized = normalizeHeader(roleRaw).replace(/:$/, '');
   if (!normalized) return undefined;
 
-  if (/(featured|main)/i.test(normalized)) return "FEATURED";
-  if (/(support)/i.test(normalized)) return "SUPPORTING";
-  if (/(antagon|villain)/i.test(normalized)) return "ANTAGONIST";
-  if (/(other)/i.test(normalized)) return "OTHER";
+  if (/(featured|main)/i.test(normalized)) return 'FEATURED';
+  if (/(support)/i.test(normalized)) return 'SUPPORTING';
+  if (/(antagon|villain)/i.test(normalized)) return 'ANTAGONIST';
+  if (/(other)/i.test(normalized)) return 'OTHER';
   return undefined;
 }
 
 function toUnderscoreTitle(s: string) {
-  return s.trim().replace(/ /g, "_");
+  return s.trim().replace(/ /g, '_');
 }
 
 function buildSeriesPageTitle(seriesTitle: string, volume: number) {
@@ -323,14 +328,16 @@ function buildIssuePageTitle(seriesTitle: string, volume: number, issueNumber: s
   return `${toUnderscoreTitle(seriesTitle)}_Vol_${volume}_${toUnderscoreTitle(issueNumber)}`;
 }
 
-function parseIssuePageTitle(pageTitle: string): { seriesTitle: string; volume: number; issueNumber: string } | null {
+function parseIssuePageTitle(
+  pageTitle: string,
+): { seriesTitle: string; volume: number; issueNumber: string } | null {
   const raw = ws(pageTitle);
   const match = raw.match(/^(.*?)(?:_|\s)Vol(?:_|\s)(\d+)(?:_|\s)(.+)$/i);
   if (!match) return null;
   return {
-    seriesTitle: ws(match[1].replace(/_/g, " ")),
+    seriesTitle: ws(match[1].replace(/_/g, ' ')),
     volume: Number(match[2]),
-    issueNumber: ws(match[3].replace(/_/g, " ")),
+    issueNumber: ws(match[3].replace(/_/g, ' ')),
   };
 }
 
@@ -339,7 +346,7 @@ function parseSeriesPageTitle(pageTitle: string): { seriesTitle: string; volume:
   const match = raw.match(/^(.*?)(?:_|\s)Vol(?:_|\s)(\d+)$/i);
   if (!match) return null;
   return {
-    seriesTitle: ws(match[1].replace(/_/g, " ")),
+    seriesTitle: ws(match[1].replace(/_/g, ' ')),
     volume: Number(match[2]),
   };
 }
@@ -347,43 +354,43 @@ function parseSeriesPageTitle(pageTitle: string): { seriesTitle: string; volume:
 function normalizeTitleKey(value: string): string {
   return ws(value)
     .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/[^a-z0-9]+/g, "");
+    .replace(/_/g, ' ')
+    .replace(/[^a-z0-9]+/g, '');
 }
 
 function canonicalSeriesTitle(value: string): string {
   const normalized = ws(value)
-    .replace(/_/g, " ")
-    .replace(/\s*\/\s*/g, " and ")
-    .replace(/\s*&\s*/g, " and ")
-    .replace(/\s+(HC|TPB|SC|GN|OGN)$/i, "");
-  if (normalizeTitleKey(normalized) === "marvelpointone") return "Point One";
-  if (normalizeTitleKey(normalized) === "allnewalldifferentmarvelpointone") {
-    return "All-New, All-Different Point One";
+    .replace(/_/g, ' ')
+    .replace(/\s*\/\s*/g, ' and ')
+    .replace(/\s*&\s*/g, ' and ')
+    .replace(/\s+(HC|TPB|SC|GN|OGN)$/i, '');
+  if (normalizeTitleKey(normalized) === 'marvelpointone') return 'Point One';
+  if (normalizeTitleKey(normalized) === 'allnewalldifferentmarvelpointone') {
+    return 'All-New, All-Different Point One';
   }
-  if (normalizeTitleKey(normalized) === "marvelcomicssuperspecial") return "Marvel Super Special";
+  if (normalizeTitleKey(normalized) === 'marvelcomicssuperspecial') return 'Marvel Super Special';
   return normalized;
 }
 
 function normalizeWikiTitleForComparison(value: string): string {
-  return ws(value).replace(/_/g, " ").toLowerCase();
+  return ws(value).replace(/_/g, ' ').toLowerCase();
 }
 
 function normalizeIssueNumberKey(value: string): string {
   const normalized = ws(value)
-    .replace(/^([0-9]+[a-z.]*)\s*:\s+.*$/i, "$1")
+    .replace(/^([0-9]+[a-z.]*)\s*:\s+.*$/i, '$1')
     .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/a\.i\./g, "ai")
-    .replace(/\s+/g, "");
+    .replace(/_/g, ' ')
+    .replace(/a\.i\./g, 'ai')
+    .replace(/\s+/g, '');
   return normalized;
 }
 
 async function apiGet(params: Record<string, string>): Promise<any> {
-  const qs = new URLSearchParams({ format: "json", formatversion: "2", ...params });
+  const qs = new URLSearchParams({ format: 'json', formatversion: '2', ...params });
   const url = `${API}?${qs.toString()}`;
 
-  const { statusCode, text } = await requestTextWithRetry(url, { "user-agent": USER_AGENT });
+  const { statusCode, text } = await requestTextWithRetry(url, { 'user-agent': USER_AGENT });
 
   if (statusCode < 200 || statusCode >= 300) {
     throw new Error(`API ${statusCode} for ${url}\n${text.slice(0, 500)}`);
@@ -413,13 +420,13 @@ async function resolvePageTitle(
   const pending = (async (): Promise<PageTitleResolution> => {
     try {
       const probe = await apiGet({
-        action: "query",
-        redirects: "1",
+        action: 'query',
+        redirects: '1',
         titles: requestedPageTitle,
       });
       const pages = probe?.query?.pages || [];
       const page = Array.isArray(pages) ? pages[0] : null;
-      if (page && !("missing" in page)) {
+      if (page && !('missing' in page)) {
         return {
           requestedPageTitle,
           resolvedPageTitle: ws(page.title || requestedPageTitle),
@@ -442,9 +449,9 @@ async function resolvePageTitle(
 
 async function loadParsedHtml(pageTitle: string): Promise<string | null> {
   const data = await apiGet({
-    action: "parse",
+    action: 'parse',
     page: pageTitle,
-    prop: "text|sections",
+    prop: 'text|sections',
   });
 
   return data?.parse?.text ? String(data.parse.text) : null;
@@ -475,15 +482,15 @@ function addUniqueAppearance(out: CrawledAppearance[], a: CrawledAppearance) {
   const name = normalizeCrawlerEntityValue(a.name);
   if (!name || name.length > APPEARANCE_NAME_MAX_LENGTH) return;
   const normalizedType = normalizeAppearanceType(a.type);
-  if (normalizedType === "REALITY") return;
+  if (normalizedType === 'REALITY') return;
   const candidate: CrawledAppearance = {
     ...a,
     name,
     type: normalizedType,
-    role: normalizedType === "CHARACTER" && a.role ? normalizeAppearanceRole(a.role) : undefined,
+    role: normalizedType === 'CHARACTER' && a.role ? normalizeAppearanceRole(a.role) : undefined,
   };
-  const k = `${candidate.type}::${candidate.role || ""}::${candidate.name}`.toLowerCase();
-  if (!out.some((x) => `${x.type}::${x.role || ""}::${x.name}`.toLowerCase() === k)) {
+  const k = `${candidate.type}::${candidate.role || ''}::${candidate.name}`.toLowerCase();
+  if (!out.some((x) => `${x.type}::${x.role || ''}::${x.name}`.toLowerCase() === k)) {
     out.push(candidate);
   }
 }
@@ -504,66 +511,66 @@ function splitListNames(raw: string | null): string[] {
 }
 
 function cleanAppearanceName(raw: string): string {
-  let value = ws(raw.replace(/[⏴⏵]/g, " "));
+  let value = ws(raw.replace(/[⏴⏵]/g, ' '));
 
   // Remove trailing contextual/status markers while preserving identity parentheses,
   // e.g. "Binary (Carol Danvers) (Joins)" -> "Binary (Carol Danvers)".
   const removableSuffixes = new Set([
-    "joins",
-    "leaves",
-    "mentioned",
-    "referenced",
-    "invoked",
-    "illusion",
-    "illusion and recap",
-    "drawing in illusion and appears in recap",
-    "behind the scenes in recap",
-    "main story and recap",
-    "main story and flashback",
-    "main story and behind the scenes in flashback",
-    "only in recap",
-    "appears in recap",
-    "only on screen as a static image or video record",
-    "on-screen in flashback",
-    "appears as a statue in recap",
-    "impersonates moon knight on-screen in illusion in main story",
+    'joins',
+    'leaves',
+    'mentioned',
+    'referenced',
+    'invoked',
+    'illusion',
+    'illusion and recap',
+    'drawing in illusion and appears in recap',
+    'behind the scenes in recap',
+    'main story and recap',
+    'main story and flashback',
+    'main story and behind the scenes in flashback',
+    'only in recap',
+    'appears in recap',
+    'only on screen as a static image or video record',
+    'on-screen in flashback',
+    'appears as a statue in recap',
+    'impersonates moon knight on-screen in illusion in main story',
     "in thor's thoughts only",
-    "first appearance",
-    "only appearance",
-    "appears in flashback",
-    "only in flashback",
-    "only in flashback unnamed",
-    "see chronology",
-    "mentioned in narration or thoughts",
-    "appears on screen",
-    "photo",
-    "cameo",
-    "name revealed",
-    "voice only",
-    "revealed to be alive",
-    "resurrection",
-    "death",
-    "death of several",
-    "death of multiple",
-    "corpse skeleton or other remains",
-    "topical reference",
-    "origin revealed",
-    "deceased",
-    "destroyed",
-    "destruction",
-    "apparent death",
-    "apparent destruction",
-    "temporarily enthralled by the countess",
-    "enthralled by the countess",
-    "freed from the countess thrall",
+    'first appearance',
+    'only appearance',
+    'appears in flashback',
+    'only in flashback',
+    'only in flashback unnamed',
+    'see chronology',
+    'mentioned in narration or thoughts',
+    'appears on screen',
+    'photo',
+    'cameo',
+    'name revealed',
+    'voice only',
+    'revealed to be alive',
+    'resurrection',
+    'death',
+    'death of several',
+    'death of multiple',
+    'corpse skeleton or other remains',
+    'topical reference',
+    'origin revealed',
+    'deceased',
+    'destroyed',
+    'destruction',
+    'apparent death',
+    'apparent destruction',
+    'temporarily enthralled by the countess',
+    'enthralled by the countess',
+    'freed from the countess thrall',
     "freed from the countess' thrall",
-    "as a hologram",
-    "as a hologram death",
-    "as a hologram destruction",
-    "grave only",
-    "last appearance",
-    "first full appearance",
-    "unnamed",
+    'as a hologram',
+    'as a hologram death',
+    'as a hologram destruction',
+    'grave only',
+    'last appearance',
+    'first full appearance',
+    'unnamed',
   ]);
 
   while (true) {
@@ -578,37 +585,37 @@ function cleanAppearanceName(raw: string): string {
     value.replace(/\(([^()]+)\)/g, (full, inner) => {
       const normalized = normalizeHeader(inner);
       for (const suffix of removableSuffixes) {
-        if (normalized.includes(suffix)) return "";
+        if (normalized.includes(suffix)) return '';
       }
       const contextualKeywords = [
-        "reference",
-        "recap",
-        "flashback",
-        "illusion",
-        "on screen",
-        "on-screen",
-        "behind the scenes",
-        "appears as",
-        "appears in",
-        "impersonates",
-        "statue",
-        "drawing",
-        "photo",
-        "cameo",
-        "death",
-        "destruction",
-        "last appearance",
-        "first full appearance",
-        "name revealed",
-        "voice only",
-        "revealed to be alive",
-        "resurrection",
-        "enthralled",
-        "freed from",
-        "hologram",
-        "grave only",
+        'reference',
+        'recap',
+        'flashback',
+        'illusion',
+        'on screen',
+        'on-screen',
+        'behind the scenes',
+        'appears as',
+        'appears in',
+        'impersonates',
+        'statue',
+        'drawing',
+        'photo',
+        'cameo',
+        'death',
+        'destruction',
+        'last appearance',
+        'first full appearance',
+        'name revealed',
+        'voice only',
+        'revealed to be alive',
+        'resurrection',
+        'enthralled',
+        'freed from',
+        'hologram',
+        'grave only',
       ];
-      if (contextualKeywords.some((keyword) => normalized.includes(keyword))) return "";
+      if (contextualKeywords.some((keyword) => normalized.includes(keyword))) return '';
       return full;
     }),
   );
@@ -617,16 +624,16 @@ function cleanAppearanceName(raw: string): string {
 }
 
 function parsePrice(raw: string | null): { price: number; currency: string } {
-  if (!raw) return { price: 0, currency: "" };
+  if (!raw) return { price: 0, currency: '' };
   const symbolMatch = raw.match(/([€$£])\s*([0-9]+(?:\.[0-9]+)?)/);
   if (symbolMatch) {
     const currencyBySymbol: Record<string, string> = {
-      "$": "USD",
-      "€": "EUR",
-      "£": "GBP",
+      $: 'USD',
+      '€': 'EUR',
+      '£': 'GBP',
     };
     return {
-      currency: currencyBySymbol[symbolMatch[1]] || "",
+      currency: currencyBySymbol[symbolMatch[1]] || '',
       price: Number(symbolMatch[2]),
     };
   }
@@ -636,12 +643,12 @@ function parsePrice(raw: string | null): { price: number; currency: string } {
     return { currency: codeMatch[1].toUpperCase(), price: Number(codeMatch[2]) };
   }
 
-  return { price: 0, currency: "" };
+  return { price: 0, currency: '' };
 }
 
 function formatReleaseDate(raw: string | null): string {
-  const value = ws(raw || "");
-  if (!value) return "";
+  const value = ws(raw || '');
+  if (!value) return '';
 
   const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) return `${isoMatch[3]}.${isoMatch[2]}.${isoMatch[1]}`;
@@ -649,22 +656,22 @@ function formatReleaseDate(raw: string | null): string {
   const monthMatch = value.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
   if (monthMatch) {
     const monthByName: Record<string, string> = {
-      january: "01",
-      february: "02",
-      march: "03",
-      april: "04",
-      may: "05",
-      june: "06",
-      july: "07",
-      august: "08",
-      september: "09",
-      october: "10",
-      november: "11",
-      december: "12",
+      january: '01',
+      february: '02',
+      march: '03',
+      april: '04',
+      may: '05',
+      june: '06',
+      july: '07',
+      august: '08',
+      september: '09',
+      october: '10',
+      november: '11',
+      december: '12',
     };
     const month = monthByName[monthMatch[1].toLowerCase()];
     if (month) {
-      return `${monthMatch[2].padStart(2, "0")}.${month}.${monthMatch[3]}`;
+      return `${monthMatch[2].padStart(2, '0')}.${month}.${monthMatch[3]}`;
     }
   }
 
@@ -672,7 +679,7 @@ function formatReleaseDate(raw: string | null): string {
 }
 
 function normalizeLegacyNumber(raw: string | null): string | null {
-  const value = ws(raw || "").replace(/^LGY:\s*/i, "");
+  const value = ws(raw || '').replace(/^LGY:\s*/i, '');
   if (!value) return null;
 
   const hashMatch = value.match(/#\s*([A-Za-z0-9./-]+)/);
@@ -702,13 +709,13 @@ function parseYearRange(raw: string | null): { startyear: number; endyear: numbe
 function h3BlockValueText($: cheerio.CheerioAPI, headerWanted: string): string | null {
   const want = normalizeHeader(headerWanted);
 
-  const h3 = $("h3")
+  const h3 = $('h3')
     .filter((_, el) => normalizeHeader($(el).text()) === want)
     .first();
 
   if (!h3.length) return null;
 
-  const chunk = h3.nextUntil("h3, h2");
+  const chunk = h3.nextUntil('h3, h2');
   const txt = ws(chunk.text());
   return txt || null;
 }
@@ -716,13 +723,13 @@ function h3BlockValueText($: cheerio.CheerioAPI, headerWanted: string): string |
 function h3BlockLinksText($: cheerio.CheerioAPI, headerWanted: string): string[] {
   const want = normalizeHeader(headerWanted);
 
-  const h3 = $("h3")
+  const h3 = $('h3')
     .filter((_, el) => normalizeHeader($(el).text()) === want)
     .first();
 
   if (!h3.length) return [];
 
-  const chunk = h3.nextUntil("h3, h2");
+  const chunk = h3.nextUntil('h3, h2');
   return collectNormalizedEntityNamesFromLinks($, chunk);
 }
 
@@ -731,15 +738,15 @@ function h3BlockLinksText($: cheerio.CheerioAPI, headerWanted: string): string[]
  * ===================================== */
 
 function infoboxRows($: cheerio.CheerioAPI) {
-  return $(".portable-infobox .pi-data").toArray();
+  return $('.portable-infobox .pi-data').toArray();
 }
 
 function infoboxValueText($: cheerio.CheerioAPI, label: string): string | null {
   const want = normalizeHeader(label);
   for (const el of infoboxRows($)) {
-    const lbl = normalizeHeader($(el).find(".pi-data-label").text());
+    const lbl = normalizeHeader($(el).find('.pi-data-label').text());
     if (lbl === want) {
-      const val = ws($(el).find(".pi-data-value").text());
+      const val = ws($(el).find('.pi-data-value').text());
       return val || null;
     }
   }
@@ -747,22 +754,25 @@ function infoboxValueText($: cheerio.CheerioAPI, label: string): string | null {
 }
 
 function infoboxTopImageUrl($: cheerio.CheerioAPI): string | null {
-  const img = $(".portable-infobox figure.pi-item.pi-image img").first();
-  const src = img.attr("src") || img.attr("data-src");
+  const img = $('.portable-infobox figure.pi-item.pi-image img').first();
+  const src = img.attr('src') || img.attr('data-src');
   return src ? normalizeImageUrl(src) : null;
 }
 
 function infoboxTopImageFileTitle($: cheerio.CheerioAPI): string | null {
-  const imageLink = $(".portable-infobox figure.pi-item.pi-image a")
-    .filter((_, el) => isWikiHref($(el).attr("href")))
+  const imageLink = $('.portable-infobox figure.pi-item.pi-image a')
+    .filter((_, el) => isWikiHref($(el).attr('href')))
     .first();
-  const href = normalizeWikiHref(imageLink.attr("href")).replace(/^\/wiki\//, "");
+  const href = normalizeWikiHref(imageLink.attr('href')).replace(/^\/wiki\//, '');
   if (/^File:/i.test(href)) return href;
-  if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(href)) return `File:${href.replace(/^File:/i, "")}`;
+  if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(href)) return `File:${href.replace(/^File:/i, '')}`;
 
-  const image = $(".portable-infobox figure.pi-item.pi-image img").first();
+  const image = $('.portable-infobox figure.pi-item.pi-image img').first();
   const imageName = ws(
-    String(image.attr("data-image-name") || image.attr("data-image-key") || "").replace(/^File:/i, ""),
+    String(image.attr('data-image-name') || image.attr('data-image-key') || '').replace(
+      /^File:/i,
+      '',
+    ),
   );
   return imageName ? `File:${imageName}` : null;
 }
@@ -770,7 +780,7 @@ function infoboxTopImageFileTitle($: cheerio.CheerioAPI): string | null {
 function inlineLabelValueText($: cheerio.CheerioAPI, label: string): string | null {
   const want = normalizeHeader(label);
 
-  const labelSpan = $("span")
+  const labelSpan = $('span')
     .filter((_, el) => normalizeHeader($(el).text()) === want)
     .first();
 
@@ -787,26 +797,26 @@ function inlineLabelValueText($: cheerio.CheerioAPI, label: string): string | nu
         .filter(Boolean) as string[],
     ),
   );
-  if (linkValues.length > 0) return linkValues.join(", ");
+  if (linkValues.length > 0) return linkValues.join(', ');
 
   const clone = container.clone();
-  clone.find("span").first().remove();
+  clone.find('span').first().remove();
   const value = ws(clone.text());
   return value || null;
 }
 
 function parseLegacyNumber($: cheerio.CheerioAPI): string | null {
   const fromLabels =
-    normalizeLegacyNumber(h3BlockValueText($, "LGY")) ??
-    normalizeLegacyNumber(h3BlockValueText($, "Legacy Number")) ??
-    normalizeLegacyNumber(infoboxValueText($, "LGY")) ??
-    normalizeLegacyNumber(infoboxValueText($, "Legacy Number")) ??
-    normalizeLegacyNumber(inlineLabelValueText($, "LGY")) ??
-    normalizeLegacyNumber(inlineLabelValueText($, "Legacy Number"));
+    normalizeLegacyNumber(h3BlockValueText($, 'LGY')) ??
+    normalizeLegacyNumber(h3BlockValueText($, 'Legacy Number')) ??
+    normalizeLegacyNumber(infoboxValueText($, 'LGY')) ??
+    normalizeLegacyNumber(infoboxValueText($, 'Legacy Number')) ??
+    normalizeLegacyNumber(inlineLabelValueText($, 'LGY')) ??
+    normalizeLegacyNumber(inlineLabelValueText($, 'Legacy Number'));
 
   if (fromLabels) return fromLabels;
 
-  const fallback = $("span, div, p, li, td")
+  const fallback = $('span, div, p, li, td')
     .map((_, el) => ws($(el).text()))
     .get()
     .find((text) => /^LGY:\s*.+/i.test(text));
@@ -846,7 +856,7 @@ function cleanStoryTitle(raw: string): string {
 function findStories($: cheerio.CheerioAPI): StoryKey[] {
   const out: StoryKey[] = [];
 
-  $("h2").each((_, el) => {
+  $('h2').each((_, el) => {
     const t = ws($(el).text());
 
     // A) 1. "Story Title"
@@ -872,7 +882,7 @@ function nextUntilH2Nodes(startEl: Element): AnyNode[] {
   const nodes: AnyNode[] = [];
   let cur = (startEl as any).nextSibling;
   while (cur) {
-    if ((cur as any).name === "h2") break;
+    if ((cur as any).name === 'h2') break;
     nodes.push(cur as any);
     cur = (cur as any).nextSibling;
   }
@@ -886,12 +896,12 @@ function parseStoryIndividualsFromBlock(htmlFragment: string): CrawledIndividual
   const capture = (needleHeader: string, type: string) => {
     const want = normalizeHeader(needleHeader);
 
-    const h = $$("h3")
+    const h = $$('h3')
       .filter((_, el) => normalizeHeader($$(el).text()).includes(want))
       .first();
     if (!h.length) return;
 
-    const chunk = h.nextUntil("h3, h2");
+    const chunk = h.nextUntil('h3, h2');
     const linkNames = collectNormalizedEntityNamesFromLinks($$, chunk);
 
     if (linkNames.length > 0) {
@@ -899,12 +909,12 @@ function parseStoryIndividualsFromBlock(htmlFragment: string): CrawledIndividual
     }
   };
 
-  capture("Writer", "writer");
-  capture("Penciler", "penciler");
-  capture("Inker", "inker");
-  capture("Colorist", "colorist");
-  capture("Letterer", "letterer");
-  capture("Editor", "editor");
+  capture('Writer', 'writer');
+  capture('Penciler', 'penciler');
+  capture('Inker', 'inker');
+  capture('Colorist', 'colorist');
+  capture('Letterer', 'letterer');
+  capture('Editor', 'editor');
 
   return individuals;
 }
@@ -917,8 +927,8 @@ function parseStoryReprintOfFromBlock(htmlFragment: string): CrawledStoryReferen
   const text = ws(reprintNode.text());
   const storyMatch = text.match(/Reprint of the\s+(\d+)(st|nd|rd|th)\s+story\s+from/i);
   const anchor = reprintNode.find("a[href^='/wiki/']").first();
-  const href = anchor.attr("href") || "";
-  const pageTitle = ws(href.replace(/^\/wiki\//, ""));
+  const href = anchor.attr('href') || '';
+  const pageTitle = ws(href.replace(/^\/wiki\//, ''));
   const parsedIssue = parseIssuePageTitle(pageTitle);
   if (!parsedIssue) return undefined;
 
@@ -943,9 +953,9 @@ function parseAppearancesForStory($: cheerio.CheerioAPI, story: StoryKey): Crawl
   const storyLower = story.title.toLowerCase();
   let h2El: Element | null = null;
 
-  $("h2").each((_, el) => {
+  $('h2').each((_, el) => {
     const t = ws($(el).text()).toLowerCase();
-    if (!t.includes("appearing in")) return;
+    if (!t.includes('appearing in')) return;
 
     if (t.includes(storyLower) || t.includes(story.headingText.toLowerCase())) {
       h2El = el;
@@ -955,18 +965,18 @@ function parseAppearancesForStory($: cheerio.CheerioAPI, story: StoryKey): Crawl
   if (!h2El) return [];
 
   const nodes = nextUntilH2Nodes(h2El);
-  const $$ = cheerio.load(`<root>${nodes.map((n) => $.html(n)).join("")}</root>`);
+  const $$ = cheerio.load(`<root>${nodes.map((n) => $.html(n)).join('')}</root>`);
   const out: CrawledAppearance[] = [];
 
   const normalizeAppearanceCategory = (lbl: string): { type: string; role?: string } => {
     const type = normalizeAppearanceType(lbl);
-    const role = type === "CHARACTER" ? normalizeAppearanceRole(lbl) : undefined;
+    const role = type === 'CHARACTER' ? normalizeAppearanceRole(lbl) : undefined;
     return { type, role };
   };
 
   const extractListItemText = ($$: cheerio.CheerioAPI, li: AnyNode): string => {
     const linked = extractPrimaryEntityNameFromListItem($$, li);
-    if (!linked) return "";
+    if (!linked) return '';
     return cleanAppearanceName(linked);
   };
 
@@ -975,8 +985,8 @@ function parseAppearancesForStory($: cheerio.CheerioAPI, story: StoryKey): Crawl
     list: cheerio.Cheerio<AnyNode>,
     category: { type: string; role?: string },
   ) => {
-    list.children("li").each((__, li) => {
-      const nestedLists = $$(li).children("ul, ol");
+    list.children('li').each((__, li) => {
+      const nestedLists = $$(li).children('ul, ol');
       if (nestedLists.length > 0) {
         nestedLists.each((___, nested) => {
           collectAppearanceListItems($$, $$(nested), category);
@@ -991,11 +1001,11 @@ function parseAppearancesForStory($: cheerio.CheerioAPI, story: StoryKey): Crawl
   };
 
   // Standard structure: bold label then list
-  $$("b, strong").each((_, el) => {
+  $$('b, strong').each((_, el) => {
     const lbl = ws($$(el).text());
     if (!lbl) return;
 
-    const ul = $$(el).parent().nextAll("ul,ol").first();
+    const ul = $$(el).parent().nextAll('ul,ol').first();
     if (!ul.length) return;
 
     const category = normalizeAppearanceCategory(lbl);
@@ -1004,9 +1014,9 @@ function parseAppearancesForStory($: cheerio.CheerioAPI, story: StoryKey): Crawl
 
   // Fallback: any <li>
   if (out.length === 0) {
-    const firstList = $$("ul, ol").first();
+    const firstList = $$('ul, ol').first();
     if (firstList.length) {
-      collectAppearanceListItems($$, firstList, { type: "OTHER" });
+      collectAppearanceListItems($$, firstList, { type: 'OTHER' });
     }
   }
 
@@ -1021,18 +1031,18 @@ function parseIssueLevelIndividuals($: cheerio.CheerioAPI): CrawledIndividual[] 
   const out: CrawledIndividual[] = [];
 
   // "Art by: ..." line (body) exists on modern pages like Avengers (Vol 8 #9).
-  const artByLine = $("*")
-    .filter((_, el) => ws($(el).text()).startsWith("Art by:"))
+  const artByLine = $('*')
+    .filter((_, el) => ws($(el).text()).startsWith('Art by:'))
     .first();
 
   if (artByLine.length) {
     const linkNames = collectNormalizedEntityNamesFromLinks($, artByLine);
-    for (const name of linkNames) addUniqueIndividual(out, name, "coverArtist");
+    for (const name of linkNames) addUniqueIndividual(out, name, 'coverArtist');
   }
 
   // Editor-in-Chief (H3 block) appears on many modern pages.
-  for (const name of h3BlockLinksText($, "Editor-in-Chief"))
-    addUniqueIndividual(out, name, "editorInChief");
+  for (const name of h3BlockLinksText($, 'Editor-in-Chief'))
+    addUniqueIndividual(out, name, 'editorInChief');
 
   return out;
 }
@@ -1044,12 +1054,12 @@ function parseIssueLevelIndividuals($: cheerio.CheerioAPI): CrawledIndividual[] 
 function parseArcsFromPartOf($: cheerio.CheerioAPI): CrawledArc[] {
   const candidates = infoboxRows($)
     .map((el) => {
-      const label = normalizeHeader($(el).find(".pi-data-label").text());
-      const value = ws($(el).find(".pi-data-value").text());
-      const valueNode = $(el).find(".pi-data-value").first();
+      const label = normalizeHeader($(el).find('.pi-data-label').text());
+      const value = ws($(el).find('.pi-data-value').text());
+      const valueNode = $(el).find('.pi-data-value').first();
       return { label, value, valueNode };
     })
-    .filter(({ label, value }) => label === "part of" || /^part of the\b/i.test(value))
+    .filter(({ label, value }) => label === 'part of' || /^part of the\b/i.test(value))
     .filter(({ value }) => /part of the/i.test(value) && value.length <= 320);
 
   const arcs: CrawledArc[] = [];
@@ -1077,26 +1087,26 @@ function parseArcsFromPartOf($: cheerio.CheerioAPI): CrawledArc[] {
   const addArc = (titleRaw: string, typeRaw?: string) => {
     const title = normalizeCrawlerEntityValue(
       titleRaw
-        .replace(/^Part of the\s+/i, "")
-        .replace(/\band\s*$/i, "")
-        .replace(/\.$/, "")
-        .replace(/\s+\((19|20)\d{2}\)\s*$/i, "")
-        .replace(/\s+\((event|storyline|arc)\)\s*$/i, "")
-        .replace(/^["“]|["”]$/g, ""),
+        .replace(/^Part of the\s+/i, '')
+        .replace(/\band\s*$/i, '')
+        .replace(/\.$/, '')
+        .replace(/\s+\((19|20)\d{2}\)\s*$/i, '')
+        .replace(/\s+\((event|storyline|arc)\)\s*$/i, '')
+        .replace(/^["“]|["”]$/g, ''),
     );
     const normalizedTitle = stripTrailingArcMetadata(title);
     if (!normalizedTitle) return;
     if (/\bseries$/i.test(normalizedTitle)) return;
     if (arcs.some((arc) => normalizeLower(arc.title) === normalizeLower(normalizedTitle))) return;
 
-    const normalizedType = normalizeHeader(typeRaw || "");
-    const type = /\bevents?\b/i.test(normalizedType) ? "EVENT" : "STORYARC";
+    const normalizedType = normalizeHeader(typeRaw || '');
+    const type = /\bevents?\b/i.test(normalizedType) ? 'EVENT' : 'STORYARC';
 
     arcs.push({ title: normalizedTitle, type });
   };
 
   for (const candidate of candidates) {
-    const html = candidate.valueNode.html() || "";
+    const html = candidate.valueNode.html() || '';
     if (!html) continue;
 
     const segments = html
@@ -1107,12 +1117,14 @@ function parseArcsFromPartOf($: cheerio.CheerioAPI): CrawledArc[] {
 
     for (const segment of segments) {
       const $$ = cheerio.load(`<root>${segment}</root>`);
-      const root = $$("root");
+      const root = $$('root');
       const segmentText = ws(root.text());
       if (!/part of the/i.test(segmentText)) continue;
 
-      const segmentTypeMatch = segmentText.match(/\b(event|events|arc|arcs|storyline|storylines)\b/i);
-      const segmentType = segmentTypeMatch ? segmentTypeMatch[1] : "";
+      const segmentTypeMatch = segmentText.match(
+        /\b(event|events|arc|arcs|storyline|storylines)\b/i,
+      );
+      const segmentType = segmentTypeMatch ? segmentTypeMatch[1] : '';
       const linkedArcs = collectNormalizedEntityNamesFromLinks($$, root);
 
       for (const arcTitle of linkedArcs) {
@@ -1133,65 +1145,65 @@ async function getImageOriginalUrls(fileTitles: string[]): Promise<Map<string, s
   if (uniqueTitles.length === 0) return new Map();
 
   const data = await apiGet({
-    action: "query",
-    prop: "imageinfo",
-    titles: uniqueTitles.join("|"),
-    iiprop: "url",
+    action: 'query',
+    prop: 'imageinfo',
+    titles: uniqueTitles.join('|'),
+    iiprop: 'url',
   });
 
   const pages = data?.query?.pages || [];
   const result = new Map<string, string>();
   for (const page of pages) {
-    const title = ws(page?.title || "");
+    const title = ws(page?.title || '');
     const url = normalizeImageUrl(page?.imageinfo?.[0]?.url);
     if (!title || !url) continue;
 
-    const normalizedTitle = title.replace(/_/g, " ");
+    const normalizedTitle = title.replace(/_/g, ' ');
     result.set(title, String(url));
     result.set(normalizedTitle, String(url));
-    result.set(normalizedTitle.replace(/ /g, "_"), String(url));
+    result.set(normalizedTitle.replace(/ /g, '_'), String(url));
   }
   return result;
 }
 
 async function getIssueCategoryImageFileTitles(pageTitle: string): Promise<string[]> {
   const data = await apiGet({
-    action: "query",
-    list: "categorymembers",
+    action: 'query',
+    list: 'categorymembers',
     cmtitle: `Category:${pageTitle}/Images`,
-    cmtype: "file",
-    cmlimit: "max",
+    cmtype: 'file',
+    cmlimit: 'max',
   });
 
   const members = data?.query?.categorymembers || [];
   return Array.from(
     new Set(
       members
-        .map((member: { title?: unknown }) => ws(String(member?.title || "")))
-        .filter((title: string) => title.startsWith("File:")),
+        .map((member: { title?: unknown }) => ws(String(member?.title || '')))
+        .filter((title: string) => title.startsWith('File:')),
     ),
   );
 }
 
 function buildVariantLabelFromFileTitle(pageTitle: string, fileTitle: string): string {
-  const normalizedTitle = ws(fileTitle).replace(/^File:/i, "");
-  const withoutExtension = normalizedTitle.replace(/\.(jpg|jpeg|png|gif|webp|svg)$/i, "");
-  const suffix = ws(withoutExtension.replace(new RegExp(`^${escapeRegExp(pageTitle)}`), ""));
-  return suffix.replace(/^[-_ ]+/, "");
+  const normalizedTitle = ws(fileTitle).replace(/^File:/i, '');
+  const withoutExtension = normalizedTitle.replace(/\.(jpg|jpeg|png|gif|webp|svg)$/i, '');
+  const suffix = ws(withoutExtension.replace(new RegExp(`^${escapeRegExp(pageTitle)}`), ''));
+  return suffix.replace(/^[-_ ]+/, '');
 }
 
 function normalizeImageUrl(raw: unknown): string {
-  return ws(String(raw || ""))
-    .replace(/\/revision\/latest(?:\/scale-to-width-down\/\d+)?(?:\?cb=[^#]+)?$/i, "")
-    .replace(/\?cb=[^#]+$/i, "");
+  return ws(String(raw || ''))
+    .replace(/\/revision\/latest(?:\/scale-to-width-down\/\d+)?(?:\?cb=[^#]+)?$/i, '')
+    .replace(/\?cb=[^#]+$/i, '');
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function normalizeFileTitleKey(value: string): string {
-  return normalizeLower(ws(value || "").replace(/^File:/i, ""));
+  return normalizeLower(ws(value || '').replace(/^File:/i, ''));
 }
 
 async function parseAlternateCoversFromImageCategory(
@@ -1211,13 +1223,15 @@ async function parseAlternateCoversFromImageCategory(
   if (fileTitles.length === 0) return [];
 
   const coverFileTitles = fileTitles.filter((fileTitle) => {
-    const normalized = ws(fileTitle).replace(/^File:/i, "");
+    const normalized = ws(fileTitle).replace(/^File:/i, '');
     if (/ from /i.test(normalized)) return false;
     return normalizeLower(normalized).startsWith(normalizeLower(pageTitle));
   });
 
   const variantFileTitles = coverFileTitles.filter((fileTitle) => {
-    const label = cleanVariantLabel(buildVariantLabelFromFileTitle(pageTitle, fileTitle).replace(/_/g, " "));
+    const label = cleanVariantLabel(
+      buildVariantLabelFromFileTitle(pageTitle, fileTitle).replace(/_/g, ' '),
+    );
     return label.length > 0 && !shouldExcludeVariant(fileTitle, label);
   });
 
@@ -1229,7 +1243,9 @@ async function parseAlternateCoversFromImageCategory(
   for (const fileTitle of variantFileTitles) {
     const originalUrl = imageUrlMap.get(fileTitle);
     if (!originalUrl) continue;
-    const variant = cleanVariantLabel(buildVariantLabelFromFileTitle(pageTitle, fileTitle).replace(/_/g, " "));
+    const variant = cleanVariantLabel(
+      buildVariantLabelFromFileTitle(pageTitle, fileTitle).replace(/_/g, ' '),
+    );
     if (!variant) continue;
 
     variants.push({
@@ -1262,7 +1278,7 @@ function collectNodesUntilNextH2(startH2: Element): AnyNode[] {
   const nodes: AnyNode[] = [];
   let cur = (startH2 as any).nextSibling;
   while (cur) {
-    if ((cur as any).name === "h2") break;
+    if ((cur as any).name === 'h2') break;
     nodes.push(cur as any);
     cur = (cur as any).nextSibling;
   }
@@ -1270,30 +1286,36 @@ function collectNodesUntilNextH2(startH2: Element): AnyNode[] {
 }
 
 function getFileTitleFromLink($: cheerio.CheerioAPI, link: cheerio.Cheerio<any>): string {
-  const href = normalizeWikiHref(link.attr("href")).replace(/^\/wiki\//, "");
+  const href = normalizeWikiHref(link.attr('href')).replace(/^\/wiki\//, '');
   if (/^File:/i.test(href)) return href;
-  if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(href)) return `File:${href.replace(/^File:/i, "")}`;
+  if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(href)) return `File:${href.replace(/^File:/i, '')}`;
 
-  const image = link.find("img").first();
+  const image = link.find('img').first();
   const imageName = ws(
-    String(image.attr("data-image-name") || image.attr("data-image-key") || "").replace(/^File:/i, ""),
+    String(image.attr('data-image-name') || image.attr('data-image-key') || '').replace(
+      /^File:/i,
+      '',
+    ),
   );
   if (imageName) return `File:${imageName}`;
 
   const linkText = ws(link.text());
-  if (/^Image:/i.test(linkText)) return linkText.replace(/^Image:/i, "File:");
+  if (/^Image:/i.test(linkText)) return linkText.replace(/^Image:/i, 'File:');
 
-  return "";
+  return '';
 }
 
-
 function isExcludedVariantValue(value: string): boolean {
-  const normalized = normalizeLower(value).replace(/[_-]+/g, " ");
-  if (/\btextless\b/.test(normalized) || /\bvirgin\b/.test(normalized) || /\bvirigin\b/.test(normalized)) {
+  const normalized = normalizeLower(value).replace(/[_-]+/g, ' ');
+  if (
+    /\btextless\b/.test(normalized) ||
+    /\bvirgin\b/.test(normalized) ||
+    /\bvirigin\b/.test(normalized)
+  ) {
     return true;
   }
-  const compact = normalized.replace(/[^a-z0-9]+/g, "");
-  return compact.includes("textless") || compact.includes("virgin") || compact.includes("virigin");
+  const compact = normalized.replace(/[^a-z0-9]+/g, '');
+  return compact.includes('textless') || compact.includes('virgin') || compact.includes('virigin');
 }
 
 function shouldExcludeVariant(fileTitle: string, variantLabel: string): boolean {
@@ -1307,22 +1329,18 @@ function extractArtistsFromText(raw: string): string[] {
 }
 
 function cleanVariantLabel(raw: string): string {
-  const value = ws(String(raw || "").replace(/^\d+\s*-\s*/i, ""));
-  if (!value) return "";
-  return ws(
-    value
-      .replace(/\s*\(?art by:\s*.*$/i, "")
-      .replace(/\s+variant\b$/i, ""),
-  );
+  const value = ws(String(raw || '').replace(/^\d+\s*-\s*/i, ''));
+  if (!value) return '';
+  return ws(value.replace(/\s*\(?art by:\s*.*$/i, '').replace(/\s+variant\b$/i, ''));
 }
 
 function isPlaceholderArtistName(value: string): boolean {
   const normalized = normalizeLower(value);
   return (
-    normalized === "" ||
-    normalized === "uncredited" ||
-    normalized === "not yet listed" ||
-    normalized === "cover artist credit needed"
+    normalized === '' ||
+    normalized === 'uncredited' ||
+    normalized === 'not yet listed' ||
+    normalized === 'cover artist credit needed'
   );
 }
 
@@ -1330,9 +1348,10 @@ function extractArtistsFromVariantTabContent(
   $: cheerio.CheerioAPI,
   content: cheerio.Cheerio<AnyNode>,
 ): string[] {
-  const linkedArtists = collectNormalizedEntityNamesFromLinks($, content.find("figcaption, .pi-caption")).filter(
-    (name) => !isPlaceholderArtistName(name),
-  );
+  const linkedArtists = collectNormalizedEntityNamesFromLinks(
+    $,
+    content.find('figcaption, .pi-caption'),
+  ).filter((name) => !isPlaceholderArtistName(name));
   if (linkedArtists.length > 0) return linkedArtists;
   return [];
 }
@@ -1340,57 +1359,65 @@ function extractArtistsFromVariantTabContent(
 function extractVariantEntriesFromWdsTabber(
   $: cheerio.CheerioAPI,
 ): Array<{ fileTitle: string; artists: string[]; variant: string }> {
-  const tabber = $("section.wds-tabber, .wds-tabber")
-    .filter((_, el) => $(el).find(".pi-item .pi-image").length > 0)
+  const tabber = $('section.wds-tabber, .wds-tabber')
+    .filter((_, el) => $(el).find('.pi-item .pi-image').length > 0)
     .first();
 
   if (!tabber.length) return [];
 
-  const tabContents = tabber.find(".wds-tab__content").toArray();
+  const tabContents = tabber.find('.wds-tab__content').toArray();
   if (tabContents.length === 0) return [];
 
-  const galleryIndex = tabContents.findIndex((content) => $(content).find(".wikia-gallery-item").length > 0);
+  const galleryIndex = tabContents.findIndex(
+    (content) => $(content).find('.wikia-gallery-item').length > 0,
+  );
   if (galleryIndex < 0) return [];
 
   const labelsByFileTitle = new Map<string, string>();
   $(tabContents[galleryIndex])
-    .find(".wikia-gallery-item")
+    .find('.wikia-gallery-item')
     .each((_, galleryItem) => {
       const item = $(galleryItem);
-      const image = item.find("img[data-image-name], img").first();
+      const image = item.find('img[data-image-name], img').first();
       const imageName = ws(
-        String(image.attr("data-image-name") || image.attr("data-image-key") || "").replace(/^File:/i, ""),
+        String(image.attr('data-image-name') || image.attr('data-image-key') || '').replace(
+          /^File:/i,
+          '',
+        ),
       );
-      const fileLink = item.find("a").first();
+      const fileLink = item.find('a').first();
       const fileTitle = imageName ? `File:${imageName}` : getFileTitleFromLink($, fileLink);
       if (!fileTitle) return;
 
       const variant = cleanVariantLabel(
-        item.find(".lightbox-caption").first().text() ||
-          image.attr("data-caption") ||
-          image.attr("alt") ||
-          fileLink.attr("title") ||
-          "",
+        item.find('.lightbox-caption').first().text() ||
+          image.attr('data-caption') ||
+          image.attr('alt') ||
+          fileLink.attr('title') ||
+          '',
       );
-      if (!variant || normalizeLower(variant) === "all") return;
+      if (!variant || normalizeLower(variant) === 'all') return;
       labelsByFileTitle.set(normalizeFileTitleKey(fileTitle), variant);
     });
 
   const entriesWithArtists = tabContents
     .slice(galleryIndex + 1)
     .map((content) => {
-      const figure = $(content).find("figure.pi-image, .pi-item.pi-image").first();
-      const fileLink = figure.find("a").first();
-      const image = figure.find("img").first();
+      const figure = $(content).find('figure.pi-image, .pi-item.pi-image').first();
+      const fileLink = figure.find('a').first();
+      const image = figure.find('img').first();
       const imageName = ws(
-        String(image.attr("data-image-name") || image.attr("data-image-key") || "").replace(/^File:/i, ""),
+        String(image.attr('data-image-name') || image.attr('data-image-key') || '').replace(
+          /^File:/i,
+          '',
+        ),
       );
       const fileTitle = imageName ? `File:${imageName}` : getFileTitleFromLink($, fileLink);
       const variant = cleanVariantLabel(
         labelsByFileTitle.get(normalizeFileTitleKey(fileTitle)) ||
-          image.attr("alt") ||
-          fileLink.attr("title") ||
-          "",
+          image.attr('alt') ||
+          fileLink.attr('title') ||
+          '',
       );
       const artists = extractArtistsFromVariantTabContent($, $(content));
       return {
@@ -1399,7 +1426,7 @@ function extractVariantEntriesFromWdsTabber(
         artists,
       };
     })
-    .filter((entry) => entry.fileTitle && entry.variant && normalizeLower(entry.variant) !== "all");
+    .filter((entry) => entry.fileTitle && entry.variant && normalizeLower(entry.variant) !== 'all');
 
   const seen = new Set<string>();
   return entriesWithArtists.filter((entry) => {
@@ -1433,7 +1460,8 @@ async function buildVariantIssuesFromEntries(
     if (!originalUrl) continue;
 
     const coverIndividuals: CrawledIndividual[] = [];
-    for (const artist of entry.artists) addUniqueIndividual(coverIndividuals, artist, "coverArtist");
+    for (const artist of entry.artists)
+      addUniqueIndividual(coverIndividuals, artist, 'coverArtist');
 
     variants.push({
       number: base.issueNumber,
@@ -1469,7 +1497,7 @@ async function parseAlternateCoversAsVariantIssues(
     price: number;
     currency: string;
     issueIndividuals: CrawledIndividual[];
-  }
+  },
 ): Promise<CrawledIssue[]> {
   const entries = extractVariantEntriesFromWdsTabber($);
   if (entries.length === 0) return parseAlternateCoversFromImageCategory(pageTitle, base);
@@ -1490,20 +1518,20 @@ export async function crawlSeries(title: string, volume: number): Promise<Crawle
     const $ = await parsePageHtmlByTitle(seriesPageTitle);
 
     const publisher =
-      h3BlockValueText($, "Publisher") ??
-      infoboxValueText($, "Publisher") ??
-      inlineLabelValueText($, "Publisher") ??
-      "";
+      h3BlockValueText($, 'Publisher') ??
+      infoboxValueText($, 'Publisher') ??
+      inlineLabelValueText($, 'Publisher') ??
+      '';
 
     const publicationDate =
-      h3BlockValueText($, "Publication Date") ??
-      infoboxValueText($, "Publication Date") ??
-      inlineLabelValueText($, "Publication Date");
+      h3BlockValueText($, 'Publication Date') ??
+      infoboxValueText($, 'Publication Date') ??
+      inlineLabelValueText($, 'Publication Date');
     const genre =
-      h3BlockValueText($, "Genre") ??
-      infoboxValueText($, "Genre") ??
-      inlineLabelValueText($, "Genre") ??
-      "";
+      h3BlockValueText($, 'Genre') ??
+      infoboxValueText($, 'Genre') ??
+      inlineLabelValueText($, 'Genre') ??
+      '';
 
     const { startyear, endyear } = parseYearRange(publicationDate);
 
@@ -1541,27 +1569,27 @@ export async function crawlIssue(
   const $ = await parsePageHtmlByTitle(issuePageTitle, issuePageResolution);
 
   const releasedate =
-    h3BlockValueText($, "Release Date") ??
-    infoboxValueText($, "Release Date") ??
-    h3BlockValueText($, "Cover Date") ??
-    infoboxValueText($, "Cover Date") ??
-    "";
+    h3BlockValueText($, 'Release Date') ??
+    infoboxValueText($, 'Release Date') ??
+    h3BlockValueText($, 'Cover Date') ??
+    infoboxValueText($, 'Cover Date') ??
+    '';
   const legacyNumber = parseLegacyNumber($) ?? undefined;
 
   const rawPrice =
-    h3BlockValueText($, "Original Price") ??
-    h3BlockValueText($, "Price") ??
-    infoboxValueText($, "Original Price") ??
-    infoboxValueText($, "Price");
+    h3BlockValueText($, 'Original Price') ??
+    h3BlockValueText($, 'Price') ??
+    infoboxValueText($, 'Original Price') ??
+    infoboxValueText($, 'Price');
 
   const { price, currency } = parsePrice(rawPrice);
 
   const coverFileTitle = infoboxTopImageFileTitle($);
-  const coverUrlMap = coverFileTitle ? await getImageOriginalUrls([coverFileTitle]) : new Map<string, string>();
+  const coverUrlMap = coverFileTitle
+    ? await getImageOriginalUrls([coverFileTitle])
+    : new Map<string, string>();
   const coverUrl =
-    (coverFileTitle ? coverUrlMap.get(coverFileTitle) : null) ??
-    infoboxTopImageUrl($) ??
-    "";
+    (coverFileTitle ? coverUrlMap.get(coverFileTitle) : null) ?? infoboxTopImageUrl($) ?? '';
 
   let seriesMeta: CrawledSeries | null = null;
   try {
@@ -1571,13 +1599,13 @@ export async function crawlIssue(
   }
 
   const individuals = parseIssueLevelIndividuals($);
-  const issueIndividuals = individuals.filter((individual) => individual.type !== "ARTIST");
+  const issueIndividuals = individuals.filter((individual) => individual.type !== 'ARTIST');
   const arcs = parseArcsFromPartOf($);
 
   const storyKeys = findStories($);
   const stories: CrawledStory[] = storyKeys.map((sk) => {
     const nodes = nextUntilH2Nodes(sk.h2El);
-    const fragment = nodes.map((n) => $.html(n)).join("");
+    const fragment = nodes.map((n) => $.html(n)).join('');
 
     const storyIndividuals = parseStoryIndividualsFromBlock(fragment);
     const reprintOf = parseStoryReprintOfFromBlock(fragment);
@@ -1592,21 +1620,25 @@ export async function crawlIssue(
     };
   });
 
-  const variantIssues = await parseAlternateCoversAsVariantIssues($, issuePageResolution.resolvedPageTitle, {
-    seriesTitle,
-    seriesVolume: volume,
-    issueNumber: number,
-    legacyNumber,
-    releasedate,
-    price,
-    currency,
-    issueIndividuals,
-  });
+  const variantIssues = await parseAlternateCoversAsVariantIssues(
+    $,
+    issuePageResolution.resolvedPageTitle,
+    {
+      seriesTitle,
+      seriesVolume: volume,
+      issueNumber: number,
+      legacyNumber,
+      releasedate,
+      price,
+      currency,
+      issueIndividuals,
+    },
+  );
 
   const cover: CrawledCover = {
     number: 1,
     url: coverUrl,
-    individuals: individuals.filter((i) => i.type === "ARTIST"),
+    individuals: individuals.filter((i) => i.type === 'ARTIST'),
   };
 
   return {
@@ -1621,9 +1653,7 @@ export async function crawlIssue(
       startyear: seriesMeta?.startyear,
       endyear: seriesMeta?.endyear,
       genre: seriesMeta?.genre,
-      publisher: seriesMeta?.publisherName
-        ? { name: seriesMeta.publisherName }
-        : undefined,
+      publisher: seriesMeta?.publisherName ? { name: seriesMeta.publisherName } : undefined,
     },
     cover,
     stories,
@@ -1638,7 +1668,12 @@ export class MarvelCrawlerService {
     return crawlSeries(title, volume);
   }
 
-  async crawlIssue(title: string, volume: number, number: string, options?: CrawlIssueOptions): Promise<CrawledIssue> {
+  async crawlIssue(
+    title: string,
+    volume: number,
+    number: string,
+    options?: CrawlIssueOptions,
+  ): Promise<CrawledIssue> {
     return crawlIssue(title, volume, number, options);
   }
 }
