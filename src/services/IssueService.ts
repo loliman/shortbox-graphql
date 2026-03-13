@@ -610,9 +610,102 @@ export class IssueService {
       parent?: StoryParentRef;
     };
 
-    const inputStories = Array.isArray((item as { stories?: unknown[] }).stories)
+    type CrawledCollectedIssueLike = {
+      number?: string;
+      storyTitle?: string;
+      series?: { title?: string; volume?: number };
+    };
+
+    type CrawledParentIssueLike = {
+      collectedIssues?: CrawledCollectedIssueLike[];
+      containedIssues?: CrawledCollectedIssueLike[];
+    };
+
+    const rawInputStories = Array.isArray((item as { stories?: unknown[] }).stories)
       ? ((item as { stories?: unknown[] }).stories as unknown[]) || []
       : [];
+
+    const expandCollectedParentStories = async (stories: unknown[]): Promise<StoryInputLike[]> => {
+      const expandedStories: StoryInputLike[] = [];
+
+      for (const rawStory of stories) {
+        if (!rawStory || typeof rawStory !== 'object') continue;
+        const story = rawStory as StoryInputLike;
+        const parentTitle = String(story.parent?.issue?.series?.title || '').trim();
+        const parentVolume = Number(story.parent?.issue?.series?.volume || 0);
+        const parentNumber = String(story.parent?.issue?.number || '').trim();
+
+        if (!parentTitle || parentVolume <= 0 || !parentNumber) {
+          expandedStories.push(story);
+          continue;
+        }
+
+        let crawledParentIssue: CrawledParentIssueLike | null = null;
+        try {
+          crawledParentIssue = (await this.crawler.crawlIssue(
+            parentTitle,
+            parentVolume,
+            parentNumber,
+          )) as CrawledParentIssueLike;
+        } catch {
+          expandedStories.push(story);
+          continue;
+        }
+
+        const collectedIssues = Array.isArray(crawledParentIssue.collectedIssues)
+          ? crawledParentIssue.collectedIssues
+          : Array.isArray(crawledParentIssue.containedIssues)
+          ? crawledParentIssue.containedIssues
+          : [];
+
+        const normalizedCollectedIssues = collectedIssues
+          .map((entry) => ({
+            number: String(entry?.number || '').trim(),
+            seriesTitle: String(entry?.series?.title || '').trim(),
+            seriesVolume: Number(entry?.series?.volume || 0),
+          }))
+          .filter(
+            (entry) =>
+              entry.number.length > 0 &&
+              entry.seriesTitle.length > 0 &&
+              entry.seriesVolume > 0,
+          );
+        const uniqueCollectedIssues = Array.from(
+          new Map(
+            normalizedCollectedIssues.map((entry) => [
+              `${entry.seriesTitle.toLowerCase()}::${entry.seriesVolume}::${entry.number.toLowerCase()}`,
+              entry,
+            ]),
+          ).values(),
+        );
+
+        if (uniqueCollectedIssues.length === 0) {
+          expandedStories.push(story);
+          continue;
+        }
+
+        for (const collectedIssue of uniqueCollectedIssues) {
+          expandedStories.push({
+            ...story,
+            title: String(story.title || ''),
+            parent: {
+              number: 0,
+              issue: {
+                number: collectedIssue.number,
+                series: {
+                  title: collectedIssue.seriesTitle,
+                  volume: collectedIssue.seriesVolume,
+                },
+              },
+            },
+          });
+        }
+      }
+
+      return expandedStories;
+    };
+
+    const inputStories = await expandCollectedParentStories(rawInputStories);
 
     const existingStoriesRaw = await this.models.Story.findAll({
       where: { fk_issue: issueId },
@@ -637,7 +730,14 @@ export class IssueService {
     if (inputStories.length === 0) return Array.from(oldUsParentStoryIds);
 
     let nextStoryNumber = 1;
-    const parentIssueCache = new Map<string, number>();
+    const parentIssueCache = new Map<string, Array<{ issueId: number; storyTitle?: string }>>();
+    const normalizeStoryTitleKey = (value: unknown): string =>
+      String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[_:;,.!?'"()\-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
     for (const rawStory of inputStories) {
       if (!rawStory || typeof rawStory !== 'object') continue;
@@ -670,10 +770,10 @@ export class IssueService {
 
       if (parentTitle && parentVolume > 0 && parentNumber) {
         const cacheKey = `${parentTitle}::${parentVolume}::${parentNumber}`;
-        let parentIssueId = parentIssueCache.get(cacheKey);
+        let parentIssueRefs = parentIssueCache.get(cacheKey);
 
-        if (!parentIssueId) {
-          parentIssueId = await this.findOrCrawlParentIssue(
+        if (!parentIssueRefs) {
+          parentIssueRefs = await this.findOrCrawlParentIssues(
             {
               title: parentTitle,
               volume: parentVolume,
@@ -681,12 +781,16 @@ export class IssueService {
             },
             transaction,
           );
-          parentIssueCache.set(cacheKey, parentIssueId);
+          parentIssueCache.set(cacheKey, parentIssueRefs);
         }
+        const parentIssueIds = parentIssueRefs.map((entry) => entry.issueId);
 
         const parentStories = await this.models.Story.findAll({
-          where: { fk_issue: parentIssueId },
+          where: {
+            fk_issue: parentIssueIds.length === 1 ? parentIssueIds[0] : { [Op.in]: parentIssueIds },
+          },
           order: [
+            ['fk_issue', 'ASC'],
             ['number', 'ASC'],
             ['id', 'ASC'],
           ],
@@ -694,16 +798,46 @@ export class IssueService {
         });
 
         const requestedParentStoryNumber = Number(parent?.number || 0);
+        const requestedStoryTitle = normalizeStoryTitleKey(story.title);
+        const hasResolvedParentStoryTitles = parentIssueRefs.some(
+          (entry) => normalizeStoryTitleKey(entry.storyTitle) !== '',
+        );
+        const matchedParentRefsByTitle =
+          requestedStoryTitle === ''
+            ? []
+            : parentIssueRefs.filter((entry) => normalizeStoryTitleKey(entry.storyTitle) === requestedStoryTitle);
+        const matchesResolvedParentStory = (parentStory: { fk_issue?: number; title?: string }) =>
+          matchedParentRefsByTitle.some(
+            (entry) =>
+              entry.issueId === Number(parentStory.fk_issue || 0) &&
+              normalizeStoryTitleKey(parentStory.title) === normalizeStoryTitleKey(entry.storyTitle),
+          );
         if (requestedParentStoryNumber === 0) {
-          for (const parentStory of parentStories) {
+          let matchingParentStories = parentStories;
+          if (matchedParentRefsByTitle.length > 0) {
+            matchingParentStories = parentStories.filter((parentStory) =>
+              matchesResolvedParentStory(parentStory),
+            );
+          } else if (requestedStoryTitle === '' && hasResolvedParentStoryTitles) {
+            matchingParentStories = parentStories.filter((parentStory) =>
+              parentIssueRefs.some(
+                (entry) =>
+                  entry.issueId === Number(parentStory.fk_issue || 0) &&
+                  normalizeStoryTitleKey(entry.storyTitle) === normalizeStoryTitleKey(parentStory.title),
+              ),
+            );
+          }
+          for (const parentStory of matchingParentStories) {
             await createStoryRow(parentStory.id);
             hasCreatedStory = true;
           }
         } else {
-          const selectedParentStory = parentStories.find(
-            (entry) => Number(entry.number || 0) === requestedParentStoryNumber,
+          const selectedParentStories = parentStories.filter(
+            (entry) =>
+              Number(entry.number || 0) === requestedParentStoryNumber &&
+              (matchedParentRefsByTitle.length === 0 || matchesResolvedParentStory(entry)),
           );
-          if (selectedParentStory) {
+          for (const selectedParentStory of selectedParentStories) {
             await createStoryRow(selectedParentStory.id);
             hasCreatedStory = true;
           }
@@ -784,10 +918,10 @@ export class IssueService {
     );
   }
 
-  private async findOrCrawlParentIssue(
+  private async findOrCrawlParentIssues(
     parent: { title: string; volume: number; number: string },
     transaction: Transaction,
-  ): Promise<number> {
+  ): Promise<Array<{ issueId: number; storyTitle?: string }>> {
     type CrawledNamedType = {
       name?: string;
       type?: string | string[];
@@ -834,6 +968,22 @@ export class IssueService {
       individuals?: CrawledNamedType[];
       arcs?: CrawledArcLike[];
       variants?: CrawledVariantLike[];
+      collectedIssues?: Array<{
+        number?: string;
+        storyTitle?: string;
+        series?: {
+          title?: string;
+          volume?: number;
+        };
+      }>;
+      containedIssues?: Array<{
+        number?: string;
+        storyTitle?: string;
+        series?: {
+          title?: string;
+          volume?: number;
+        };
+      }>;
     };
 
     const normalizeTypeList = (raw: unknown): string[] => {
@@ -1049,6 +1199,60 @@ export class IssueService {
         volume,
         number,
       )) as CrawledIssueLike;
+      const normalizedCollectedIssues = Array.isArray(crawledIssue.collectedIssues)
+        ? crawledIssue.collectedIssues
+            .map((entry) => ({
+              number: String(entry?.number || '').trim(),
+              storyTitle: String(entry?.storyTitle || '').trim(),
+              seriesTitle: String(entry?.series?.title || '').trim(),
+              seriesVolume: Number(entry?.series?.volume || 0),
+            }))
+            .filter((entry) => entry.number && entry.seriesTitle && entry.seriesVolume > 0)
+        : Array.isArray(crawledIssue.containedIssues)
+        ? crawledIssue.containedIssues
+            .map((entry) => ({
+              number: String(entry?.number || '').trim(),
+              storyTitle: String(entry?.storyTitle || '').trim(),
+              seriesTitle: String(entry?.series?.title || '').trim(),
+              seriesVolume: Number(entry?.series?.volume || 0),
+            }))
+            .filter((entry) => entry.number && entry.seriesTitle && entry.seriesVolume > 0)
+        : [];
+
+      if (normalizedCollectedIssues.length > 0) {
+        const containedIssueRefs: Array<{ issueId: number; storyTitle?: string }> = [];
+        const seenContainedIssueRefs = new Set<string>();
+        for (const containedIssue of normalizedCollectedIssues) {
+          const resolvedIssueRefs = await this.findOrCrawlParentIssues(
+            {
+              title: containedIssue.seriesTitle,
+              volume: containedIssue.seriesVolume,
+              number: containedIssue.number,
+            },
+            transaction,
+          );
+          for (const resolvedIssueRef of resolvedIssueRefs) {
+            const resolvedStoryTitle = containedIssue.storyTitle || resolvedIssueRef.storyTitle;
+            if (resolvedStoryTitle) {
+              const key = `${resolvedIssueRef.issueId}::${resolvedStoryTitle.toLowerCase()}`;
+              if (seenContainedIssueRefs.has(key)) continue;
+              seenContainedIssueRefs.add(key);
+              containedIssueRefs.push({
+                issueId: resolvedIssueRef.issueId,
+                storyTitle: resolvedStoryTitle,
+              });
+              continue;
+            }
+
+            const key = `${resolvedIssueRef.issueId}::`;
+            if (seenContainedIssueRefs.has(key)) continue;
+            seenContainedIssueRefs.add(key);
+            containedIssueRefs.push({ issueId: resolvedIssueRef.issueId });
+          }
+        }
+        return containedIssueRefs;
+      }
+
       issue = await this.models.Issue.create(
         {
           title: '',
@@ -1172,7 +1376,7 @@ export class IssueService {
       }
     }
 
-    return issue.id;
+    return [{ issueId: issue.id }];
   }
 
   async getLastEdited(

@@ -59,6 +59,17 @@ export interface CrawledIssue {
   variants?: unknown[];
   individuals?: CrawledIndividual[];
   arcs?: CrawledArc[];
+  collectedIssues?: CrawledIssueReference[];
+  containedIssues?: CrawledIssueReference[];
+}
+
+export interface CrawledIssueReference {
+  number: string;
+  storyTitle?: string;
+  series: {
+    title: string;
+    volume: number;
+  };
 }
 
 export interface CrawledAppearance {
@@ -377,6 +388,34 @@ function normalizeIssueNumberKey(value: string): string {
     .replace(/a\.i\./g, "ai")
     .replace(/\s+/g, "");
   return normalized;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractContainedIssueStoryTitleFromCaption(
+  $: cheerio.CheerioAPI,
+  caption: cheerio.Cheerio<AnyNode>,
+): string {
+  if (!caption.length) return "";
+
+  const lastLink = caption.find("a[href^='/wiki/']").last();
+  if (!lastLink.length) return "";
+
+  const fragments: string[] = [];
+  let node = (lastLink.get(0) as AnyNode | null)?.nextSibling || null;
+  while (node) {
+    const text = ws($(node).text());
+    if (text) fragments.push(text);
+    node = (node as AnyNode).nextSibling || null;
+  }
+
+  const trailingText = ws(fragments.join(" ").replace(/^["“”']+|["“”']+$/g, ""));
+  if (trailingText) return trailingText;
+
+  const captionText = ws(caption.text());
+  return captionText;
 }
 
 async function apiGet(params: Record<string, string>): Promise<any> {
@@ -1186,10 +1225,6 @@ function normalizeImageUrl(raw: unknown): string {
     .replace(/\?cb=[^#]+$/i, "");
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function normalizeFileTitleKey(value: string): string {
   return normalizeLower(ws(value || "").replace(/^File:/i, ""));
 }
@@ -1284,6 +1319,49 @@ function getFileTitleFromLink($: cheerio.CheerioAPI, link: cheerio.Cheerio<any>)
   if (/^Image:/i.test(linkText)) return linkText.replace(/^Image:/i, "File:");
 
   return "";
+}
+
+function parseContainedIssuesFromGallery($: cheerio.CheerioAPI): CrawledIssueReference[] {
+  const gallery = $("#gallery-1");
+  if (!gallery.length) return [];
+
+  const containedIssues: CrawledIssueReference[] = [];
+  const seen = new Set<string>();
+
+  gallery.find(".wikia-gallery-item").each((_, galleryItem) => {
+    const links = $(galleryItem).find("a[href^='/wiki/']").toArray();
+    const parsedIssue = links
+      .map((link) => {
+        const href = normalizeWikiHref($(link).attr("href"));
+        if (!href.startsWith("/wiki/")) return null;
+        const pageTitle = decodeURIComponent(href.replace(/^\/wiki\//, "").split("#")[0].split("?")[0]);
+        if (/^File:/i.test(pageTitle)) return null;
+        return parseIssuePageTitle(pageTitle);
+      })
+      .find((candidate) => candidate && candidate.volume > 0 && candidate.issueNumber);
+
+    if (!parsedIssue) return;
+
+    const caption = $(galleryItem)
+      .find(".lightbox-caption, .thumbcaption, .gallerytext, .wikia-gallery-caption")
+      .first();
+    const storyTitle = extractContainedIssueStoryTitleFromCaption($, caption);
+
+    const normalizedReference = {
+      number: parsedIssue.issueNumber,
+      storyTitle,
+      series: {
+        title: canonicalSeriesTitle(parsedIssue.seriesTitle),
+        volume: parsedIssue.volume,
+      },
+    };
+    const key = `${normalizeLower(normalizedReference.series.title)}::${normalizedReference.series.volume}::${normalizeIssueNumberKey(normalizedReference.number)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    containedIssues.push(normalizedReference);
+  });
+
+  return containedIssues;
 }
 
 
@@ -1539,6 +1617,7 @@ export async function crawlIssue(
   const issuePageTitle = buildIssuePageTitle(seriesTitle, volume, number);
   const issuePageResolution = await resolvePageTitle(issuePageTitle, options?.pageTitleResolution);
   const $ = await parsePageHtmlByTitle(issuePageTitle, issuePageResolution);
+  const collectedIssues = parseContainedIssuesFromGallery($);
 
   const releasedate =
     h3BlockValueText($, "Release Date") ??
@@ -1630,6 +1709,8 @@ export async function crawlIssue(
     variants: variantIssues,
     individuals: issueIndividuals,
     arcs,
+    collectedIssues,
+    containedIssues: collectedIssues,
   };
 }
 
@@ -1642,3 +1723,7 @@ export class MarvelCrawlerService {
     return crawlIssue(title, volume, number, options);
   }
 }
+
+export const __testables = {
+  extractContainedIssueStoryTitleFromCaption,
+};

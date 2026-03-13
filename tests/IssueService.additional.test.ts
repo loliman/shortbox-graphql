@@ -37,13 +37,35 @@ describe('IssueService additional coverage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockModels = {
-      Publisher: { findOne: jest.fn() },
-      Series: { findOne: jest.fn() },
+      Publisher: { findOne: jest.fn(), findOrCreate: jest.fn() },
+      Series: { findOne: jest.fn(), create: jest.fn() },
       Issue: { findAll: jest.fn(), findOne: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
-      Story: { findAll: jest.fn(), destroy: jest.fn().mockResolvedValue(undefined) },
-      Cover: { findAll: jest.fn() },
+      Story: { findAll: jest.fn(), destroy: jest.fn().mockResolvedValue(undefined), create: jest.fn() },
+      Cover: { findAll: jest.fn(), findOrCreate: jest.fn() },
+      Individual: { findOrCreate: jest.fn() },
+      Issue_Individual: { findOrCreate: jest.fn() },
+      Cover_Individual: { findOrCreate: jest.fn() },
+      Arc: { findOrCreate: jest.fn() },
+      Issue_Arc: { findOrCreate: jest.fn() },
+      Appearance: { findOrCreate: jest.fn() },
+      Story_Appearance: { findOrCreate: jest.fn() },
+      Story_Individual: { findOrCreate: jest.fn() },
     };
+    mockModels.Publisher.findOrCreate.mockResolvedValue([{ id: 1 }]);
+    mockModels.Cover.findOrCreate.mockResolvedValue([{ id: 1, url: '' }]);
+    mockModels.Individual.findOrCreate.mockResolvedValue([{ id: 1 }]);
+    mockModels.Issue_Individual.findOrCreate.mockResolvedValue([{}]);
+    mockModels.Cover_Individual.findOrCreate.mockResolvedValue([{}]);
+    mockModels.Arc.findOrCreate.mockResolvedValue([{ id: 1 }]);
+    mockModels.Issue_Arc.findOrCreate.mockResolvedValue([{}]);
+    mockModels.Appearance.findOrCreate.mockResolvedValue([{ id: 1 }]);
+    mockModels.Story_Appearance.findOrCreate.mockResolvedValue([{}]);
+    mockModels.Story_Individual.findOrCreate.mockResolvedValue([{}]);
     issueService = new IssueService(mockModels, 'req-1');
+    (issueService as any).crawler = {
+      crawlSeries: jest.fn(),
+      crawlIssue: jest.fn().mockResolvedValue({ collectedIssues: [], containedIssues: [] }),
+    };
   });
 
   it('uses FilterService options in filtered findIssues without cursor pagination', async () => {
@@ -497,6 +519,597 @@ describe('IssueService additional coverage', () => {
         number: '12',
         fk_series: 99,
         releasedate: '1970-01-01',
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('imports contained issues instead of the TPB parent issue when the crawler resolves a gallery', async () => {
+    mockModels.Series.findOne.mockImplementation(({ where }: any) => {
+      if (where?.title === 'Star Wars: The Original Marvel Years Omnibus' && where?.volume === 1) return { id: 77 };
+      if (where?.title === 'Star Wars' && where?.volume === 1) return { id: 99 };
+      return null;
+    });
+    mockModels.Issue.findOne.mockImplementation(({ where }: any) => {
+      if (where?.number === '2' && where?.fk_series === 77) return null;
+      if (where?.number === '1' && where?.fk_series === 99) return null;
+      if (where?.number === '2' && where?.fk_series === 99) return null;
+      return null;
+    });
+    mockModels.Issue.create
+      .mockResolvedValueOnce({ id: 500, format: 'Heft' })
+      .mockResolvedValueOnce({ id: 501, format: 'Heft' });
+
+    (issueService as any).crawler = {
+      crawlSeries: jest.fn().mockImplementation(async (title: string, volume: number) => ({
+        title,
+        volume,
+        startyear: 1977,
+        endyear: 0,
+        publisherName: 'Marvel Comics',
+      })),
+      crawlIssue: jest.fn().mockImplementation(async (title: string, volume: number, number: string) => {
+        if (title === 'Star Wars: The Original Marvel Years Omnibus' && volume === 1 && number === '2') {
+          return {
+            releasedate: '2022-01-01',
+            legacyNumber: '',
+            price: 100,
+            currency: 'USD',
+            cover: { number: 0, url: '', individuals: [] },
+            stories: [],
+            individuals: [],
+            arcs: [],
+            variants: [],
+            containedIssues: [
+              { number: '1', storyTitle: 'TPB Story Part 1', series: { title: 'Star Wars', volume: 1 } },
+              { number: '2', storyTitle: 'TPB Story Part 2', series: { title: 'Star Wars', volume: 1 } },
+            ],
+          };
+        }
+
+        return {
+          releasedate: '1977-07-01',
+          legacyNumber: '',
+          price: 0.35,
+          currency: 'USD',
+          cover: { number: 0, url: '', individuals: [] },
+          stories: [],
+          individuals: [],
+          arcs: [],
+          variants: [],
+        };
+      }),
+    };
+
+    const parentIssueIds = await (issueService as any).findOrCrawlParentIssues(
+      {
+        title: 'Star Wars: The Original Marvel Years Omnibus',
+        volume: 1,
+        number: '2',
+      },
+      tx,
+    );
+
+    expect(parentIssueIds).toEqual([
+      { issueId: 500, storyTitle: 'TPB Story Part 1' },
+      { issueId: 501, storyTitle: 'TPB Story Part 2' },
+    ]);
+    expect(mockModels.Issue.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        number: '1',
+        fk_series: 99,
+      }),
+      { transaction: tx },
+    );
+    expect(mockModels.Issue.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        number: '2',
+        fk_series: 99,
+      }),
+      { transaction: tx },
+    );
+    expect(mockModels.Issue.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        number: '2',
+        price: 100,
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('keeps contained issue story titles from TPB gallery entries', async () => {
+    mockModels.Series.findOne.mockImplementation(({ where }: any) => {
+      if (where?.title === 'Doctor Strange Omnibus' && where?.volume === 1) return { id: 77 };
+      if (where?.title === 'Strange Tales' && where?.volume === 1) return { id: 99 };
+      return null;
+    });
+    mockModels.Issue.findOne.mockImplementation(({ where }: any) => {
+      if (where?.number === '1' && where?.fk_series === 77) return null;
+      if (where?.number === '110' && where?.fk_series === 99) return null;
+      return null;
+    });
+    mockModels.Issue.create.mockResolvedValueOnce({ id: 500, format: 'Heft' });
+    mockModels.Story.create.mockResolvedValue({ id: 900 });
+
+    (issueService as any).crawler = {
+      crawlSeries: jest.fn().mockImplementation(async (title: string, volume: number) => ({
+        title,
+        volume,
+        startyear: 1963,
+        endyear: 1968,
+        publisherName: 'Marvel Comics',
+      })),
+      crawlIssue: jest.fn().mockImplementation(async (title: string, volume: number, number: string) => {
+        if (title === 'Doctor Strange Omnibus' && volume === 1 && number === '1') {
+          return {
+            releasedate: '2016-10-04',
+            legacyNumber: '',
+            price: 75,
+            currency: 'USD',
+            cover: { number: 0, url: '', individuals: [] },
+            stories: [],
+            individuals: [],
+            arcs: [],
+            variants: [],
+            containedIssues: [
+              {
+                number: '110',
+                storyTitle: 'Dr. Strange Master of Black Magic!',
+                series: { title: 'Strange Tales', volume: 1 },
+              },
+            ],
+          };
+        }
+
+        return {
+          releasedate: '1963-07-01',
+          legacyNumber: '',
+          price: 0.12,
+          currency: 'USD',
+          cover: { number: 0, url: '', individuals: [] },
+          stories: [
+            { number: 1, title: 'The Human Torch Vs. the Wizard and Paste-Pot Pete!' },
+            { number: 2, title: 'Dr. Strange' },
+          ],
+          individuals: [],
+          arcs: [],
+          variants: [],
+        };
+      }),
+    };
+
+    const parentIssueIds = await (issueService as any).findOrCrawlParentIssues(
+      {
+        title: 'Doctor Strange Omnibus',
+        volume: 1,
+        number: '1',
+      },
+      tx,
+    );
+
+    expect(parentIssueIds).toEqual([
+      { issueId: 500, storyTitle: 'Dr. Strange Master of Black Magic!' },
+    ]);
+  });
+
+  it('links all parent stories from resolved contained issues when no parent story number is provided', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          title: 'TPB Story Part 2',
+          addinfo: '',
+          part: '',
+          parent: {
+            issue: {
+              series: { title: 'Star Wars: The Original Marvel Years Omnibus', volume: 1 },
+              number: '2',
+            },
+          },
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll
+      .mockResolvedValueOnce([{ id: 901, number: 25, fk_parent: 902 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 777, fk_issue: 500, number: 1, title: 'TPB Story Part 1' },
+        { id: 778, fk_issue: 501, number: 1, title: 'TPB Story Part 2' },
+      ]);
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+
+    jest.spyOn(issueService as any, 'findOrCrawlParentIssues').mockResolvedValue([
+      { issueId: 500, storyTitle: 'TPB Story Part 1' },
+      { issueId: 501, storyTitle: 'TPB Story Part 2' },
+    ]);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Story.findAll).toHaveBeenNthCalledWith(3, {
+      where: { fk_issue: { [Op.in]: [500, 501] } },
+      order: [
+        ['fk_issue', 'ASC'],
+        ['number', 'ASC'],
+        ['id', 'ASC'],
+      ],
+      transaction: tx,
+    });
+    expect(mockModels.Story.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 778,
+        number: 1,
+        title: 'TPB Story Part 2',
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('matches TPB references to the specific parent story instead of all stories from the resolved issue', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          title: 'Wanted Story',
+          addinfo: '',
+          part: '',
+          parent: {
+            issue: {
+              series: { title: 'Star Wars: The Original Marvel Years Omnibus', volume: 1 },
+              number: '2',
+            },
+          },
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll
+      .mockResolvedValueOnce([{ id: 901, number: 25, fk_parent: 902 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 777, fk_issue: 501, number: 1, title: 'Other Story' },
+        { id: 778, fk_issue: 501, number: 2, title: 'Wanted Story' },
+      ]);
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+
+    jest.spyOn(issueService as any, 'findOrCrawlParentIssues').mockResolvedValue([
+      { issueId: 501, storyTitle: 'Wanted Story' },
+    ]);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Story.create).toHaveBeenCalledTimes(1);
+    expect(mockModels.Story.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 778,
+        title: 'Wanted Story',
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('attaches the resolved omnibus stories when the input story title is empty', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          title: '',
+          addinfo: '',
+          part: '',
+          parent: {
+            issue: {
+              series: { title: 'Doctor Strange Omnibus', volume: 1 },
+              number: '1',
+            },
+          },
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll.mockImplementation(({ where }: any) => {
+      if (where?.fk_issue === 211) return [{ id: 901, number: 25, fk_parent: 902 }];
+      if (where?.id && where.id[Op.in]) return [];
+      if (where?.fk_issue === 500 || where?.fk_issue?.[Op.in]?.includes?.(500)) {
+        return [
+          { id: 579, fk_issue: 500, number: 1, title: 'The Human Torch Vs. the Wizard and Paste-Pot Pete!' },
+          { id: 582, fk_issue: 500, number: 4, title: 'Dr. Strange Master of Black Magic!' },
+        ];
+      }
+      return [];
+    });
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+
+    (issueService as any).crawler.crawlIssue = jest.fn().mockResolvedValue({
+      collectedIssues: [
+        {
+          number: '110',
+          storyTitle: 'The Human Torch Vs. the Wizard and Paste-Pot Pete!',
+          series: { title: 'Strange Tales', volume: 1 },
+        },
+        {
+          number: '110',
+          storyTitle: 'Dr. Strange Master of Black Magic!',
+          series: { title: 'Strange Tales', volume: 1 },
+        },
+      ],
+    });
+
+    jest.spyOn(issueService as any, 'findOrCrawlParentIssues').mockImplementation(async (parent: any) => {
+      expect(parent).toEqual({
+        title: 'Strange Tales',
+        volume: 1,
+        number: '110',
+      });
+      return [
+        { issueId: 500, storyTitle: 'The Human Torch Vs. the Wizard and Paste-Pot Pete!' },
+        { issueId: 500, storyTitle: 'Dr. Strange Master of Black Magic!' },
+      ];
+    });
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Story.create).toHaveBeenCalledTimes(2);
+    expect(mockModels.Story.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 579,
+        title: '',
+      }),
+      { transaction: tx },
+    );
+    expect(mockModels.Story.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 582,
+        title: '',
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('attaches all stories from an expanded TPB issue even when parent refs only contain issue ids', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          title: '',
+          addinfo: '',
+          part: '',
+          parent: {
+            issue: {
+              series: { title: 'Doctor Strange Omnibus', volume: 1 },
+              number: '1',
+            },
+          },
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll.mockImplementation(({ where }: any) => {
+      if (where?.fk_issue === 211) return [{ id: 901, number: 25, fk_parent: 902 }];
+      if (where?.id && where.id[Op.in]) return [];
+      if (where?.fk_issue === 500 || where?.fk_issue?.[Op.in]?.includes?.(500)) {
+        return [
+          { id: 579, fk_issue: 500, number: 1, title: 'The Human Torch Vs. the Wizard and Paste-Pot Pete!' },
+          { id: 582, fk_issue: 500, number: 4, title: 'Dr. Strange Master of Black Magic!' },
+        ];
+      }
+      return [];
+    });
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+
+    (issueService as any).crawler.crawlIssue = jest.fn().mockResolvedValue({
+      collectedIssues: [
+        {
+          number: '110',
+          storyTitle: 'Dr. Strange Master of Black Magic!',
+          series: { title: 'Strange Tales', volume: 1 },
+        },
+      ],
+    });
+
+    jest.spyOn(issueService as any, 'findOrCrawlParentIssues').mockResolvedValue([
+      { issueId: 500 },
+    ]);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Story.create).toHaveBeenCalledTimes(2);
+    expect(mockModels.Story.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 579,
+        title: '',
+      }),
+      { transaction: tx },
+    );
+    expect(mockModels.Story.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 582,
+        title: '',
+      }),
+      { transaction: tx },
+    );
+  });
+
+  it('treats a TPB without collected issues like a normal parent issue', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          title: '',
+          addinfo: '',
+          part: '',
+          parent: {
+            issue: {
+              series: { title: 'Galleryless TPB', volume: 1 },
+              number: '1',
+            },
+          },
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll.mockImplementation(({ where }: any) => {
+      if (where?.fk_issue === 211) return [{ id: 901, number: 25, fk_parent: 902 }];
+      if (where?.id && where.id[Op.in]) return [];
+      if (where?.fk_issue === 700 || where?.fk_issue?.[Op.in]?.includes?.(700)) {
+        return [
+          { id: 701, fk_issue: 700, number: 1, title: 'Story One' },
+          { id: 702, fk_issue: 700, number: 2, title: 'Story Two' },
+        ];
+      }
+      return [];
+    });
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+
+    (issueService as any).crawler.crawlIssue = jest.fn().mockResolvedValue({
+      collectedIssues: [],
+      containedIssues: [],
+    });
+
+    jest.spyOn(issueService as any, 'findOrCrawlParentIssues').mockResolvedValue([
+      { issueId: 700 },
+    ]);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Story.create).toHaveBeenCalledTimes(2);
+    expect(mockModels.Story.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 701,
+        title: '',
+      }),
+      { transaction: tx },
+    );
+    expect(mockModels.Story.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: 702,
+        title: '',
       }),
       { transaction: tx },
     );
