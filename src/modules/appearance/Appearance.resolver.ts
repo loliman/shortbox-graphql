@@ -94,7 +94,9 @@ export const resolvers: AppearanceResolvers = {
     realities: async (_, { pattern, first, after }, { models }) => {
       const limit = first || 50;
       const decodedCursor = decodeCursorId(after || undefined);
-      const normalizedPattern = String(pattern || '').trim().toLowerCase();
+      const normalizedPattern = String(pattern || '')
+        .trim()
+        .toLowerCase();
 
       const appearanceRows = await models.Appearance.findAll({
         attributes: ['name'],
@@ -114,9 +116,7 @@ export const resolvers: AppearanceResolvers = {
       const filteredRealities =
         normalizedPattern.length === 0
           ? sortedRealities
-          : sortedRealities.filter((reality) =>
-              reality.toLowerCase().includes(normalizedPattern),
-            );
+          : sortedRealities.filter((reality) => reality.toLowerCase().includes(normalizedPattern));
       const nodes: RealityNode[] = filteredRealities.map((name, index) => ({
         id: index + 1,
         name,
