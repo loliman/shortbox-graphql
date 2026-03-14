@@ -56,7 +56,8 @@ const RELEASE_DATE_FALLBACK = '1970-01-01';
 
 const normalizeString = (value: unknown): string => String(value ?? '').trim();
 const normalizeLower = (value: unknown): string => normalizeString(value).toLowerCase();
-const hasOwn = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key);
+const hasOwn = (value: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
 
 const coerceReleaseDateForDb = (value: unknown): string => {
   const toFallback = (): string => RELEASE_DATE_FALLBACK;
@@ -569,7 +570,9 @@ export class IssueService {
       }
     }
     const shouldSyncStories =
-      typeof item === 'object' && item !== null && hasOwn(item as Record<string, unknown>, 'stories');
+      typeof item === 'object' &&
+      item !== null &&
+      hasOwn(item as Record<string, unknown>, 'stories');
 
     if (!oldPublisher.original && shouldSyncStories) {
       const removedUsParentStoryIds = await this.syncStoriesFromParentRefs(
@@ -655,8 +658,8 @@ export class IssueService {
         const collectedIssues = Array.isArray(crawledParentIssue.collectedIssues)
           ? crawledParentIssue.collectedIssues
           : Array.isArray(crawledParentIssue.containedIssues)
-          ? crawledParentIssue.containedIssues
-          : [];
+            ? crawledParentIssue.containedIssues
+            : [];
 
         const normalizedCollectedIssues = collectedIssues
           .map((entry) => ({
@@ -666,9 +669,7 @@ export class IssueService {
           }))
           .filter(
             (entry) =>
-              entry.number.length > 0 &&
-              entry.seriesTitle.length > 0 &&
-              entry.seriesVolume > 0,
+              entry.number.length > 0 && entry.seriesTitle.length > 0 && entry.seriesVolume > 0,
           );
         const uniqueCollectedIssues = Array.from(
           new Map(
@@ -805,12 +806,15 @@ export class IssueService {
         const matchedParentRefsByTitle =
           requestedStoryTitle === ''
             ? []
-            : parentIssueRefs.filter((entry) => normalizeStoryTitleKey(entry.storyTitle) === requestedStoryTitle);
+            : parentIssueRefs.filter(
+                (entry) => normalizeStoryTitleKey(entry.storyTitle) === requestedStoryTitle,
+              );
         const matchesResolvedParentStory = (parentStory: { fk_issue?: number; title?: string }) =>
           matchedParentRefsByTitle.some(
             (entry) =>
               entry.issueId === Number(parentStory.fk_issue || 0) &&
-              normalizeStoryTitleKey(parentStory.title) === normalizeStoryTitleKey(entry.storyTitle),
+              normalizeStoryTitleKey(parentStory.title) ===
+                normalizeStoryTitleKey(entry.storyTitle),
           );
         if (requestedParentStoryNumber === 0) {
           let matchingParentStories = parentStories;
@@ -823,7 +827,8 @@ export class IssueService {
               parentIssueRefs.some(
                 (entry) =>
                   entry.issueId === Number(parentStory.fk_issue || 0) &&
-                  normalizeStoryTitleKey(entry.storyTitle) === normalizeStoryTitleKey(parentStory.title),
+                  normalizeStoryTitleKey(entry.storyTitle) ===
+                    normalizeStoryTitleKey(parentStory.title),
               ),
             );
           }
@@ -1209,15 +1214,15 @@ export class IssueService {
             }))
             .filter((entry) => entry.number && entry.seriesTitle && entry.seriesVolume > 0)
         : Array.isArray(crawledIssue.containedIssues)
-        ? crawledIssue.containedIssues
-            .map((entry) => ({
-              number: String(entry?.number || '').trim(),
-              storyTitle: String(entry?.storyTitle || '').trim(),
-              seriesTitle: String(entry?.series?.title || '').trim(),
-              seriesVolume: Number(entry?.series?.volume || 0),
-            }))
-            .filter((entry) => entry.number && entry.seriesTitle && entry.seriesVolume > 0)
-        : [];
+          ? crawledIssue.containedIssues
+              .map((entry) => ({
+                number: String(entry?.number || '').trim(),
+                storyTitle: String(entry?.storyTitle || '').trim(),
+                seriesTitle: String(entry?.series?.title || '').trim(),
+                seriesVolume: Number(entry?.series?.volume || 0),
+              }))
+              .filter((entry) => entry.number && entry.seriesTitle && entry.seriesVolume > 0)
+          : [];
 
       if (normalizedCollectedIssues.length > 0) {
         const containedIssueRefs: Array<{ issueId: number; storyTitle?: string }> = [];
