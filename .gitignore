@@ -44,3 +44,4 @@ error.log
 /.scannerwork/
 reports
 *.dump
+/data/
