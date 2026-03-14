@@ -409,69 +409,68 @@ export class FilterService {
     }
 
     if (runtimeFilter.individuals && runtimeFilter.individuals.length > 0) {
-      const individualConditions = runtimeFilter.individuals
-        .flatMap((ind) => {
-          const name = typeof ind?.name === 'string' ? ind.name.trim() : '';
-          if (!name) return [];
+      const individualConditions = runtimeFilter.individuals.flatMap((ind) => {
+        const name = typeof ind?.name === 'string' ? ind.name.trim() : '';
+        if (!name) return [];
 
-          const rawTypes = Array.isArray(ind?.type) ? ind.type : [];
-          const normalizedTypes = dedupeTerms(
-            rawTypes
-              .filter((type): type is string => typeof type === 'string' && !!type)
-              .map((type) => type.trim().toUpperCase()),
-          );
-          const nonTranslatorTypes = normalizedTypes.filter(
-            (type) => type !== TRANSLATOR_STORY_INDIVIDUAL_TYPE,
-          );
-          const includesTranslatorType = normalizedTypes.includes(TRANSLATOR_STORY_INDIVIDUAL_TYPE);
+        const rawTypes = Array.isArray(ind?.type) ? ind.type : [];
+        const normalizedTypes = dedupeTerms(
+          rawTypes
+            .filter((type): type is string => typeof type === 'string' && !!type)
+            .map((type) => type.trim().toUpperCase()),
+        );
+        const nonTranslatorTypes = normalizedTypes.filter(
+          (type) => type !== TRANSLATOR_STORY_INDIVIDUAL_TYPE,
+        );
+        const includesTranslatorType = normalizedTypes.includes(TRANSLATOR_STORY_INDIVIDUAL_TYPE);
 
-          const buildStoryIndividualCondition = (types: string[]): Record<string, unknown> => {
-            const condition: Record<string, unknown> = {
-              '$stories.individuals.name$': name,
-            };
-            if (types.length > 0) {
-              condition['$stories.individuals.story_individual.type$'] = { [Op.in]: types };
-            }
-            needsStoryIndividualJoin = true;
-            return condition;
+        const buildStoryIndividualCondition = (types: string[]): Record<string, unknown> => {
+          const condition: Record<string, unknown> = {
+            '$stories.individuals.name$': name,
           };
+          if (types.length > 0) {
+            condition['$stories.individuals.story_individual.type$'] = { [Op.in]: types };
+          }
+          needsStoryIndividualJoin = true;
+          return condition;
+        };
 
-          const buildParentStoryIndividualCondition = (types: string[]): Record<string, unknown> => {
-            const condition: Record<string, unknown> = {
-              '$stories.parent.individuals.name$': name,
-            };
-            if (types.length > 0) {
-              condition['$stories.parent.individuals.story_individual.type$'] = { [Op.in]: types };
-            }
-            needsParentIndividualJoin = true;
-            return condition;
+        const buildParentStoryIndividualCondition = (types: string[]): Record<string, unknown> => {
+          const condition: Record<string, unknown> = {
+            '$stories.parent.individuals.name$': name,
           };
-
-          const conditions: Array<Record<string, unknown>> = [];
-          if (normalizedTypes.length === 0) {
-            conditions.push(buildParentStoryIndividualCondition([]));
-            conditions.push({
-              [Op.and]: [{ '$stories.parent.id$': null }, buildStoryIndividualCondition([])],
-            });
-            return conditions;
+          if (types.length > 0) {
+            condition['$stories.parent.individuals.story_individual.type$'] = { [Op.in]: types };
           }
+          needsParentIndividualJoin = true;
+          return condition;
+        };
 
-          if (nonTranslatorTypes.length > 0) {
-            conditions.push(buildParentStoryIndividualCondition(nonTranslatorTypes));
-            conditions.push({
-              [Op.and]: [
-                { '$stories.parent.id$': null },
-                buildStoryIndividualCondition(nonTranslatorTypes),
-              ],
-            });
-          }
-
-          if (includesTranslatorType) {
-            conditions.push(buildStoryIndividualCondition([TRANSLATOR_STORY_INDIVIDUAL_TYPE]));
-          }
-
+        const conditions: Array<Record<string, unknown>> = [];
+        if (normalizedTypes.length === 0) {
+          conditions.push(buildParentStoryIndividualCondition([]));
+          conditions.push({
+            [Op.and]: [{ '$stories.parent.id$': null }, buildStoryIndividualCondition([])],
+          });
           return conditions;
-        });
+        }
+
+        if (nonTranslatorTypes.length > 0) {
+          conditions.push(buildParentStoryIndividualCondition(nonTranslatorTypes));
+          conditions.push({
+            [Op.and]: [
+              { '$stories.parent.id$': null },
+              buildStoryIndividualCondition(nonTranslatorTypes),
+            ],
+          });
+        }
+
+        if (includesTranslatorType) {
+          conditions.push(buildStoryIndividualCondition([TRANSLATOR_STORY_INDIVIDUAL_TYPE]));
+        }
+
+        return conditions;
+      });
 
       if (individualConditions.length > 0) appendAndCondition({ [Op.or]: individualConditions });
     }
