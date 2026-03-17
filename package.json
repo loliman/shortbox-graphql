@@ -44,7 +44,7 @@
     "csrf-csrf": "^4.0.3",
     "dataloader": "^2.2.3",
     "dateformat": "^3.0.3",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "graphile-worker": "^0.16.6",
