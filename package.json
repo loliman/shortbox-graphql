@@ -59,7 +59,7 @@
     "pg": "^8.18.0",
     "pg-hstore": "^2.3.4",
     "playwright": "^1.52.0",
-    "rate-limiter-flexible": "^9.1.1",
+    "rate-limiter-flexible": "^10.0.1",
     "sequelize": "^6.37.8",
     "shelljs": "^0.10.0",
     "winston": "^3.19.0",
