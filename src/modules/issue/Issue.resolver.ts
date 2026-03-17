@@ -1,7 +1,7 @@
 import { IssueService } from '../../services/IssueService';
 import { GraphQLError } from 'graphql';
 import { IssueResolvers } from '../../types/graphql';
-import { FilterSchema, IssueInputSchema } from '../../types/schemas';
+import { FilterSchema, IssueInputSchema, ReportErrorInputSchema } from '../../types/schemas';
 import { Op } from 'sequelize';
 
 type IssueParent = {
@@ -370,6 +370,20 @@ export const resolvers: IssueResolvers = {
         throw e;
       }
     },
+    changeRequests: async (_, { order, direction, type }, context) => {
+      const { issueService } = context;
+      return await issueService.listChangeRequests({
+        type: type || undefined,
+        order: order || undefined,
+        direction: direction || undefined,
+      });
+    },
+    changeRequestCount: async (_, { type }, context) => {
+      const { issueService } = context;
+      return await issueService.countChangeRequests({
+        type: type || undefined,
+      });
+    },
   },
   Mutation: {
     deleteIssue: async (_, { item }, context) => {
@@ -430,6 +444,57 @@ export const resolvers: IssueResolvers = {
         }
         throw e;
       }
+    },
+    reportError: async (_, { input }, context) => {
+      const { models, issueService } = context;
+
+      try {
+        ReportErrorInputSchema.parse(input);
+        return await models.sequelize.transaction(async (tx) => {
+          return await issueService.reportError(input.issue as any, input.item as any, tx);
+        });
+      } catch (e) {
+        if (e instanceof Error && e.name === 'ZodError') {
+          throw new GraphQLError(e.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw e;
+      }
+    },
+    acceptChangeRequest: async (_, { id }, context) => {
+      const { loggedIn, models, issueService } = context;
+      if (!loggedIn)
+        throw new GraphQLError('Du bist nicht eingeloggt', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+
+      const numericId = Number(id);
+      if (!Number.isFinite(numericId) || numericId <= 0) {
+        throw new GraphQLError('Ungültige Change-Request-ID', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
+      return await models.sequelize.transaction(async (tx) => {
+        return await issueService.acceptChangeRequest(Math.trunc(numericId), tx);
+      });
+    },
+    discardChangeRequest: async (_, { id }, context) => {
+      const { loggedIn, models, issueService } = context;
+      if (!loggedIn)
+        throw new GraphQLError('Du bist nicht eingeloggt', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+
+      const numericId = Number(id);
+      if (!Number.isFinite(numericId) || numericId <= 0) {
+        throw new GraphQLError('Ungültige Change-Request-ID', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
+      return await models.sequelize.transaction(async (tx) => {
+        return await issueService.discardChangeRequest(Math.trunc(numericId), tx);
+      });
     },
   },
   Issue: {

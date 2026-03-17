@@ -44,6 +44,11 @@ export class Issue extends Model {
       through: models.Issue_Arc,
       foreignKey: 'fk_issue',
     });
+    Issue.hasMany(models.ChangeRequest, {
+      as: { singular: 'changeRequest', plural: 'changeRequests' },
+      foreignKey: 'fk_issue',
+      onDelete: 'cascade',
+    });
   }
 
   public async deleteInstance(transaction: Transaction, models: DbModels): Promise<void> {

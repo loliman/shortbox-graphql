@@ -9,6 +9,7 @@ import { Individual } from '../modules/individual/Individual.model';
 import { Appearance } from '../modules/appearance/Appearance.model';
 import { User } from '../modules/user/User.model';
 import { AdminTaskResult } from '../modules/admin-task-result/AdminTaskResult.model';
+import { ChangeRequest } from '../modules/change-request/ChangeRequest.model';
 
 export interface DbModels {
   Publisher: ModelStatic<Publisher>;
@@ -21,6 +22,7 @@ export interface DbModels {
   Appearance: ModelStatic<Appearance>;
   User: ModelStatic<User>;
   AdminTaskResult: ModelStatic<AdminTaskResult>;
+  ChangeRequest: ModelStatic<ChangeRequest>;
   Issue_Individual: ModelStatic<Model>;
   Issue_Arc: ModelStatic<Model>;
   Story_Individual: ModelStatic<Model>;

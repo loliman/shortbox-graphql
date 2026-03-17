@@ -232,7 +232,12 @@ export interface Context {
   issueVariantsLoader: DataLoader<number, Issue[]>;
 }
 
-const canRunProtectedMutation = rule({ cache: 'contextual' })(async (_, __, context: Context) => {
+const canRunProtectedMutation = rule({ cache: 'contextual' })(
+  async (_, __, context: Context, info?: { fieldName?: string }) => {
+    if (info?.fieldName === 'reportError') {
+      return true;
+    }
+
   if (!context.loggedIn) {
     return new GraphQLError('Du bist nicht eingeloggt', {
       extensions: { code: 'UNAUTHENTICATED' },
@@ -252,7 +257,8 @@ const canRunProtectedMutation = rule({ cache: 'contextual' })(async (_, __, cont
   }
 
   return true;
-});
+  },
+);
 
 const permissions = shield(
   {

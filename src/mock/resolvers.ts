@@ -56,6 +56,8 @@ export const mockResolvers = {
       createConnection(mockIndividuals.filter((i) => matches(i.name, args.pattern))),
     apps: (_: unknown, args: { pattern?: string }) =>
       createConnection(mockApps.filter((a) => matches(a.name, args.pattern))),
+    changeRequests: () => [],
+    changeRequestCount: () => 0,
   },
   Mutation: {
     login: () => ({ id: 1 }),
@@ -93,6 +95,15 @@ export const mockResolvers = {
       ...getIssueFixture(false),
       ...args.item,
     }),
+    reportError: (_: unknown, args: { input?: { issue?: { id?: string | number } } }) => ({
+      id: 'change-request-created',
+      issueId: args.input?.issue?.id || '1',
+      createdAt: new Date().toISOString(),
+      type: 'ISSUE',
+      changeRequest: args.input || {},
+    }),
+    acceptChangeRequest: () => getIssueFixture(false),
+    discardChangeRequest: () => true,
   },
   Publisher: {
     seriesCount: (parent: { seriesCount?: number }) => parent.seriesCount ?? 0,

@@ -69,6 +69,20 @@ export const IssueInputSchema = z.object({
   collected: z.boolean().optional(),
   comicguideid: z.number().int().optional(),
   series: SeriesInputSchema.optional(),
+  stories: z.array(z.unknown()).optional(),
+});
+
+const ReportIssueReferenceSchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  number: z.string().optional(),
+  format: z.string().optional(),
+  variant: z.string().optional(),
+  series: SeriesInputSchema.partial().optional(),
+});
+
+export const ReportErrorInputSchema = z.object({
+  issue: ReportIssueReferenceSchema,
+  item: IssueInputSchema,
 });
 
 export const IndividualInputSchema = z.object({

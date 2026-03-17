@@ -12,6 +12,12 @@ import {
   pickPreferredIssueVariant,
   sortIssueVariants,
 } from '../util/issueVariantOrdering';
+import { ChangeRequestRepository } from '../repositories/ChangeRequestRepository';
+import type {
+  ChangeRequestEntity,
+  ChangeRequestType,
+  CreateChangeRequestInput,
+} from '../types/changeRequest';
 
 const ALLOWED_LAST_EDITED_SORT_FIELDS = new Set([
   'updatedat',
@@ -57,6 +63,24 @@ const RELEASE_DATE_FALLBACK = '1970-01-01';
 const normalizeString = (value: unknown): string => String(value ?? '').trim();
 const normalizeLower = (value: unknown): string => normalizeString(value).toLowerCase();
 const hasOwn = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key);
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+const normalizeIssueReleaseDate = (value: unknown): string => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    return value.toISOString().slice(0, 10);
+  }
+
+  const normalized = normalizeString(value);
+  if (normalized.length === 0) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+};
 
 const coerceReleaseDateForDb = (value: unknown): string => {
   const toFallback = (): string => RELEASE_DATE_FALLBACK;
@@ -275,11 +299,14 @@ const normalizeLimitationForDb = (value: unknown): string => {
 
 export class IssueService {
   private readonly crawler = new MarvelCrawlerService();
+  private readonly changeRequestRepository: ChangeRequestRepository;
 
   constructor(
     private models: typeof import('../models').default,
     private requestId?: string,
-  ) {}
+  ) {
+    this.changeRequestRepository = new ChangeRequestRepository(this.models);
+  }
 
   private log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
     if (level === 'error') {
@@ -587,6 +614,94 @@ export class IssueService {
       }
     }
     return savedIssue;
+  }
+
+  async reportError(
+    issue: IssueInput,
+    item: IssueInput,
+    transaction: Transaction,
+  ): Promise<ChangeRequestEntity> {
+    const targetIssue = await this.resolveIssueByIdentity(issue, transaction);
+    if (!targetIssue) throw new Error('Issue not found');
+
+    const normalizedItem = normalizeForDiff(item);
+
+    const payload: CreateChangeRequestInput = {
+      issueId: targetIssue.id as number,
+      type: 'ISSUE',
+      changeRequest: {
+        item: normalizedItem,
+      },
+    };
+
+    return await this.changeRequestRepository.create(payload, transaction);
+  }
+
+  async listChangeRequests(
+    options?: {
+      type?: ChangeRequestType;
+      order?: string;
+      direction?: string;
+    },
+    transaction?: Transaction,
+  ): Promise<ChangeRequestEntity[]> {
+    const changeRequests = await this.changeRequestRepository.findAll({
+      type: options?.type,
+      order: options?.order,
+      direction: options?.direction,
+      transaction,
+    });
+
+    if (changeRequests.length === 0) return [];
+
+    const loadedIssuesByChangeRequestId = new Map<number, Record<string, unknown> | null>();
+    await Promise.all(
+      changeRequests.map(async (entry) => {
+        const loadedIssue = await this.loadIssueForChangeRequest(entry.issueId, transaction);
+        loadedIssuesByChangeRequestId.set(entry.id, loadedIssue);
+      }),
+    );
+
+    return changeRequests.map((entry) => {
+      const loadedIssue = loadedIssuesByChangeRequestId.get(entry.id) || null;
+
+      const normalizedPayload = normalizeChangeRequestPayload(entry.changeRequest, loadedIssue);
+      return {
+        ...entry,
+        changeRequest: normalizedPayload,
+      };
+    });
+  }
+
+  async countChangeRequests(
+    options?: {
+      type?: ChangeRequestType;
+    },
+    transaction?: Transaction,
+  ): Promise<number> {
+    return await this.changeRequestRepository.count({
+      type: options?.type,
+      transaction,
+    });
+  }
+
+  async discardChangeRequest(id: number, transaction: Transaction): Promise<boolean> {
+    return await this.changeRequestRepository.deleteById(id, transaction);
+  }
+
+  async acceptChangeRequest(id: number, transaction: Transaction) {
+    const changeRequest = await this.changeRequestRepository.findById(id, transaction);
+    if (!changeRequest) throw new Error('Change Request nicht gefunden');
+
+    const issue = await this.loadIssueForChangeRequest(changeRequest.issueId, transaction);
+    if (!issue) throw new Error('Issue zum Change Request nicht gefunden');
+
+    const item = resolveChangeRequestItem(changeRequest.changeRequest, issue);
+    if (!item) throw new Error('Ungültiger Change Request');
+
+    const updatedIssue = await this.editIssue(issue as IssueInput, item as IssueInput, transaction);
+    await this.changeRequestRepository.deleteById(id, transaction);
+    return updatedIssue;
   }
 
   private async syncStoriesFromParentRefs(
@@ -1762,4 +1877,375 @@ export class IssueService {
       return sortIssueVariants(siblingsForIssue);
     });
   }
+
+  private async resolveIssueByIdentity(
+    issue: IssueInput,
+    transaction: Transaction,
+  ): Promise<{ id: number } | null> {
+    const issueId = Number((issue as { id?: unknown })?.id);
+    if (Number.isFinite(issueId) && issueId > 0) {
+      const byId = (await this.models.Issue.findByPk(Math.trunc(issueId), {
+        attributes: ['id'],
+        transaction,
+      })) as { id?: number } | null;
+      if (byId?.id) return { id: byId.id };
+    }
+
+    const publisher = await this.models.Publisher.findOne({
+      where: { name: (issue.series?.publisher?.name || '').trim() },
+      transaction,
+    });
+    if (!publisher) return null;
+
+    const series = await this.models.Series.findOne({
+      where: {
+        title: (issue.series?.title || '').trim(),
+        volume: issue.series?.volume,
+        fk_publisher: publisher.id,
+      },
+      transaction,
+    });
+    if (!series) return null;
+
+    const where: Record<string, unknown> = {
+      number: (issue.number || '').trim(),
+      variant: (issue.variant || '').trim(),
+      fk_series: series.id,
+    };
+    const format = typeof issue.format === 'string' ? issue.format.trim() : '';
+    if (format !== '') where.format = format;
+
+    const resolved = (await this.models.Issue.findOne({
+      where,
+      transaction,
+    })) as { id?: number } | null;
+    if (!resolved?.id) return null;
+    return { id: resolved.id };
+  }
+
+  private async loadIssueForChangeRequest(
+    issueId: number,
+    transaction?: Transaction,
+  ): Promise<Record<string, unknown> | null> {
+    const row = (await this.models.Issue.findByPk(issueId, {
+      include: [
+        {
+          model: this.models.Series,
+          as: 'series',
+          include: [{ model: this.models.Publisher, as: 'publisher' }],
+        },
+        {
+          model: this.models.Story,
+          as: 'stories',
+          include: [
+            { model: this.models.Individual, as: 'individuals' },
+            { model: this.models.Appearance, as: 'appearances' },
+            {
+              model: this.models.Story,
+              as: 'parent',
+              include: [
+                {
+                  model: this.models.Issue,
+                  as: 'issue',
+                  include: [
+                    {
+                      model: this.models.Series,
+                      as: 'series',
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      transaction,
+    })) as unknown as
+      | {
+          title?: unknown;
+          number?: unknown;
+          format?: unknown;
+          variant?: unknown;
+          releasedate?: unknown;
+          pages?: unknown;
+          price?: unknown;
+          currency?: unknown;
+          isbn?: unknown;
+          limitation?: unknown;
+          comicguideid?: unknown;
+          addinfo?: unknown;
+          series?: {
+            title?: unknown;
+            volume?: unknown;
+            startyear?: unknown;
+            publisher?: { name?: unknown; us?: unknown };
+          };
+          stories?: Array<{
+            id?: unknown;
+            title?: unknown;
+            addinfo?: unknown;
+            part?: unknown;
+            number?: unknown;
+            exclusive?: unknown;
+            individuals?: Array<{ name?: unknown; type?: unknown }>;
+            appearances?: Array<{ name?: unknown; type?: unknown; role?: unknown }>;
+            parent?: {
+              title?: unknown;
+              number?: unknown;
+              issue?: {
+                number?: unknown;
+                series?: {
+                  title?: unknown;
+                  volume?: unknown;
+                };
+              };
+            };
+          }>;
+        }
+      | null;
+
+    if (!row) return null;
+
+    const stories = Array.isArray(row.stories) ? [...row.stories] : [];
+    stories.sort((a, b) => Number(a.number || 0) - Number(b.number || 0));
+
+    return {
+      id: Number((row as { id?: unknown }).id || issueId),
+      title: normalizeString(row.title),
+      number: normalizeString(row.number),
+      format: normalizeString(row.format),
+      variant: normalizeString(row.variant),
+      releasedate: normalizeIssueReleaseDate(row.releasedate),
+      pages: Number(row.pages || 0),
+      price: Number(row.price || 0),
+      currency: normalizeString(row.currency),
+      isbn: normalizeString(row.isbn),
+      limitation: normalizeString(row.limitation),
+      comicguideid: Number(row.comicguideid || 0),
+      addinfo: normalizeString(row.addinfo),
+      series: {
+        title: normalizeString(row.series?.title),
+        volume: Number(row.series?.volume || 0),
+        startyear: Number(row.series?.startyear || 0),
+        publisher: {
+          name: normalizeString(row.series?.publisher?.name),
+          us: Boolean(row.series?.publisher?.us),
+        },
+      },
+      stories: stories.map((story) => {
+        const parent = story.parent;
+        const parentIssue = parent?.issue;
+        const parentSeries = parentIssue?.series;
+        const mapped: Record<string, unknown> = {
+          title: normalizeString(story.title),
+          addinfo: normalizeString(story.addinfo),
+          part: normalizeString(story.part),
+          number: Number(story.number || 0),
+          exclusive: Boolean(story.exclusive) && !parent,
+          individuals: Array.isArray(story.individuals)
+            ? story.individuals.map((entry) => ({
+                name: normalizeString(entry?.name),
+                type: Array.isArray(entry?.type)
+                  ? entry?.type
+                  : normalizeString(entry?.type)
+                    ? [normalizeString(entry?.type)]
+                    : [],
+              }))
+            : [],
+          appearances: Array.isArray(story.appearances)
+            ? story.appearances.map((entry) => ({
+                name: normalizeString(entry?.name),
+                type: normalizeString(entry?.type),
+                role: normalizeString(entry?.role),
+              }))
+            : [],
+        };
+
+        if (parent) {
+          mapped.parent = {
+            title: normalizeString(parent.title),
+            number: Number(parent.number || 0),
+            issue: parentIssue
+              ? {
+                  number: normalizeString(parentIssue.number),
+                  series: parentSeries
+                    ? {
+                        title: normalizeString(parentSeries.title),
+                        volume: Number(parentSeries.volume || 0),
+                      }
+                    : undefined,
+                }
+              : undefined,
+          };
+        }
+
+        return mapped;
+      }),
+    };
+  }
 }
+
+type DiffEntry = {
+  path: string;
+  from: unknown;
+  to: unknown;
+};
+
+const normalizeForDiff = (value: unknown): unknown => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return value.toISOString().slice(0, 10);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeForDiff(entry));
+  }
+
+  if (value && typeof value === 'object') {
+    const input = value as Record<string, unknown>;
+    const normalized: Record<string, unknown> = {};
+    for (const key of Object.keys(input).sort()) {
+      normalized[key] = normalizeForDiff(input[key]);
+    }
+    return normalized;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  return value;
+};
+
+const extractChangeRequestItem = (value: unknown): Record<string, unknown> | null => {
+  const payload = asRecord(value);
+  if (!payload) return null;
+
+  const wrappedItem = asRecord(payload.item);
+  if (wrappedItem) return wrappedItem;
+
+  if (hasOwn(payload, 'item')) return null;
+  return payload;
+};
+
+const mergeRecords = (
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> => {
+  const merged: Record<string, unknown> = { ...base };
+
+  for (const [key, patchValue] of Object.entries(patch)) {
+    const baseValue = merged[key];
+
+    if (Array.isArray(patchValue)) {
+      merged[key] = patchValue;
+      continue;
+    }
+
+    if (
+      isPlainObject(baseValue) &&
+      isPlainObject(patchValue)
+    ) {
+      merged[key] = mergeRecords(baseValue, patchValue);
+      continue;
+    }
+
+    merged[key] = patchValue;
+  }
+
+  return merged;
+};
+
+const resolveChangeRequestItem = (
+  value: unknown,
+  issue: Record<string, unknown> | null,
+): Record<string, unknown> | null => {
+  const changeItem = extractChangeRequestItem(value);
+  if (!changeItem && !issue) return null;
+  if (!changeItem) return issue ? (normalizeForDiff(issue) as Record<string, unknown>) : null;
+  if (!issue) return normalizeForDiff(changeItem) as Record<string, unknown>;
+
+  return normalizeForDiff(mergeRecords(issue, changeItem)) as Record<string, unknown>;
+};
+
+const normalizeChangeRequestPayload = (
+  value: unknown,
+  issue: Record<string, unknown> | null,
+): Record<string, unknown> => {
+  const payload = asRecord(value) || {};
+  const normalizedItem = resolveChangeRequestItem(payload, issue) || {};
+
+  const nextPayload: Record<string, unknown> = {
+    ...payload,
+    item: normalizedItem,
+  };
+
+  if (issue) nextPayload.issue = issue;
+  return nextPayload;
+};
+
+const buildDiffEntries = (base: unknown, next: unknown): DiffEntry[] => {
+  const diffs: DiffEntry[] = [];
+  diffValues(base, next, '', diffs);
+  return diffs;
+};
+
+const diffValues = (base: unknown, next: unknown, path: string, diffs: DiffEntry[]) => {
+  if (isEqualValue(base, next)) return;
+
+  const baseIsArray = Array.isArray(base);
+  const nextIsArray = Array.isArray(next);
+  if (baseIsArray || nextIsArray) {
+    const baseArray = baseIsArray ? (base as unknown[]) : [];
+    const nextArray = nextIsArray ? (next as unknown[]) : [];
+    const max = Math.max(baseArray.length, nextArray.length);
+    for (let i = 0; i < max; i += 1) {
+      diffValues(baseArray[i], nextArray[i], appendDiffPath(path, `[${i}]`), diffs);
+    }
+    return;
+  }
+
+  const baseIsObject = isPlainObject(base);
+  const nextIsObject = isPlainObject(next);
+  if (baseIsObject && nextIsObject) {
+    const baseRecord = base as Record<string, unknown>;
+    const nextRecord = next as Record<string, unknown>;
+    const keys = new Set([...Object.keys(baseRecord), ...Object.keys(nextRecord)]);
+    for (const key of Array.from(keys).sort()) {
+      diffValues(baseRecord[key], nextRecord[key], appendDiffPath(path, key), diffs);
+    }
+    return;
+  }
+
+  diffs.push({
+    path: path || '(root)',
+    from: base,
+    to: next,
+  });
+};
+
+const appendDiffPath = (base: string, key: string): string => {
+  if (!base) return key;
+  if (key.startsWith('[')) return `${base}${key}`;
+  return `${base}.${key}`;
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const isEqualValue = (left: unknown, right: unknown): boolean => {
+  if (left === right) return true;
+  return Number.isNaN(left) && Number.isNaN(right);
+};
+
+const determineChangeRequestType = (diffs: DiffEntry[]): ChangeRequestType => {
+  const changedPaths = diffs.map((diff) => diff.path);
+
+  if (changedPaths.some((path) => path.startsWith('series.publisher'))) {
+    return 'PUBLISHER';
+  }
+  if (changedPaths.some((path) => path.startsWith('series.'))) {
+    return 'SERIES';
+  }
+  return 'ISSUE';
+};

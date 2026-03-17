@@ -94,6 +94,33 @@ export type {
 type EmptyArgs = Record<string, never>;
 type MaybePromise<T> = T | Promise<T>;
 
+type MutationReportErrorArgsLocal = {
+  input: {
+    issue: IssueInput;
+    item: IssueInput;
+  };
+};
+
+type QueryChangeRequestsArgsLocal = {
+  first?: number | null;
+  after?: string | null;
+  order?: string | null;
+  direction?: string | null;
+  type?: 'SERIES' | 'ISSUE' | 'PUBLISHER' | null;
+};
+
+type QueryChangeRequestCountArgsLocal = {
+  type?: 'SERIES' | 'ISSUE' | 'PUBLISHER' | null;
+};
+
+type MutationAcceptChangeRequestArgsLocal = {
+  id: string;
+};
+
+type MutationDiscardChangeRequestArgsLocal = {
+  id: string;
+};
+
 type QueryGenresArgs = {
   pattern?: string | null;
   first?: number | null;
@@ -146,6 +173,12 @@ export type QueryResolverFields = {
   realities: ResolverFn<unknown, QueryRealitiesArgs, ResolverResult<QueryRealitiesResult>>;
   issueDetails: ResolverFn<unknown, QueryIssueDetailsArgs, ResolverResult<Query['issueDetails']>>;
   issueList: ResolverFn<unknown, QueryIssueListArgs, ResolverResult<Query['issueList']>>;
+  changeRequests: ResolverFn<unknown, QueryChangeRequestsArgsLocal, ResolverResult<unknown>>;
+  changeRequestCount: ResolverFn<
+    unknown,
+    QueryChangeRequestCountArgsLocal,
+    ResolverResult<number>
+  >;
   lastEdited: ResolverFn<unknown, QueryLastEditedArgs, ResolverResult<Query['lastEdited']>>;
   me: ResolverFn<unknown, EmptyArgs, ResolverResult<Query['me']>>;
   nodes: ResolverFn<unknown, QueryNodesArgs, ResolverResult<Query['nodes']>>;
@@ -208,6 +241,17 @@ export type MutationResolverFields = {
   editSeries: ResolverFn<unknown, MutationEditSeriesArgs, ResolverResult<Mutation['editSeries']>>;
   login: ResolverFn<unknown, MutationLoginArgs, ResolverResult<Mutation['login']>>;
   logout: ResolverFn<unknown, EmptyArgs, ResolverResult<Mutation['logout']>>;
+  reportError: ResolverFn<unknown, MutationReportErrorArgsLocal, ResolverResult<unknown>>;
+  acceptChangeRequest: ResolverFn<
+    unknown,
+    MutationAcceptChangeRequestArgsLocal,
+    ResolverResult<unknown>
+  >;
+  discardChangeRequest: ResolverFn<
+    unknown,
+    MutationDiscardChangeRequestArgsLocal,
+    ResolverResult<boolean>
+  >;
 };
 
 export type QueryResolvers = Partial<QueryResolverFields>;
@@ -259,8 +303,19 @@ export interface PublisherResolvers {
 }
 
 export interface IssueResolvers {
-  Query?: Pick<QueryResolvers, 'issueList' | 'issueDetails' | 'lastEdited'>;
-  Mutation?: Pick<MutationResolvers, 'deleteIssue' | 'createIssue' | 'editIssue'>;
+  Query?: Pick<
+    QueryResolvers,
+    'issueList' | 'issueDetails' | 'lastEdited' | 'changeRequests' | 'changeRequestCount'
+  >;
+  Mutation?: Pick<
+    MutationResolvers,
+    | 'deleteIssue'
+    | 'createIssue'
+    | 'editIssue'
+    | 'reportError'
+    | 'acceptChangeRequest'
+    | 'discardChangeRequest'
+  >;
   Issue?: ObjectResolverFields<unknown, Issue>;
 }
 

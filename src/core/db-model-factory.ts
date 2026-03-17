@@ -17,6 +17,7 @@ type LoadedFactories = {
   AppearanceFactory: ModelFactory;
   UserFactory: ModelFactory;
   AdminTaskResultFactory: ModelFactory;
+  ChangeRequestFactory: ModelFactory;
   Issue_IndividualFactory: ModelFactory;
   Issue_ArcFactory: ModelFactory;
   Story_IndividualFactory: ModelFactory;
@@ -35,6 +36,7 @@ const modelModulePaths = [
   '../modules/appearance/Appearance.model',
   '../modules/user/User.model',
   '../modules/admin-task-result/AdminTaskResult.model',
+  '../modules/change-request/ChangeRequest.model',
   '../modules/shared/Issue_Individual.model',
   '../modules/shared/Issue_Arc.model',
   '../modules/shared/Story_Individual.model',
@@ -58,6 +60,7 @@ const loadFactories = (): LoadedFactories => {
     AppearanceFactory: require('../modules/appearance/Appearance.model').default,
     UserFactory: require('../modules/user/User.model').default,
     AdminTaskResultFactory: require('../modules/admin-task-result/AdminTaskResult.model').default,
+    ChangeRequestFactory: require('../modules/change-request/ChangeRequest.model').default,
     Issue_IndividualFactory: require('../modules/shared/Issue_Individual.model').default,
     Issue_ArcFactory: require('../modules/shared/Issue_Arc.model').default,
     Story_IndividualFactory: require('../modules/shared/Story_Individual.model').default,
@@ -98,6 +101,7 @@ export const createDbModels = (databaseName: string, schema = DEFAULT_SCHEMA): D
     AppearanceFactory,
     UserFactory,
     AdminTaskResultFactory,
+    ChangeRequestFactory,
     Issue_IndividualFactory,
     Issue_ArcFactory,
     Story_IndividualFactory,
@@ -120,6 +124,7 @@ export const createDbModels = (databaseName: string, schema = DEFAULT_SCHEMA): D
   db.Appearance = AppearanceFactory(sequelize) as DbModels['Appearance'];
   db.User = UserFactory(sequelize) as DbModels['User'];
   db.AdminTaskResult = AdminTaskResultFactory(sequelize) as DbModels['AdminTaskResult'];
+  db.ChangeRequest = ChangeRequestFactory(sequelize) as DbModels['ChangeRequest'];
   db.Issue_Individual = Issue_IndividualFactory(sequelize) as DbModels['Issue_Individual'];
   db.Issue_Arc = Issue_ArcFactory(sequelize) as DbModels['Issue_Arc'];
   db.Story_Individual = Story_IndividualFactory(sequelize) as DbModels['Story_Individual'];
