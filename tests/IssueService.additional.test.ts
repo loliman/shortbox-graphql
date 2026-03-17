@@ -357,11 +357,147 @@ describe('IssueService additional coverage', () => {
       expect.objectContaining({
         fk_issue: 211,
         fk_parent: null,
-        number: 1,
+        number: 25,
         title: 'Story',
       }),
       { transaction: tx },
     );
+  });
+
+  it('persists story numbers, individuals, and appearances from edited DE stories', async () => {
+    const oldItem = {
+      ...baseItem,
+      number: '1',
+      variant: '',
+      format: 'Hardcover',
+      series: {
+        title: 'Series',
+        volume: 1,
+        publisher: { name: 'Pub' },
+      },
+    } as any;
+    const newItem = {
+      ...oldItem,
+      stories: [
+        {
+          number: 25,
+          title: 'Story',
+          addinfo: 'Info',
+          part: '2/3',
+          individuals: [
+            { name: 'Writer One', type: ['WRITER', 'PENCILER'] },
+            { name: 'Inker One', type: 'INKER' },
+          ],
+          appearances: [
+            { name: 'Spider-Man', type: 'CHARACTER', role: 'lead' },
+            { name: 'Mary Jane', type: 'CHARACTER' },
+          ],
+        },
+      ],
+    } as any;
+
+    const save = jest.fn().mockResolvedValue({ id: 211 });
+    const existing = { id: 211, save } as any;
+
+    mockModels.Publisher.findOne
+      .mockResolvedValueOnce({ id: 3, original: false })
+      .mockResolvedValueOnce({ id: 3, original: false });
+    mockModels.Series.findOne
+      .mockResolvedValueOnce({ id: 7 })
+      .mockResolvedValueOnce({ id: 7 });
+    mockModels.Issue.findOne.mockResolvedValueOnce(existing);
+    mockModels.Issue.findAll.mockResolvedValueOnce([]);
+    mockModels.Story.findAll
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mockModels.Story.create = jest.fn().mockResolvedValue({ id: 999 });
+    mockModels.Individual.findOrCreate
+      .mockResolvedValueOnce([{ id: 101 }])
+      .mockResolvedValueOnce([{ id: 102 }]);
+    mockModels.Appearance.findOrCreate
+      .mockResolvedValueOnce([{ id: 201 }])
+      .mockResolvedValueOnce([{ id: 202 }]);
+
+    await issueService.editIssue(oldItem, newItem, tx);
+
+    expect(mockModels.Story.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fk_issue: 211,
+        fk_parent: null,
+        number: 25,
+        title: 'Story',
+        addinfo: 'Info',
+        part: '2/3',
+      }),
+      { transaction: tx },
+    );
+    expect(mockModels.Story_Individual.findOrCreate).toHaveBeenCalledTimes(3);
+    expect(mockModels.Story_Individual.findOrCreate).toHaveBeenNthCalledWith(1, {
+      where: {
+        fk_story: 999,
+        fk_individual: 101,
+        type: 'WRITER',
+      },
+      defaults: {
+        fk_story: 999,
+        fk_individual: 101,
+        type: 'WRITER',
+      },
+      transaction: tx,
+    });
+    expect(mockModels.Story_Individual.findOrCreate).toHaveBeenNthCalledWith(2, {
+      where: {
+        fk_story: 999,
+        fk_individual: 101,
+        type: 'PENCILER',
+      },
+      defaults: {
+        fk_story: 999,
+        fk_individual: 101,
+        type: 'PENCILER',
+      },
+      transaction: tx,
+    });
+    expect(mockModels.Story_Individual.findOrCreate).toHaveBeenNthCalledWith(3, {
+      where: {
+        fk_story: 999,
+        fk_individual: 102,
+        type: 'INKER',
+      },
+      defaults: {
+        fk_story: 999,
+        fk_individual: 102,
+        type: 'INKER',
+      },
+      transaction: tx,
+    });
+    expect(mockModels.Story_Appearance.findOrCreate).toHaveBeenCalledTimes(2);
+    expect(mockModels.Story_Appearance.findOrCreate).toHaveBeenNthCalledWith(1, {
+      where: {
+        fk_story: 999,
+        fk_appearance: 201,
+        role: 'lead',
+      },
+      defaults: {
+        fk_story: 999,
+        fk_appearance: 201,
+        role: 'lead',
+      },
+      transaction: tx,
+    });
+    expect(mockModels.Story_Appearance.findOrCreate).toHaveBeenNthCalledWith(2, {
+      where: {
+        fk_story: 999,
+        fk_appearance: 202,
+        role: '',
+      },
+      defaults: {
+        fk_story: 999,
+        fk_appearance: 202,
+        role: '',
+      },
+      transaction: tx,
+    });
   });
 
   it('resolves US parent stories against the main issue with empty variant', async () => {
@@ -429,7 +565,7 @@ describe('IssueService additional coverage', () => {
       expect.objectContaining({
         fk_issue: 211,
         fk_parent: 777,
-        number: 1,
+        number: 25,
         title: 'Story',
       }),
       { transaction: tx },

@@ -722,6 +722,8 @@ export class IssueService {
       title?: string;
       addinfo?: string;
       part?: string;
+      individuals?: Array<{ name?: string; type?: string | string[] }>;
+      appearances?: Array<{ name?: string; type?: string; role?: string }>;
       parent?: StoryParentRef;
     };
 
@@ -822,6 +824,86 @@ export class IssueService {
 
     const inputStories = await expandCollectedParentStories(rawInputStories);
 
+    const normalizeTypeList = (raw: unknown): string[] => {
+      if (Array.isArray(raw)) {
+        return raw.map((entry) => String(entry || '').trim()).filter((entry) => entry.length > 0);
+      }
+      const normalized = String(raw || '').trim();
+      return normalized ? [normalized] : [];
+    };
+
+    const findOrCreateIndividual = async (rawName: unknown) => {
+      const name = String(rawName || '').trim();
+      if (!name) return null;
+      const [individual] = await this.models.Individual.findOrCreate({
+        where: { name },
+        defaults: { name },
+        transaction,
+      });
+      return individual;
+    };
+
+    const linkStoryIndividuals = async (
+      storyId: number,
+      individuals: Array<{ name?: string; type?: string | string[] }> = [],
+    ) => {
+      for (const entry of individuals) {
+        const individual = await findOrCreateIndividual(entry?.name);
+        if (!individual) continue;
+
+        const types = normalizeTypeList(entry?.type);
+        if (types.length === 0) continue;
+
+        for (const type of types) {
+          await this.models.Story_Individual.findOrCreate({
+            where: {
+              fk_story: storyId,
+              fk_individual: individual.id,
+              type,
+            },
+            defaults: {
+              fk_story: storyId,
+              fk_individual: individual.id,
+              type,
+            },
+            transaction,
+          });
+        }
+      }
+    };
+
+    const linkStoryAppearances = async (
+      storyId: number,
+      appearances: Array<{ name?: string; type?: string; role?: string }> = [],
+    ) => {
+      for (const rawAppearance of appearances) {
+        const name = String(rawAppearance?.name || '').trim();
+        const type = String(rawAppearance?.type || '').trim();
+        const role = String(rawAppearance?.role || '').trim();
+        if (!name || !type) continue;
+
+        const [appearance] = await this.models.Appearance.findOrCreate({
+          where: { name, type },
+          defaults: { name, type },
+          transaction,
+        });
+
+        await this.models.Story_Appearance.findOrCreate({
+          where: {
+            fk_story: storyId,
+            fk_appearance: appearance.id,
+            role,
+          },
+          defaults: {
+            fk_story: storyId,
+            fk_appearance: appearance.id,
+            role,
+          },
+          transaction,
+        });
+      }
+    };
+
     const existingStoriesRaw = await this.models.Story.findAll({
       where: { fk_issue: issueId },
       order: [
@@ -864,21 +946,27 @@ export class IssueService {
       const parentTitle = String(parentSeries?.title || '').trim();
       const parentVolume = Number(parentSeries?.volume || 0);
       const parentNumber = String(parentIssue?.number || '').trim();
+      const requestedStoryNumber = Number(story.number || 0);
+      const resolvedStoryNumber = requestedStoryNumber > 0 ? requestedStoryNumber : nextStoryNumber++;
+      if (resolvedStoryNumber >= nextStoryNumber) nextStoryNumber = resolvedStoryNumber + 1;
       const createStoryRow = async (parentStoryId: number | null) => {
         if (typeof parentStoryId === 'number' && parentStoryId > 0) {
           newlyLinkedParentStoryIds.add(parentStoryId);
         }
-        return await this.models.Story.create(
+        const createdStory = await this.models.Story.create(
           {
             fk_issue: issueId,
             fk_parent: parentStoryId,
-            number: nextStoryNumber++,
+            number: resolvedStoryNumber,
             title: String(story.title || ''),
             addinfo: String(story.addinfo || ''),
             part: String(story.part || ''),
           },
           { transaction },
         );
+        await linkStoryIndividuals(createdStory.id, story.individuals || []);
+        await linkStoryAppearances(createdStory.id, story.appearances || []);
+        return createdStory;
       };
 
       let hasCreatedStory = false;
