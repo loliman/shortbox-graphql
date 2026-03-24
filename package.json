@@ -39,7 +39,7 @@
     "@types/express": "^5.0.6",
     "axios": "^1.13.5",
     "cheerio": "^1.2.0",
-    "connect-session-sequelize": "^8.0.5",
+    "connect-session-sequelize": "^8.0.6",
     "cookie-parser": "^1.4.7",
     "csrf-csrf": "^4.0.3",
     "dataloader": "^2.2.3",
