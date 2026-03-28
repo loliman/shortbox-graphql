@@ -341,9 +341,13 @@ const normalizeDryRun = (options?: ReimportRunOptions): boolean => {
   return true;
 };
 
-const normalizeTargetDeFastPath = (options?: ReimportRunOptions): boolean => !normalizeDryRun(options);
+const normalizeTargetDeFastPath = (options?: ReimportRunOptions): boolean =>
+  !normalizeDryRun(options);
 
-const normalizeCollectDetails = (options: ReimportRunOptions | undefined, dryRun: boolean): boolean => {
+const normalizeCollectDetails = (
+  options: ReimportRunOptions | undefined,
+  dryRun: boolean,
+): boolean => {
   if (typeof options?.collectDetails === 'boolean') return options.collectDetails;
   return true;
 };
@@ -377,7 +381,9 @@ const truncateString = (value: unknown, maxLength: number): string => {
 
 const quoteSqlIdentifier = (value: string): string => `"${value.replace(/"/g, '""')}"`;
 
-const resolveSeriesTableReference = (targetModels: DbModels): { schema: string; table: string } | null => {
+const resolveSeriesTableReference = (
+  targetModels: DbModels,
+): { schema: string; table: string } | null => {
   const seriesModel = targetModels.Series as unknown as { getTableName?: () => unknown };
   if (!seriesModel || typeof seriesModel.getTableName !== 'function') return null;
   const tableName = seriesModel.getTableName();
@@ -411,7 +417,9 @@ const mapWithConcurrency = async <Input, Output>(
 
   for (let offset = 0; offset < items.length; offset += limit) {
     const chunk = items.slice(offset, offset + limit);
-    const chunkResults = await Promise.all(chunk.map((item, index) => mapper(item, offset + index)));
+    const chunkResults = await Promise.all(
+      chunk.map((item, index) => mapper(item, offset + index)),
+    );
     results.push(...chunkResults);
   }
 
@@ -495,7 +503,9 @@ const isValidIsoDateOnly = (value: string): boolean => {
   const month = Number(match[2]);
   const day = Number(match[3]);
   const parsed = new Date(year, month - 1, day);
-  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
+  return (
+    parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
+  );
 };
 
 const coerceReleaseDateForDb = (value: unknown): string => {
@@ -523,7 +533,8 @@ const toInt = (value: unknown): number => {
 const issueLabel = (issue: {
   series?: { title?: string; volume?: number };
   number?: string;
-}): string => `${normalizeString(issue.series?.title)} (Vol. ${toInt(issue.series?.volume)}) #${normalizeString(issue.number)}`;
+}): string =>
+  `${normalizeString(issue.series?.title)} (Vol. ${toInt(issue.series?.volume)}) #${normalizeString(issue.number)}`;
 
 const formatReimportCounter = (label: string, current: number, total?: number): string => {
   if (!total || total <= 0) return `${label} ${current}`;
@@ -574,8 +585,19 @@ const formatIssueLog = (
   extras: string[] = [],
 ): string => {
   const actionLabel =
-    action === 'start' ? 'START' : action === 'skip' ? 'SKIP' : action === 'done' ? 'DONE' : 'MANUAL';
-  const parts = [formatLogScope('issue'), formatPrimaryLabel(actionLabel), formatStatusLabel(status), label];
+    action === 'start'
+      ? 'START'
+      : action === 'skip'
+        ? 'SKIP'
+        : action === 'done'
+          ? 'DONE'
+          : 'MANUAL';
+  const parts = [
+    formatLogScope('issue'),
+    formatPrimaryLabel(actionLabel),
+    formatStatusLabel(status),
+    label,
+  ];
   return [...parts, ...extras].join(' | ');
 };
 
@@ -640,7 +662,11 @@ const storyTitlesLooselyMatch = (left: string, right: string): boolean => {
   const normalizedLeft = normalizeString(left);
   const normalizedRight = normalizeString(right);
   if (!normalizedLeft || !normalizedRight) return false;
-  return normalizedLeft === normalizedRight || normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft);
+  return (
+    normalizedLeft === normalizedRight ||
+    normalizedLeft.includes(normalizedRight) ||
+    normalizedRight.includes(normalizedLeft)
+  );
 };
 
 type StoryWithNumberAndTitle = {
@@ -743,19 +769,24 @@ const buildStoryMappings = (
     const hasMeaningfulTitle = Boolean(normalizedSourceTitle) && sourceDbTitle !== 'Untitled';
     if (!hasMeaningfulTitle && sourceNumber <= 0) continue;
 
-    const exactMatches =
-      hasMeaningfulTitle
-        ? available.filter((candidate) => !candidate.used && candidate.normalizedTitle === normalizedSourceTitle)
-        : [];
+    const exactMatches = hasMeaningfulTitle
+      ? available.filter(
+          (candidate) => !candidate.used && candidate.normalizedTitle === normalizedSourceTitle,
+        )
+      : [];
     const looseMatches =
       exactMatches.length === 0 && hasMeaningfulTitle
         ? available.filter(
             (candidate) =>
-              !candidate.used && storyTitlesLooselyMatch(candidate.normalizedTitle, normalizedSourceTitle),
+              !candidate.used &&
+              storyTitlesLooselyMatch(candidate.normalizedTitle, normalizedSourceTitle),
           )
         : [];
     const numberMatches =
-      exactMatches.length === 0 && looseMatches.length === 0 && !hasMeaningfulTitle && sourceNumber > 0
+      exactMatches.length === 0 &&
+      looseMatches.length === 0 &&
+      !hasMeaningfulTitle &&
+      sourceNumber > 0
         ? available.filter((candidate) => !candidate.used && candidate.number === sourceNumber)
         : [];
 
@@ -766,7 +797,8 @@ const buildStoryMappings = (
       (looseMatches.length === 1 ? looseMatches[0] : null) ||
       (numberMatches.length === 1 ? numberMatches[0] : null) ||
       (sourceNumber > 0
-        ? available.find((candidate) => !candidate.used && candidate.number === sourceNumber) || null
+        ? available.find((candidate) => !candidate.used && candidate.number === sourceNumber) ||
+          null
         : null);
     if (!match) continue;
 
@@ -803,7 +835,9 @@ const subtractTitleMultiset = (
     }
 
     if (loose) {
-      const looseIndex = remaining.findIndex((candidate) => storyTitlesLooselyMatch(candidate, title));
+      const looseIndex = remaining.findIndex((candidate) =>
+        storyTitlesLooselyMatch(candidate, title),
+      );
       if (looseIndex >= 0) {
         remaining.splice(looseIndex, 1);
         continue;
@@ -827,15 +861,22 @@ const loadSeriesBatchForScope = async (
     return (await sourceModels.Series.findAll({
       where: { id: scope.seriesId },
       attributes: SOURCE_SERIES_ATTRIBUTES,
-      include: [{ model: sourceModels.Publisher, as: 'publisher', required: true, where: { original: false } }],
+      include: [
+        {
+          model: sourceModels.Publisher,
+          as: 'publisher',
+          required: true,
+          where: { original: false },
+        },
+      ],
     })) as unknown as SeriesWithPublisher[];
   }
 
   if (scope.kind === 'issue') {
     if (offset > 0) return [];
-    const issue = (await sourceModels.Issue.findByPk(scope.issueId)) as unknown as
-      | { fk_series?: number | null }
-      | null;
+    const issue = (await sourceModels.Issue.findByPk(scope.issueId)) as unknown as {
+      fk_series?: number | null;
+    } | null;
     const seriesId = toInt(issue?.fk_series);
     if (!seriesId) return [];
 
@@ -873,8 +914,11 @@ const loadSeriesBatchForScope = async (
   })) as unknown as SeriesWithPublisher[];
 };
 
-const loadDeIssuesForSeries = async (sourceModels: DbModels, seriesId: number): Promise<DeIssueWithStories[]> =>
-  ((await sourceModels.Issue.findAll({
+const loadDeIssuesForSeries = async (
+  sourceModels: DbModels,
+  seriesId: number,
+): Promise<DeIssueWithStories[]> =>
+  (await sourceModels.Issue.findAll({
     where: { fk_series: seriesId },
     include: [
       {
@@ -882,7 +926,14 @@ const loadDeIssuesForSeries = async (sourceModels: DbModels, seriesId: number): 
         as: 'series',
         required: true,
         attributes: SOURCE_SERIES_ATTRIBUTES,
-        include: [{ model: sourceModels.Publisher, as: 'publisher', required: true, where: { original: false } }],
+        include: [
+          {
+            model: sourceModels.Publisher,
+            as: 'publisher',
+            required: true,
+            where: { original: false },
+          },
+        ],
       },
       {
         model: sourceModels.Story,
@@ -897,7 +948,7 @@ const loadDeIssuesForSeries = async (sourceModels: DbModels, seriesId: number): 
       [{ model: sourceModels.Story, as: 'stories' }, 'number', 'ASC'],
       [{ model: sourceModels.Story, as: 'stories' }, 'id', 'ASC'],
     ],
-  })) as unknown) as DeIssueWithStories[];
+  })) as unknown as DeIssueWithStories[];
 
 type TargetDeIssueSnapshot = {
   id: number;
@@ -913,45 +964,47 @@ const loadTargetDeIssueSnapshot = async (
   targetModels: DbModels,
   deIssue: DeIssueWithStories,
 ): Promise<TargetDeIssueSnapshot | null> =>
-  ((await targetModels.Issue.findOne({
-    where: {
-      number: normalizeString(deIssue.number),
-      format: normalizeString(deIssue.format),
-      variant: normalizeString(deIssue.variant),
-    },
-    include: [
-      {
-        model: targetModels.Series,
-        as: 'series',
-        required: true,
-        where: {
-          title: normalizeString(deIssue.series?.title),
-          volume: toInt(deIssue.series?.volume),
-        },
-        include: [
-          {
-            model: targetModels.Publisher,
-            as: 'publisher',
-            required: true,
-            where: {
-              name: normalizeString(deIssue.series?.publisher?.name),
-              original: false,
-            },
+  (
+    await targetModels.Issue.findOne({
+      where: {
+        number: normalizeString(deIssue.number),
+        format: normalizeString(deIssue.format),
+        variant: normalizeString(deIssue.variant),
+      },
+      include: [
+        {
+          model: targetModels.Series,
+          as: 'series',
+          required: true,
+          where: {
+            title: normalizeString(deIssue.series?.title),
+            volume: toInt(deIssue.series?.volume),
           },
-        ],
-      },
-      {
-        model: targetModels.Story,
-        as: 'stories',
-        required: false,
-        attributes: ['id', 'number', 'title', 'fk_parent'],
-      },
-    ],
-    order: [
-      [{ model: targetModels.Story, as: 'stories' }, 'number', 'ASC'],
-      [{ model: targetModels.Story, as: 'stories' }, 'id', 'ASC'],
-    ],
-  }))?.get({ plain: true }) as unknown) as TargetDeIssueSnapshot | null;
+          include: [
+            {
+              model: targetModels.Publisher,
+              as: 'publisher',
+              required: true,
+              where: {
+                name: normalizeString(deIssue.series?.publisher?.name),
+                original: false,
+              },
+            },
+          ],
+        },
+        {
+          model: targetModels.Story,
+          as: 'stories',
+          required: false,
+          attributes: ['id', 'number', 'title', 'fk_parent'],
+        },
+      ],
+      order: [
+        [{ model: targetModels.Story, as: 'stories' }, 'number', 'ASC'],
+        [{ model: targetModels.Story, as: 'stories' }, 'id', 'ASC'],
+      ],
+    })
+  )?.get({ plain: true }) as unknown as TargetDeIssueSnapshot | null;
 
 const targetDeIssueLooksComplete = async (
   targetModels: DbModels,
@@ -971,7 +1024,10 @@ const targetDeIssueLooksComplete = async (
   for (const targetStory of targetStories) {
     if (targetStory.fk_parent == null) continue;
     const storyNumber = toInt(targetStory.number);
-    targetParentCountsByStoryNumber.set(storyNumber, (targetParentCountsByStoryNumber.get(storyNumber) || 0) + 1);
+    targetParentCountsByStoryNumber.set(
+      storyNumber,
+      (targetParentCountsByStoryNumber.get(storyNumber) || 0) + 1,
+    );
   }
 
   for (const sourceStory of sourceStories) {
@@ -985,7 +1041,10 @@ const targetDeIssueLooksComplete = async (
   return true;
 };
 
-const countDeSeriesForScope = async (sourceModels: DbModels, scope: ReimportScope): Promise<number> => {
+const countDeSeriesForScope = async (
+  sourceModels: DbModels,
+  scope: ReimportScope,
+): Promise<number> => {
   if (scope.kind === 'series' || scope.kind === 'issue') return 1;
 
   const include = [
@@ -1000,7 +1059,10 @@ const countDeSeriesForScope = async (sourceModels: DbModels, scope: ReimportScop
   return sourceModels.Series.count({ include });
 };
 
-const countDeIssuesForScope = async (sourceModels: DbModels, scope: ReimportScope): Promise<number> => {
+const countDeIssuesForScope = async (
+  sourceModels: DbModels,
+  scope: ReimportScope,
+): Promise<number> => {
   if (scope.kind === 'issue') return 1;
 
   if (scope.kind === 'series') {
@@ -1020,7 +1082,10 @@ const countDeIssuesForScope = async (sourceModels: DbModels, scope: ReimportScop
             as: 'publisher',
             required: true,
             attributes: [],
-            where: { original: false, ...(scope.kind === 'publisher' ? { id: scope.publisherId } : {}) },
+            where: {
+              original: false,
+              ...(scope.kind === 'publisher' ? { id: scope.publisherId } : {}),
+            },
           },
         ],
       },
@@ -1061,10 +1126,10 @@ const loadUsStoryClosure = async (
 
   while (queue.length > 0) {
     const frontier = queue.splice(0, 100);
-    const rows = ((await sourceModels.Story.findAll({
+    const rows = (await sourceModels.Story.findAll({
       where: { id: { [Op.in]: frontier } },
       attributes: ['id', 'fk_issue', 'fk_reprint'],
-    })) as unknown) as UsStoryRow[];
+    })) as unknown as UsStoryRow[];
 
     for (const row of rows) {
       const id = toInt(row.id);
@@ -1097,7 +1162,9 @@ const loadLinkedUsIssueIdsForDeIssue = async (
 
   const usStoryClosure = await loadUsStoryClosure(sourceModels, rootUsStoryIds);
   const usIssueIds = Array.from(
-    new Set([...usStoryClosure.values()].map((story) => toInt(story.fk_issue)).filter((id) => id > 0)),
+    new Set(
+      [...usStoryClosure.values()].map((story) => toInt(story.fk_issue)).filter((id) => id > 0),
+    ),
   ).sort((left, right) => left - right);
 
   return { rootUsStoryIds, usIssueIds };
@@ -1110,11 +1177,11 @@ const loadUsIssueGroupKeys = async (
   const uniqueIssueIds = Array.from(new Set(usIssueIds.map(toInt).filter((id) => id > 0)));
   if (uniqueIssueIds.length === 0) return new Set<string>();
 
-  const rows = ((await sourceModels.Issue.findAll({
+  const rows = (await sourceModels.Issue.findAll({
     where: { id: { [Op.in]: uniqueIssueIds } },
     attributes: ['id', 'number', 'fk_series'],
     raw: true,
-  })) as unknown) as Array<{ id: number; number: string; fk_series: number }>;
+  })) as unknown as Array<{ id: number; number: string; fk_series: number }>;
 
   const keys = new Set<string>();
   for (const row of rows) {
@@ -1126,8 +1193,11 @@ const loadUsIssueGroupKeys = async (
   return keys;
 };
 
-const loadSourceUsIssue = async (sourceModels: DbModels, issueId: number): Promise<SourceUsIssue | null> =>
-  ((await sourceModels.Issue.findByPk(issueId, {
+const loadSourceUsIssue = async (
+  sourceModels: DbModels,
+  issueId: number,
+): Promise<SourceUsIssue | null> =>
+  (await sourceModels.Issue.findByPk(issueId, {
     include: [
       {
         model: sourceModels.Series,
@@ -1144,9 +1214,12 @@ const loadSourceUsIssue = async (sourceModels: DbModels, issueId: number): Promi
       },
     ],
     order: [[{ model: sourceModels.Story, as: 'stories' }, 'number', 'ASC']],
-  })) as unknown) as SourceUsIssue | null;
+  })) as unknown as SourceUsIssue | null;
 
-const loadIssueGraph = async (sourceModels: DbModels, issueId: number): Promise<LoadedIssueGraph | null> => {
+const loadIssueGraph = async (
+  sourceModels: DbModels,
+  issueId: number,
+): Promise<LoadedIssueGraph | null> => {
   const issue = await sourceModels.Issue.findByPk(issueId, {
     include: [
       {
@@ -1318,7 +1391,9 @@ const targetHasIssueGroup = async (
             model: targetModels.Publisher,
             as: 'publisher',
             required: true,
-            ...(series.publisherName ? { where: { name: normalizeString(series.publisherName) } } : {}),
+            ...(series.publisherName
+              ? { where: { name: normalizeString(series.publisherName) } }
+              : {}),
           },
         ],
       },
@@ -1389,7 +1464,11 @@ const evaluateUsIssue = async (
     }
 
     try {
-      const crawled = await crawler.crawlIssue(requestedSeries.title, requestedSeries.volume, sourceIssue.number);
+      const crawled = await crawler.crawlIssue(
+        requestedSeries.title,
+        requestedSeries.volume,
+        sourceIssue.number,
+      );
       const crawledStoriesForComparison = collectRepresentativeStoriesByNumber(crawled.stories);
       const crawledStoryCount = crawledStoriesForComparison.length;
       const crawledSeries = {
@@ -1443,9 +1522,12 @@ const evaluateUsIssue = async (
         const unmatchedShortboxStoryTitlesLoose = hasComparableTitleSets
           ? subtractTitleMultiset(crawledStoryTitles, shortboxStoryTitles, { loose: true })
           : shortboxStoryTitles;
-        const storyTitleSubset = shortboxStoryTitles.length > 0 && unmatchedShortboxStoryTitles.length === 0;
+        const storyTitleSubset =
+          shortboxStoryTitles.length > 0 && unmatchedShortboxStoryTitles.length === 0;
         const looseStoryTitleSubset =
-          !storyTitleSubset && shortboxStoryTitles.length > 0 && unmatchedShortboxStoryTitlesLoose.length === 0;
+          !storyTitleSubset &&
+          shortboxStoryTitles.length > 0 &&
+          unmatchedShortboxStoryTitlesLoose.length === 0;
 
         return {
           sourceIssue,
@@ -1455,12 +1537,18 @@ const evaluateUsIssue = async (
             label,
             result: crawlResult,
             status: storyTitleSubset && !moved ? 'ok' : 'check',
-            reason: storyTitleSubset || looseStoryTitleSubset ? 'story-count-mismatch-subset' : 'story-count-mismatch',
+            reason:
+              storyTitleSubset || looseStoryTitleSubset
+                ? 'story-count-mismatch-subset'
+                : 'story-count-mismatch',
             moved,
             shortboxStoryCount: sourceStoryCount,
             crawledStoryCount,
             storyCountDirection: 'crawler-has-more-stories',
-            storyTitleSubset: shortboxStoryTitles.length > 0 ? storyTitleSubset || looseStoryTitleSubset : undefined,
+            storyTitleSubset:
+              shortboxStoryTitles.length > 0
+                ? storyTitleSubset || looseStoryTitleSubset
+                : undefined,
             storyMappings,
             unmatchedShortboxStoryTitles:
               storyTitleSubset || looseStoryTitleSubset
@@ -1551,10 +1639,16 @@ const evaluateUsIssue = async (
   return pending;
 };
 
-const targetStoryRefKey = (seriesTitle: string, volume: number, issueNumber: string, storyNumber: number) =>
+const targetStoryRefKey = (
+  seriesTitle: string,
+  volume: number,
+  issueNumber: string,
+  storyNumber: number,
+) =>
   `${normalizeLower(seriesTitle)}::${toInt(volume)}::${normalizeLower(issueNumber)}::${toInt(storyNumber)}`;
 
-const targetIssueGroupKey = (seriesId: number, number: string) => `${toInt(seriesId)}::${normalizeString(number)}`;
+const targetIssueGroupKey = (seriesId: number, number: string) =>
+  `${toInt(seriesId)}::${normalizeString(number)}`;
 
 type TargetEntityCache = {
   publishers: Map<string, Promise<any>>;
@@ -1592,7 +1686,8 @@ const primeEntityCache = (cache: Map<string, Promise<any>>, cacheKey: string, en
   cache.set(cacheKey, Promise.resolve(entity));
 };
 
-const createTargetIssueGroupPresenceCache = (): TargetIssueGroupPresenceCache => new Map<string, Promise<boolean>>();
+const createTargetIssueGroupPresenceCache = (): TargetIssueGroupPresenceCache =>
+  new Map<string, Promise<boolean>>();
 
 const targetIssueGroupPresenceCacheKey = (
   series: { title: string; volume: number; publisherName?: string },
@@ -1611,7 +1706,10 @@ const primeTargetIssueGroupPresenceCache = (
   issueNumber: string,
   exists: boolean,
 ) => {
-  cache.set(targetIssueGroupPresenceCacheKey(series, issueNumber), Promise.resolve(Boolean(exists)));
+  cache.set(
+    targetIssueGroupPresenceCacheKey(series, issueNumber),
+    Promise.resolve(Boolean(exists)),
+  );
 };
 
 const syncIssueScalars = async (
@@ -1890,7 +1988,11 @@ const rememberTargetStoryInPersistenceContext = (
       appearanceKeys.add(targetStoryAppearanceLinkKey(appearanceId, role));
     }
     if (name && type && appearanceId > 0) {
-      primeEntityCache(targetEntityCache.appearances, targetAppearanceCacheKey(name, type), appearance);
+      primeEntityCache(
+        targetEntityCache.appearances,
+        targetAppearanceCacheKey(name, type),
+        appearance,
+      );
     }
   }
   context.storyAppearanceKeysByStoryId.set(storyId, appearanceKeys);
@@ -2044,7 +2146,12 @@ const syncStoryAppearances = async (
       normalizeString((entry as LoadedAppearance).story_appearance?.role) ||
       normalizeString((entry as CrawledAppearance).role);
     if (!name || !type) continue;
-    const appearance = await getOrLoadTargetAppearanceCached(targetModels, targetEntityCache, name, type);
+    const appearance = await getOrLoadTargetAppearanceCached(
+      targetModels,
+      targetEntityCache,
+      name,
+      type,
+    );
     const linkKey = targetStoryAppearanceLinkKey(appearance.id, role);
     if (existingLinks.has(linkKey)) continue;
 
@@ -2112,7 +2219,9 @@ const matchStoryFromIssueStories = (
   );
   if (normalizedMatch) return toInt(normalizedMatch.id);
 
-  const exactMatch = numberScoped.find((candidate) => normalizeString(candidate.title) === exactDbTitle);
+  const exactMatch = numberScoped.find(
+    (candidate) => normalizeString(candidate.title) === exactDbTitle,
+  );
   if (exactMatch) return toInt(exactMatch.id);
 
   if (numberScoped.length === 1) {
@@ -2126,7 +2235,9 @@ const loadSourceParentStoryLookups = async (
   sourceModels: DbModels,
   sourceStoryIds: number[],
 ): Promise<SourceParentStoryLookup[]> => {
-  const uniqueSourceStoryIds = Array.from(new Set(sourceStoryIds.map(toInt).filter((id) => id > 0)));
+  const uniqueSourceStoryIds = Array.from(
+    new Set(sourceStoryIds.map(toInt).filter((id) => id > 0)),
+  );
   if (uniqueSourceStoryIds.length === 0) return [];
 
   const rows = await sourceModels.Story.findAll({
@@ -2237,7 +2348,9 @@ const hydrateTargetParentStoryMappingsFromTarget = async (
     new Set(
       sourceStoryIds
         .map(toInt)
-        .filter((sourceStoryId) => sourceStoryId > 0 && !sourceStoryToTargetStoryId.has(sourceStoryId)),
+        .filter(
+          (sourceStoryId) => sourceStoryId > 0 && !sourceStoryToTargetStoryId.has(sourceStoryId),
+        ),
     ),
   );
   if (unresolvedSourceStoryIds.length === 0) return;
@@ -2260,7 +2373,10 @@ const hydrateTargetParentStoryMappingsFromTarget = async (
 
     let targetIssuePromise = targetIssueCache.get(issueKey);
     if (!targetIssuePromise) {
-      targetIssuePromise = loadTargetIssueWithStoriesForSourceParentStory(targetModels, sourceStory);
+      targetIssuePromise = loadTargetIssueWithStoriesForSourceParentStory(
+        targetModels,
+        sourceStory,
+      );
       targetIssueCache.set(issueKey, targetIssuePromise);
     }
 
@@ -2335,7 +2451,9 @@ const findCrawledStoryIndexForSourceStory = (
       }))
       .filter((candidate) => storyTitlesLooselyMatch(candidate.title, sourceTitle));
 
-    const looseTitleAndNumberMatch = looseTitleMatches.find((candidate) => candidate.number === sourceNumber);
+    const looseTitleAndNumberMatch = looseTitleMatches.find(
+      (candidate) => candidate.number === sourceNumber,
+    );
     if (looseTitleAndNumberMatch) return looseTitleAndNumberMatch.index;
     if (looseTitleMatches.length === 1) return looseTitleMatches[0].index;
     return null;
@@ -2384,11 +2502,16 @@ const loadResolvableSourceStoryIdsForEvaluatedIssue = async (
   if (evaluated.report.result === 'crawler' || evaluated.report.result === 'moved') {
     if (evaluated.report.reason === 'ok' && Array.isArray(evaluated.sourceIssue.stories)) {
       return new Set(
-        evaluated.sourceIssue.stories.map((story) => toInt(story.id)).filter((sourceStoryId) => sourceStoryId > 0),
+        evaluated.sourceIssue.stories
+          .map((story) => toInt(story.id))
+          .filter((sourceStoryId) => sourceStoryId > 0),
       );
     }
 
-    if (Array.isArray(evaluated.report.storyMappings) && evaluated.report.storyMappings.length > 0) {
+    if (
+      Array.isArray(evaluated.report.storyMappings) &&
+      evaluated.report.storyMappings.length > 0
+    ) {
       return new Set(
         evaluated.report.storyMappings
           .map((mapping) => toInt(mapping.sourceStoryId))
@@ -2398,26 +2521,43 @@ const loadResolvableSourceStoryIdsForEvaluatedIssue = async (
 
     const sourceSeriesId = toInt(evaluated.sourceIssue.series?.id);
     if (!sourceSeriesId) return new Set();
-    const groupIssues = await loadIssueGroupByNumber(sourceModels, sourceSeriesId, evaluated.sourceIssue.number);
+    const groupIssues = await loadIssueGroupByNumber(
+      sourceModels,
+      sourceSeriesId,
+      evaluated.sourceIssue.number,
+    );
     if (groupIssues.length === 0) return new Set();
-    const storyMappings = buildIssueGroupStoryMappings(groupIssues, evaluated.crawledIssue?.stories);
+    const storyMappings = buildIssueGroupStoryMappings(
+      groupIssues,
+      evaluated.crawledIssue?.stories,
+    );
 
     return new Set(
-      storyMappings.map((mapping) => toInt(mapping.sourceStoryId)).filter((sourceStoryId) => sourceStoryId > 0),
+      storyMappings
+        .map((mapping) => toInt(mapping.sourceStoryId))
+        .filter((sourceStoryId) => sourceStoryId > 0),
     );
   }
 
   if (Array.isArray(evaluated.sourceIssue.stories) && evaluated.sourceIssue.stories.length > 0) {
     return new Set(
-      evaluated.sourceIssue.stories.map((story) => toInt(story.id)).filter((storyId) => storyId > 0),
+      evaluated.sourceIssue.stories
+        .map((story) => toInt(story.id))
+        .filter((storyId) => storyId > 0),
     );
   }
 
   const sourceSeriesId = toInt(evaluated.sourceIssue.series?.id);
   if (!sourceSeriesId) return new Set();
-  const groupIssues = await loadIssueGroupByNumber(sourceModels, sourceSeriesId, evaluated.sourceIssue.number);
+  const groupIssues = await loadIssueGroupByNumber(
+    sourceModels,
+    sourceSeriesId,
+    evaluated.sourceIssue.number,
+  );
   return new Set(
-    groupIssues.flatMap((issue) => (issue.stories || []).map((story) => toInt(story.id)).filter((storyId) => storyId > 0)),
+    groupIssues.flatMap((issue) =>
+      (issue.stories || []).map((story) => toInt(story.id)).filter((storyId) => storyId > 0),
+    ),
   );
 };
 
@@ -2428,14 +2568,21 @@ const findMissingDeParentStoryIds = async (
   sourceStoryToTargetStoryId: Map<number, number>,
 ): Promise<number[]> => {
   const requiredParentStoryIds = Array.from(
-    new Set((deIssue.stories || []).map((story) => toInt(story.fk_parent)).filter((storyId) => storyId > 0)),
+    new Set(
+      (deIssue.stories || [])
+        .map((story) => toInt(story.fk_parent))
+        .filter((storyId) => storyId > 0),
+    ),
   );
   if (requiredParentStoryIds.length === 0) return [];
 
   const resolvableParentStoryIds = new Set<number>(sourceStoryToTargetStoryId.keys());
 
   for (const evaluated of evaluatedUsIssues) {
-    const sourceStoryIds = await loadResolvableSourceStoryIdsForEvaluatedIssue(sourceModels, evaluated);
+    const sourceStoryIds = await loadResolvableSourceStoryIdsForEvaluatedIssue(
+      sourceModels,
+      evaluated,
+    );
     for (const sourceStoryId of sourceStoryIds) {
       resolvableParentStoryIds.add(sourceStoryId);
     }
@@ -2490,8 +2637,17 @@ const loadOrCreateTargetIssueGroupContext = async (
     addinfo?: string;
   },
 ) => {
-  const targetPublisher = await findOrCreateTargetPublisher(targetModels, targetEntityCache, sourcePublisher);
-  const targetSeries = await findOrCreateTargetSeries(targetModels, targetEntityCache, targetPublisher.id, sourceSeries);
+  const targetPublisher = await findOrCreateTargetPublisher(
+    targetModels,
+    targetEntityCache,
+    sourcePublisher,
+  );
+  const targetSeries = await findOrCreateTargetSeries(
+    targetModels,
+    targetEntityCache,
+    targetPublisher.id,
+    sourceSeries,
+  );
   return { targetPublisher, targetSeries };
 };
 
@@ -2506,7 +2662,11 @@ const persistSourceUsIssueGroup = async (
   targetStoryRefIndex: Map<string, number>,
 ): Promise<void> => {
   const sourceSeriesId = toInt(evaluated.sourceIssue.series?.id);
-  const groupIssues = await loadIssueGroupByNumber(sourceModels, sourceSeriesId, evaluated.sourceIssue.number);
+  const groupIssues = await loadIssueGroupByNumber(
+    sourceModels,
+    sourceSeriesId,
+    evaluated.sourceIssue.number,
+  );
   if (groupIssues.length === 0) {
     throw new Error(`Could not load source US issue group for ${evaluated.report.label}`);
   }
@@ -2535,9 +2695,18 @@ const persistSourceUsIssueGroup = async (
       ...sourceIssue,
       fk_series: targetSeries.id,
     });
-    const targetStoryContext = await loadTargetStoryPersistenceContext(targetModels, targetEntityCache, targetIssue.id);
+    const targetStoryContext = await loadTargetStoryPersistenceContext(
+      targetModels,
+      targetEntityCache,
+      targetIssue.id,
+    );
 
-    await syncIssueIndividuals(targetModels, targetEntityCache, targetIssue.id, sourceIssue.individuals);
+    await syncIssueIndividuals(
+      targetModels,
+      targetEntityCache,
+      targetIssue.id,
+      sourceIssue.individuals,
+    );
     await syncIssueArcs(targetModels, targetEntityCache, targetIssue.id, sourceIssue.arcs);
 
     for (const cover of sourceIssue.covers || []) {
@@ -2548,7 +2717,12 @@ const persistSourceUsIssueGroup = async (
         normalizeString(cover.url),
         normalizeString(cover.addinfo),
       );
-      await syncCoverIndividuals(targetModels, targetEntityCache, targetCover.id, cover.individuals);
+      await syncCoverIndividuals(
+        targetModels,
+        targetEntityCache,
+        targetCover.id,
+        cover.individuals,
+      );
     }
 
     for (const story of sourceIssue.stories || []) {
@@ -2598,7 +2772,13 @@ const persistSourceUsIssueGroup = async (
         sourceReprintStoryId: story.fk_reprint == null ? undefined : toInt(story.fk_reprint),
       });
 
-      await syncStoryIndividuals(targetModels, targetEntityCache, targetStoryContext, targetStory.id, story.individuals);
+      await syncStoryIndividuals(
+        targetModels,
+        targetEntityCache,
+        targetStoryContext,
+        targetStory.id,
+        story.individuals,
+      );
       await syncStoryAppearances(
         targetModels,
         targetEntityCache,
@@ -2626,7 +2806,6 @@ const persistSourceUsIssueGroup = async (
       });
     }
   }
-
 };
 
 const persistCrawledUsIssueGroup = async (
@@ -2707,7 +2886,12 @@ const persistCrawledUsIssueGroup = async (
     fk_series: targetSeries.id,
   });
 
-  await syncIssueIndividuals(targetModels, targetEntityCache, mainIssue.id, crawledIssue.individuals);
+  await syncIssueIndividuals(
+    targetModels,
+    targetEntityCache,
+    mainIssue.id,
+    crawledIssue.individuals,
+  );
   await syncIssueArcs(targetModels, targetEntityCache, mainIssue.id, crawledIssue.arcs);
 
   if (crawledIssue.cover) {
@@ -2718,11 +2902,20 @@ const persistCrawledUsIssueGroup = async (
       normalizeString(crawledIssue.cover.url),
       '',
     );
-    await syncCoverIndividuals(targetModels, targetEntityCache, targetCover.id, crawledIssue.cover.individuals);
+    await syncCoverIndividuals(
+      targetModels,
+      targetEntityCache,
+      targetCover.id,
+      crawledIssue.cover.individuals,
+    );
   }
 
   const persistedCrawledStoryIdsByIndex = new Map<number, number>();
-  const targetStoryContext = await loadTargetStoryPersistenceContext(targetModels, targetEntityCache, mainIssue.id);
+  const targetStoryContext = await loadTargetStoryPersistenceContext(
+    targetModels,
+    targetEntityCache,
+    mainIssue.id,
+  );
   for (const [index, story] of (crawledIssue.stories || []).entries()) {
     const existing = matchExistingStory(targetStoryContext, toInt(story.number), story.title);
     const targetStory =
@@ -2747,7 +2940,13 @@ const persistCrawledUsIssueGroup = async (
       targetStory.id,
     );
 
-    await syncStoryIndividuals(targetModels, targetEntityCache, targetStoryContext, targetStory.id, story.individuals);
+    await syncStoryIndividuals(
+      targetModels,
+      targetEntityCache,
+      targetStoryContext,
+      targetStory.id,
+      story.individuals,
+    );
     await syncStoryAppearances(
       targetModels,
       targetEntityCache,
@@ -2769,9 +2968,14 @@ const persistCrawledUsIssueGroup = async (
 
   const sourceSeriesId = toInt(evaluated.sourceIssue.series?.id);
   const groupIssues =
-    sourceSeriesId > 0 ? await loadIssueGroupByNumber(sourceModels, sourceSeriesId, evaluated.sourceIssue.number) : [];
+    sourceSeriesId > 0
+      ? await loadIssueGroupByNumber(sourceModels, sourceSeriesId, evaluated.sourceIssue.number)
+      : [];
   const groupMappings = buildIssueGroupStoryMappings(groupIssues, crawledIssue.stories);
-  const sourceIssueMappings = buildStoryMappingsFromSourceStories(evaluated.sourceIssue.stories, crawledIssue.stories);
+  const sourceIssueMappings = buildStoryMappingsFromSourceStories(
+    evaluated.sourceIssue.stories,
+    crawledIssue.stories,
+  );
   const storyMappings =
     groupMappings.length > 0
       ? groupMappings
@@ -2799,7 +3003,8 @@ const persistCrawledUsIssueGroup = async (
       releasedate:
         normalizeString((variant as { releasedate?: string }).releasedate) || mainIssue.releasedate,
       legacy_number:
-        normalizeString((variant as { legacyNumber?: string }).legacyNumber) || mainIssue.legacy_number,
+        normalizeString((variant as { legacyNumber?: string }).legacyNumber) ||
+        mainIssue.legacy_number,
       pages: 0,
       price: Number((variant as { price?: number }).price || 0),
       currency: normalizeString((variant as { currency?: string }).currency) || mainIssue.currency,
@@ -2821,9 +3026,13 @@ const persistCrawledUsIssueGroup = async (
       normalizeString(variantCover.url),
       '',
     );
-    await syncCoverIndividuals(targetModels, targetEntityCache, targetCover.id, variantCover.individuals);
+    await syncCoverIndividuals(
+      targetModels,
+      targetEntityCache,
+      targetCover.id,
+      variantCover.individuals,
+    );
   }
-
 };
 
 const flushPendingLinks = async (
@@ -2854,7 +3063,12 @@ const flushPendingLinks = async (
     const pending = pendingCrawledReprints[index];
     if (!pending.storyNumber) continue;
     const mappedTargetReprintId = targetStoryRefIndex.get(
-      targetStoryRefKey(pending.seriesTitle, pending.volume, pending.issueNumber, pending.storyNumber),
+      targetStoryRefKey(
+        pending.seriesTitle,
+        pending.volume,
+        pending.issueNumber,
+        pending.storyNumber,
+      ),
     );
     if (!mappedTargetReprintId) continue;
     await targetModels.Story.update(
@@ -2878,7 +3092,11 @@ const persistDeIssue = async (
   }
 
   const requiredParentStoryIds = Array.from(
-    new Set((deIssue.stories || []).map((story) => toInt(story.fk_parent)).filter((storyId) => storyId > 0)),
+    new Set(
+      (deIssue.stories || [])
+        .map((story) => toInt(story.fk_parent))
+        .filter((storyId) => storyId > 0),
+    ),
   );
   const missingParentStoryIds = requiredParentStoryIds.filter(
     (sourceStoryId) => !sourceStoryToTargetStoryId.has(sourceStoryId),
@@ -2910,7 +3128,11 @@ const persistDeIssue = async (
     ...deIssue,
     fk_series: targetSeries.id,
   });
-  const targetStoryContext = await loadTargetStoryPersistenceContext(targetModels, targetEntityCache, targetIssue.id);
+  const targetStoryContext = await loadTargetStoryPersistenceContext(
+    targetModels,
+    targetEntityCache,
+    targetIssue.id,
+  );
   await syncIssueIndividuals(targetModels, targetEntityCache, targetIssue.id, deIssue.individuals);
   await syncIssueArcs(targetModels, targetEntityCache, targetIssue.id, deIssue.arcs);
 
@@ -2957,14 +3179,22 @@ const persistDeIssue = async (
     targetStory.part = normalizeString(story.part);
     const sourceParentStoryId = story.fk_parent == null ? null : toInt(story.fk_parent);
     const targetParentStoryId =
-      sourceParentStoryId == null ? null : sourceStoryToTargetStoryId.get(sourceParentStoryId) || null;
+      sourceParentStoryId == null
+        ? null
+        : sourceStoryToTargetStoryId.get(sourceParentStoryId) || null;
     if (sourceParentStoryId != null && !targetParentStoryId) {
       throw new MissingTargetParentStoryMappingError(issueLabel(deIssue), [sourceParentStoryId]);
     }
     targetStory.fk_parent = targetParentStoryId;
     await targetStory.save();
 
-    await syncStoryIndividuals(targetModels, targetEntityCache, targetStoryContext, targetStory.id, story.individuals);
+    await syncStoryIndividuals(
+      targetModels,
+      targetEntityCache,
+      targetStoryContext,
+      targetStory.id,
+      story.individuals,
+    );
     await syncStoryAppearances(
       targetModels,
       targetEntityCache,
@@ -3018,18 +3248,23 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
     totalMappedUsIssues: 0,
     processedUsIssues: 0,
     processedUsIssueGroups: 0,
-      results: {
-        shortbox: 0,
-        crawler: 0,
-        moved: 0,
-        manual: 0,
-      },
+    results: {
+      shortbox: 0,
+      crawler: 0,
+      moved: 0,
+      manual: 0,
+    },
   };
 
   const logProgress = (stage: string, extra?: string) => {
-    const remainingUsIssueGroups = Math.max(0, counters.totalUsIssueGroups - counters.processedUsIssueGroups);
+    const remainingUsIssueGroups = Math.max(
+      0,
+      counters.totalUsIssueGroups - counters.processedUsIssueGroups,
+    );
     const averageUsIssueGroupDurationMs =
-      counters.processedUsIssueGroups > 0 ? (Date.now() - runStartedAtMs) / counters.processedUsIssueGroups : 0;
+      counters.processedUsIssueGroups > 0
+        ? (Date.now() - runStartedAtMs) / counters.processedUsIssueGroups
+        : 0;
     const approxTimeLeft =
       counters.processedUsIssueGroups > 0 && remainingUsIssueGroups > 0
         ? formatApproxDuration(averageUsIssueGroupDurationMs * remainingUsIssueGroups)
@@ -3054,11 +3289,15 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   logger.info(
     `[reimport] starting DE->US ${dryRun ? 'dry-run' : 'prod-run'} (scope=${scope.kind}, batchSize=${SERIES_BATCH_SIZE}, targetDeFastPath=${enableTargetDeFastPath ? 'enabled' : 'disabled'})`,
   );
-  logProgress('start', `scope=${scope.kind} targetDeFastPath=${enableTargetDeFastPath ? 'enabled' : 'disabled'}`);
+  logProgress(
+    'start',
+    `scope=${scope.kind} targetDeFastPath=${enableTargetDeFastPath ? 'enabled' : 'disabled'}`,
+  );
 
   const persistedUsIssueGroupKeys = new Set<string>();
   const sourceStoryToTargetStoryId = new Map<number, number>();
-  const pendingSourceReprintLinks: Array<{ targetStoryId: number; sourceReprintStoryId: number }> = [];
+  const pendingSourceReprintLinks: Array<{ targetStoryId: number; sourceReprintStoryId: number }> =
+    [];
   const pendingCrawledReprints: Array<{
     targetStoryId: number;
     seriesTitle: string;
@@ -3150,214 +3389,157 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
   };
 
   try {
-  while (true) {
-    const seriesBatch = await loadSeriesBatchForScope(sourceModels, scope, offset, SERIES_BATCH_SIZE);
-    if (seriesBatch.length === 0) break;
-    offset += seriesBatch.length;
-    console.log(`[reimport][batch] Loaded ${seriesBatch.length} DE series (offset ${offset})`);
-
-    for (const deSeries of seriesBatch) {
-      const deIssues = await loadDeIssuesForSeries(sourceModels, toInt(deSeries.id));
-      const issueResults: ReimportDeIssueResult[] = [];
-      console.log(
-        `[reimport][series] ${formatReimportCounter(
-          'Series',
-          counters.processedDeSeries + 1,
-          counters.totalDeSeries,
-        )} | ${normalizeString(deSeries.title)} (Vol. ${toInt(deSeries.volume)}) | ${deIssues.length} DE issues`,
+    while (true) {
+      const seriesBatch = await loadSeriesBatchForScope(
+        sourceModels,
+        scope,
+        offset,
+        SERIES_BATCH_SIZE,
       );
+      if (seriesBatch.length === 0) break;
+      offset += seriesBatch.length;
+      console.log(`[reimport][batch] Loaded ${seriesBatch.length} DE series (offset ${offset})`);
 
-      for (const deIssue of deIssues) {
-        const deIssueStartedAtMs = Date.now();
-        const finishDeIssue = () => {
-          const durationMs = Date.now() - deIssueStartedAtMs;
-          counters.totalDeIssueDurationMs += durationMs;
-          counters.processedDeIssues += 1;
-          return durationMs;
-        };
-        const { rootUsStoryIds, usIssueIds } = await loadLinkedUsIssueIdsForDeIssue(sourceModels, deIssue);
-        counters.totalMappedUsIssues += usIssueIds.length;
+      for (const deSeries of seriesBatch) {
+        const deIssues = await loadDeIssuesForSeries(sourceModels, toInt(deSeries.id));
+        const issueResults: ReimportDeIssueResult[] = [];
+        console.log(
+          `[reimport][series] ${formatReimportCounter(
+            'Series',
+            counters.processedDeSeries + 1,
+            counters.totalDeSeries,
+          )} | ${normalizeString(deSeries.title)} (Vol. ${toInt(deSeries.volume)}) | ${deIssues.length} DE issues`,
+        );
 
-        if (
-          !dryRun &&
-          targetModels &&
-          enableTargetDeFastPath &&
-          (await targetDeIssueLooksComplete(targetModels, deIssue))
-        ) {
-          counters.processedUsIssues += usIssueIds.length;
-          const skippedUsIssueGroupKeys = await loadUsIssueGroupKeys(sourceModels, usIssueIds);
-          for (const usIssueGroupKey of skippedUsIssueGroupKeys) {
-            if (processedUsIssueGroupKeys.has(usIssueGroupKey)) continue;
-            processedUsIssueGroupKeys.add(usIssueGroupKey);
-            counters.processedUsIssueGroups += 1;
+        for (const deIssue of deIssues) {
+          const deIssueStartedAtMs = Date.now();
+          const finishDeIssue = () => {
+            const durationMs = Date.now() - deIssueStartedAtMs;
+            counters.totalDeIssueDurationMs += durationMs;
+            counters.processedDeIssues += 1;
+            return durationMs;
+          };
+          const { rootUsStoryIds, usIssueIds } = await loadLinkedUsIssueIdsForDeIssue(
+            sourceModels,
+            deIssue,
+          );
+          counters.totalMappedUsIssues += usIssueIds.length;
+
+          if (
+            !dryRun &&
+            targetModels &&
+            enableTargetDeFastPath &&
+            (await targetDeIssueLooksComplete(targetModels, deIssue))
+          ) {
+            counters.processedUsIssues += usIssueIds.length;
+            const skippedUsIssueGroupKeys = await loadUsIssueGroupKeys(sourceModels, usIssueIds);
+            for (const usIssueGroupKey of skippedUsIssueGroupKeys) {
+              if (processedUsIssueGroupKeys.has(usIssueGroupKey)) continue;
+              processedUsIssueGroupKeys.add(usIssueGroupKey);
+              counters.processedUsIssueGroups += 1;
+            }
+            console.log(
+              formatIssueLog('skip', 'ok', issueLabel(deIssue), ['target issue already complete']),
+            );
+            if (collectDetails) {
+              issueResults.push({
+                id: toInt(deIssue.id),
+                label: issueLabel(deIssue),
+                status: 'ok',
+                linkedUsIssueIds: [],
+                usIssues: [],
+              });
+            }
+            const issueDurationMs = finishDeIssue();
+            console.log(
+              formatIssueLog('skip', 'ok', issueLabel(deIssue), [
+                'target issue already complete',
+                `linked US issues ${usIssueIds.length}`,
+                `duration=${formatIssueDuration(issueDurationMs)}`,
+              ]),
+            );
+            logProgress(
+              'issue-done',
+              `label=${issueLabel(deIssue)} skipped=target-complete us=${usIssueIds.length} groups=${skippedUsIssueGroupKeys.size}`,
+            );
+            continue;
           }
-          console.log(formatIssueLog('skip', 'ok', issueLabel(deIssue), ['target issue already complete']));
-          if (collectDetails) {
-            issueResults.push({
-              id: toInt(deIssue.id),
-              label: issueLabel(deIssue),
-              status: 'ok',
-              linkedUsIssueIds: [],
-              usIssues: [],
-            });
-          }
-          const issueDurationMs = finishDeIssue();
+
           console.log(
-            formatIssueLog('skip', 'ok', issueLabel(deIssue), [
-              'target issue already complete',
+            formatIssueLog('start', 'info', issueLabel(deIssue), [
+              `parent stories ${rootUsStoryIds.length}`,
               `linked US issues ${usIssueIds.length}`,
-              `duration=${formatIssueDuration(issueDurationMs)}`,
             ]),
           );
-          logProgress(
-            'issue-done',
-            `label=${issueLabel(deIssue)} skipped=target-complete us=${usIssueIds.length} groups=${skippedUsIssueGroupKeys.size}`,
+
+          const usIssues: ReimportUsIssueResult[] = [];
+          const evaluationCache: EvaluationCache = new Map<number, Promise<EvaluatedUsIssue>>();
+          const evaluatedUsIssues = await mapWithConcurrency(
+            usIssueIds,
+            US_EVALUATION_CONCURRENCY,
+            async (usIssueId) =>
+              evaluateUsIssue(
+                sourceModels,
+                usIssueId,
+                crawler,
+                evaluationCache,
+                targetIssueGroupPresenceCache,
+                targetModels,
+              ),
           );
-          continue;
-        }
 
-        console.log(
-          formatIssueLog('start', 'info', issueLabel(deIssue), [
-            `parent stories ${rootUsStoryIds.length}`,
-            `linked US issues ${usIssueIds.length}`,
-          ]),
-        );
-
-        const usIssues: ReimportUsIssueResult[] = [];
-        const evaluationCache: EvaluationCache = new Map<number, Promise<EvaluatedUsIssue>>();
-        const evaluatedUsIssues = await mapWithConcurrency(
-          usIssueIds,
-          US_EVALUATION_CONCURRENCY,
-          async (usIssueId) =>
-            evaluateUsIssue(
-              sourceModels,
-              usIssueId,
-              crawler,
-              evaluationCache,
-              targetIssueGroupPresenceCache,
-              targetModels,
-            ),
-        );
-
-        for (const evaluated of evaluatedUsIssues) {
-          const result = evaluated.report;
-          const usIssueGroupKey = targetIssueGroupKey(
-            toInt(evaluated.sourceIssue.series?.id),
-            evaluated.sourceIssue.number,
-          );
-          usIssues.push(result);
-          counters.processedUsIssues += 1;
-          if (!processedUsIssueGroupKeys.has(usIssueGroupKey)) {
-            processedUsIssueGroupKeys.add(usIssueGroupKey);
-            counters.processedUsIssueGroups += 1;
-          }
-          counters.results[result.result] += 1;
-          if (result.reason === 'ok') summaryCounters.reasons.ok += 1;
-          if (result.reason === 'not-found') summaryCounters.reasons.notFound += 1;
-          if (result.reason === 'story-count-mismatch') summaryCounters.reasons.storyCountMismatch += 1;
-          if (result.reason === 'story-count-mismatch-subset') summaryCounters.reasons.storyCountMismatchSubset += 1;
-          if (result.reason === 'story-title-mismatch') summaryCounters.reasons.storyTitleMismatch += 1;
-          if (result.reason === 'crawl-failed') summaryCounters.reasons.crawlFailed += 1;
-          if (result.storyCountDirection === 'crawler-has-more-stories') {
-            summaryCounters.storyCountDirections.crawlerHasMoreStories += 1;
-          }
-          if (result.storyCountDirection === 'crawler-has-fewer-stories') {
-            summaryCounters.storyCountDirections.crawlerHasFewerStories += 1;
-          }
-          console.log(formatUsIssueLog(result));
-        }
-        const deIssueStatus = formatIssueStatus(usIssues);
-
-        const hasManual = evaluatedUsIssues.some((evaluated) => evaluated.report.result === 'manual');
-        if (hasManual) {
-          const manualCount = evaluatedUsIssues.filter((evaluated) => evaluated.report.result === 'manual').length;
-          let sourcePersistenceApplied = false;
-          let sourcePersistenceError: string | null = null;
-          if (!dryRun && targetModels) {
-            await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
-            const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
-            sourcePersistenceApplied = persistenceResult.ok;
-            if (!persistenceResult.ok) {
-              sourcePersistenceError =
-                persistenceResult.missingSourceStoryIds.length > 0
-                  ? `missing parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
-                  : persistenceResult.message;
+          for (const evaluated of evaluatedUsIssues) {
+            const result = evaluated.report;
+            const usIssueGroupKey = targetIssueGroupKey(
+              toInt(evaluated.sourceIssue.series?.id),
+              evaluated.sourceIssue.number,
+            );
+            usIssues.push(result);
+            counters.processedUsIssues += 1;
+            if (!processedUsIssueGroupKeys.has(usIssueGroupKey)) {
+              processedUsIssueGroupKeys.add(usIssueGroupKey);
+              counters.processedUsIssueGroups += 1;
             }
-          }
-          if (collectDetails) {
-            issueResults.push({
-              id: toInt(deIssue.id),
-              label: issueLabel(deIssue),
-              status: 'manual',
-              linkedUsIssueIds: usIssueIds,
-              usIssues,
-            });
-          }
-          const issueDurationMs = finishDeIssue();
-          const manualExtras = [
-            `${manualCount}/${evaluatedUsIssues.length} linked US issues require manual review`,
-            sourcePersistenceApplied ? 'source persistence applied' : 'persistence skipped',
-            `duration=${formatIssueDuration(issueDurationMs)}`,
-          ];
-          if (sourcePersistenceError) {
-            manualExtras.splice(2, 0, sourcePersistenceError);
-          }
-          console.log(
-            formatIssueLog('manual', 'manual', issueLabel(deIssue), manualExtras),
-          );
-          logProgress('issue-manual', `label=${issueLabel(deIssue)}`);
-          continue;
-        }
-
-        const missingParentStoryIds = await findMissingDeParentStoryIds(
-          sourceModels,
-          deIssue,
-          evaluatedUsIssues,
-          sourceStoryToTargetStoryId,
-        );
-        if (missingParentStoryIds.length > 0) {
-          let sourcePersistenceApplied = false;
-          let sourcePersistenceError: string | null = null;
-          if (!dryRun && targetModels) {
-            await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
-            const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
-            sourcePersistenceApplied = persistenceResult.ok;
-            if (!persistenceResult.ok) {
-              sourcePersistenceError =
-                persistenceResult.missingSourceStoryIds.length > 0
-                  ? `missing parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
-                  : persistenceResult.message;
+            counters.results[result.result] += 1;
+            if (result.reason === 'ok') summaryCounters.reasons.ok += 1;
+            if (result.reason === 'not-found') summaryCounters.reasons.notFound += 1;
+            if (result.reason === 'story-count-mismatch')
+              summaryCounters.reasons.storyCountMismatch += 1;
+            if (result.reason === 'story-count-mismatch-subset')
+              summaryCounters.reasons.storyCountMismatchSubset += 1;
+            if (result.reason === 'story-title-mismatch')
+              summaryCounters.reasons.storyTitleMismatch += 1;
+            if (result.reason === 'crawl-failed') summaryCounters.reasons.crawlFailed += 1;
+            if (result.storyCountDirection === 'crawler-has-more-stories') {
+              summaryCounters.storyCountDirections.crawlerHasMoreStories += 1;
             }
+            if (result.storyCountDirection === 'crawler-has-fewer-stories') {
+              summaryCounters.storyCountDirections.crawlerHasFewerStories += 1;
+            }
+            console.log(formatUsIssueLog(result));
           }
-          if (collectDetails) {
-            issueResults.push({
-              id: toInt(deIssue.id),
-              label: issueLabel(deIssue),
-              status: 'manual',
-              linkedUsIssueIds: usIssueIds,
-              usIssues,
-            });
-          }
-          const issueDurationMs = finishDeIssue();
-          const manualExtras = [
-            `unresolved parent story ids ${missingParentStoryIds.join(', ')}`,
-            sourcePersistenceApplied ? 'source persistence applied' : 'persistence skipped',
-            `duration=${formatIssueDuration(issueDurationMs)}`,
-          ];
-          if (sourcePersistenceError) {
-            manualExtras.splice(2, 0, sourcePersistenceError);
-          }
-          console.log(
-            formatIssueLog('manual', 'manual', issueLabel(deIssue), manualExtras),
-          );
-          logProgress('issue-manual', `label=${issueLabel(deIssue)} missingParents=${missingParentStoryIds.length}`);
-          continue;
-        }
+          const deIssueStatus = formatIssueStatus(usIssues);
 
-        if (!dryRun && targetModels) {
-          await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
-          const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
-          if (!persistenceResult.ok) {
+          const hasManual = evaluatedUsIssues.some(
+            (evaluated) => evaluated.report.result === 'manual',
+          );
+          if (hasManual) {
+            const manualCount = evaluatedUsIssues.filter(
+              (evaluated) => evaluated.report.result === 'manual',
+            ).length;
+            let sourcePersistenceApplied = false;
+            let sourcePersistenceError: string | null = null;
+            if (!dryRun && targetModels) {
+              await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
+              const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
+              sourcePersistenceApplied = persistenceResult.ok;
+              if (!persistenceResult.ok) {
+                sourcePersistenceError =
+                  persistenceResult.missingSourceStoryIds.length > 0
+                    ? `missing parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
+                    : persistenceResult.message;
+              }
+            }
             if (collectDetails) {
               issueResults.push({
                 id: toInt(deIssue.id),
@@ -3368,92 +3550,168 @@ export async function runReimport(options?: ReimportRunOptions): Promise<Reimpor
               });
             }
             const issueDurationMs = finishDeIssue();
-            console.log(
-              formatIssueLog('manual', 'manual', issueLabel(deIssue), [
-                persistenceResult.missingSourceStoryIds.length > 0
-                  ? `unresolved parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
-                  : 'unresolved parent story ids',
-                'source persistence skipped',
-                `duration=${formatIssueDuration(issueDurationMs)}`,
-              ]),
-            );
+            const manualExtras = [
+              `${manualCount}/${evaluatedUsIssues.length} linked US issues require manual review`,
+              sourcePersistenceApplied ? 'source persistence applied' : 'persistence skipped',
+              `duration=${formatIssueDuration(issueDurationMs)}`,
+            ];
+            if (sourcePersistenceError) {
+              manualExtras.splice(2, 0, sourcePersistenceError);
+            }
+            console.log(formatIssueLog('manual', 'manual', issueLabel(deIssue), manualExtras));
+            logProgress('issue-manual', `label=${issueLabel(deIssue)}`);
+            continue;
+          }
+
+          const missingParentStoryIds = await findMissingDeParentStoryIds(
+            sourceModels,
+            deIssue,
+            evaluatedUsIssues,
+            sourceStoryToTargetStoryId,
+          );
+          if (missingParentStoryIds.length > 0) {
+            let sourcePersistenceApplied = false;
+            let sourcePersistenceError: string | null = null;
+            if (!dryRun && targetModels) {
+              await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
+              const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
+              sourcePersistenceApplied = persistenceResult.ok;
+              if (!persistenceResult.ok) {
+                sourcePersistenceError =
+                  persistenceResult.missingSourceStoryIds.length > 0
+                    ? `missing parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
+                    : persistenceResult.message;
+              }
+            }
+            if (collectDetails) {
+              issueResults.push({
+                id: toInt(deIssue.id),
+                label: issueLabel(deIssue),
+                status: 'manual',
+                linkedUsIssueIds: usIssueIds,
+                usIssues,
+              });
+            }
+            const issueDurationMs = finishDeIssue();
+            const manualExtras = [
+              `unresolved parent story ids ${missingParentStoryIds.join(', ')}`,
+              sourcePersistenceApplied ? 'source persistence applied' : 'persistence skipped',
+              `duration=${formatIssueDuration(issueDurationMs)}`,
+            ];
+            if (sourcePersistenceError) {
+              manualExtras.splice(2, 0, sourcePersistenceError);
+            }
+            console.log(formatIssueLog('manual', 'manual', issueLabel(deIssue), manualExtras));
             logProgress(
               'issue-manual',
-              `label=${issueLabel(deIssue)} missingParents=${persistenceResult.missingSourceStoryIds.length || 1}`,
+              `label=${issueLabel(deIssue)} missingParents=${missingParentStoryIds.length}`,
             );
             continue;
           }
+
+          if (!dryRun && targetModels) {
+            await persistUsIssueGroupsForDeIssue(evaluatedUsIssues);
+            const persistenceResult = await persistCurrentDeIssueFromSource(toInt(deIssue.id));
+            if (!persistenceResult.ok) {
+              if (collectDetails) {
+                issueResults.push({
+                  id: toInt(deIssue.id),
+                  label: issueLabel(deIssue),
+                  status: 'manual',
+                  linkedUsIssueIds: usIssueIds,
+                  usIssues,
+                });
+              }
+              const issueDurationMs = finishDeIssue();
+              console.log(
+                formatIssueLog('manual', 'manual', issueLabel(deIssue), [
+                  persistenceResult.missingSourceStoryIds.length > 0
+                    ? `unresolved parent story ids ${persistenceResult.missingSourceStoryIds.join(', ')}`
+                    : 'unresolved parent story ids',
+                  'source persistence skipped',
+                  `duration=${formatIssueDuration(issueDurationMs)}`,
+                ]),
+              );
+              logProgress(
+                'issue-manual',
+                `label=${issueLabel(deIssue)} missingParents=${persistenceResult.missingSourceStoryIds.length || 1}`,
+              );
+              continue;
+            }
+          }
+          if (collectDetails) {
+            issueResults.push({
+              id: toInt(deIssue.id),
+              label: issueLabel(deIssue),
+              status: deIssueStatus,
+              linkedUsIssueIds: usIssueIds,
+              usIssues,
+            });
+          }
+          const issueDurationMs = finishDeIssue();
+          console.log(
+            formatIssueLog('done', deIssueStatus, issueLabel(deIssue), [
+              `${usIssueIds.length} linked US issues processed`,
+              `duration=${formatIssueDuration(issueDurationMs)}`,
+            ]),
+          );
+          logProgress('issue-done', `label=${issueLabel(deIssue)}`);
         }
+
         if (collectDetails) {
-          issueResults.push({
-            id: toInt(deIssue.id),
-            label: issueLabel(deIssue),
-            status: deIssueStatus,
-            linkedUsIssueIds: usIssueIds,
-            usIssues,
+          seriesResults.push({
+            id: toInt(deSeries.id),
+            title: normalizeString(deSeries.title),
+            volume: toInt(deSeries.volume),
+            publisherName: normalizeString(deSeries.publisher?.name),
+            issues: issueResults,
           });
         }
-        const issueDurationMs = finishDeIssue();
-        console.log(
-          formatIssueLog('done', deIssueStatus, issueLabel(deIssue), [
-            `${usIssueIds.length} linked US issues processed`,
-            `duration=${formatIssueDuration(issueDurationMs)}`,
-          ]),
+        counters.processedDeSeries += 1;
+        logProgress(
+          'series-done',
+          `label=${normalizeString(deSeries.title)} (Vol. ${toInt(deSeries.volume)})`,
         );
-        logProgress('issue-done', `label=${issueLabel(deIssue)}`);
       }
-
-      if (collectDetails) {
-        seriesResults.push({
-          id: toInt(deSeries.id),
-          title: normalizeString(deSeries.title),
-          volume: toInt(deSeries.volume),
-          publisherName: normalizeString(deSeries.publisher?.name),
-          issues: issueResults,
-        });
-      }
-      counters.processedDeSeries += 1;
-      logProgress('series-done', `label=${normalizeString(deSeries.title)} (Vol. ${toInt(deSeries.volume)})`);
     }
-  }
 
-  const report: ReimportReport = {
-    dryRun,
-    startedAt,
-    finishedAt: new Date().toISOString(),
-    scope,
-    summary: {
-      totalDeSeries: counters.processedDeSeries,
-      totalDeIssues: counters.processedDeIssues,
-      totalMappedUsIssues: counters.totalMappedUsIssues,
-      results: {
-        shortbox: counters.results.shortbox,
-        crawler: counters.results.crawler,
-        moved: counters.results.moved,
-        manual: counters.results.manual,
+    const report: ReimportReport = {
+      dryRun,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      scope,
+      summary: {
+        totalDeSeries: counters.processedDeSeries,
+        totalDeIssues: counters.processedDeIssues,
+        totalMappedUsIssues: counters.totalMappedUsIssues,
+        results: {
+          shortbox: counters.results.shortbox,
+          crawler: counters.results.crawler,
+          moved: counters.results.moved,
+          manual: counters.results.manual,
+        },
+        reasons: {
+          ok: summaryCounters.reasons.ok,
+          notFound: summaryCounters.reasons.notFound,
+          storyCountMismatch: summaryCounters.reasons.storyCountMismatch,
+          storyCountMismatchSubset: summaryCounters.reasons.storyCountMismatchSubset,
+          storyTitleMismatch: summaryCounters.reasons.storyTitleMismatch,
+          crawlFailed: summaryCounters.reasons.crawlFailed,
+        },
+        storyCountDirections: {
+          crawlerHasMoreStories: summaryCounters.storyCountDirections.crawlerHasMoreStories,
+          crawlerHasFewerStories: summaryCounters.storyCountDirections.crawlerHasFewerStories,
+        },
       },
-      reasons: {
-        ok: summaryCounters.reasons.ok,
-        notFound: summaryCounters.reasons.notFound,
-        storyCountMismatch: summaryCounters.reasons.storyCountMismatch,
-        storyCountMismatchSubset: summaryCounters.reasons.storyCountMismatchSubset,
-        storyTitleMismatch: summaryCounters.reasons.storyTitleMismatch,
-        crawlFailed: summaryCounters.reasons.crawlFailed,
-      },
-      storyCountDirections: {
-        crawlerHasMoreStories: summaryCounters.storyCountDirections.crawlerHasMoreStories,
-        crawlerHasFewerStories: summaryCounters.storyCountDirections.crawlerHasFewerStories,
-      },
-    },
-    series: collectDetails ? seriesResults : [],
-  };
+      series: collectDetails ? seriesResults : [],
+    };
 
-  logger.info(
-    `[reimport] finished DE->US ${dryRun ? 'dry-run' : 'prod-run'} series=${report.summary.totalDeSeries} deIssues=${report.summary.totalDeIssues} usIssues=${report.summary.totalMappedUsIssues}`,
-  );
-  logProgress('finished');
+    logger.info(
+      `[reimport] finished DE->US ${dryRun ? 'dry-run' : 'prod-run'} series=${report.summary.totalDeSeries} deIssues=${report.summary.totalDeIssues} usIssues=${report.summary.totalMappedUsIssues}`,
+    );
+    logProgress('finished');
 
-  return report;
+    return report;
   } finally {
     await closeDbModels(internalSourceModels);
   }
