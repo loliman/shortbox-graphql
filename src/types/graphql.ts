@@ -174,11 +174,7 @@ export type QueryResolverFields = {
   issueDetails: ResolverFn<unknown, QueryIssueDetailsArgs, ResolverResult<Query['issueDetails']>>;
   issueList: ResolverFn<unknown, QueryIssueListArgs, ResolverResult<Query['issueList']>>;
   changeRequests: ResolverFn<unknown, QueryChangeRequestsArgsLocal, ResolverResult<unknown>>;
-  changeRequestCount: ResolverFn<
-    unknown,
-    QueryChangeRequestCountArgsLocal,
-    ResolverResult<number>
-  >;
+  changeRequestCount: ResolverFn<unknown, QueryChangeRequestCountArgsLocal, ResolverResult<number>>;
   lastEdited: ResolverFn<unknown, QueryLastEditedArgs, ResolverResult<Query['lastEdited']>>;
   me: ResolverFn<unknown, EmptyArgs, ResolverResult<Query['me']>>;
   nodes: ResolverFn<unknown, QueryNodesArgs, ResolverResult<Query['nodes']>>;
