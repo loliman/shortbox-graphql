@@ -69,24 +69,33 @@ type ClassifiedIssue = {
 };
 
 const DEFAULT_REPORT = path.resolve(process.cwd(), 'reports/us-issue-crawl-analysis.json');
-const DEFAULT_OUT = path.resolve(process.cwd(), 'reports/us-issue-crawl-reimport-classification.json');
-const DEFAULT_VERIFICATION = path.resolve(process.cwd(), 'reports/us-issue-crawl-parser-risk-verification.json');
+const DEFAULT_OUT = path.resolve(
+  process.cwd(),
+  'reports/us-issue-crawl-reimport-classification.json',
+);
+const DEFAULT_VERIFICATION = path.resolve(
+  process.cwd(),
+  'reports/us-issue-crawl-parser-risk-verification.json',
+);
 
 const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Journey into Mystery (Vol. 1) #102',
     outcome: 'crawler-safe',
-    reason: 'Live-checked: four-story wiki structure with one clean reprint and one Tales of Asgard backup looked semantically correct.',
+    reason:
+      'Live-checked: four-story wiki structure with one clean reprint and one Tales of Asgard backup looked semantically correct.',
   },
   {
     label: 'Savage Sword of Conan (Vol. 1) #8',
     outcome: 'crawler-safe',
-    reason: 'Live-checked: six-story magazine layout looked plausible and not parser-generated noise.',
+    reason:
+      'Live-checked: six-story magazine layout looked plausible and not parser-generated noise.',
   },
   {
     label: 'Captain America (Vol. 1) #600',
     outcome: 'crawler-safe',
-    reason: 'Live-checked: four stories including one explicit reprint; wiki structure looked coherent.',
+    reason:
+      'Live-checked: four stories including one explicit reprint; wiki structure looked coherent.',
   },
   {
     label: 'Beware (Vol. 1) #1',
@@ -96,7 +105,8 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Civil War II: Ulysses (Vol. 1) #1',
     outcome: 'crawler-safe',
-    reason: 'Live-checked: two stories with explicit reprintOf links into the Infinite Comic series.',
+    reason:
+      'Live-checked: two stories with explicit reprintOf links into the Infinite Comic series.',
   },
   {
     label: 'Slapstick (Vol. 2) #3',
@@ -106,12 +116,14 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Captain Planet and the Planeteers (Vol. 1) #10',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes only one story section; extra local stories look like DB drift.',
+    reason:
+      'Live-checked page structure: wiki exposes only one story section; extra local stories look like DB drift.',
   },
   {
     label: 'Captain America: First Vengeance (Vol. 1) #1',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes only chapter 1 as a story; extra local stories look like DB drift.',
+    reason:
+      'Live-checked page structure: wiki exposes only chapter 1 as a story; extra local stories look like DB drift.',
   },
   {
     label: 'Amazing Spider-Man Annual (Vol. 2) #1',
@@ -126,22 +138,26 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Captain America (Vol. 2) #3',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes exactly one story section titled "Patriotism".',
+    reason:
+      'Live-checked page structure: wiki exposes exactly one story section titled "Patriotism".',
   },
   {
     label: 'Captain America Annual (Vol. 1) #13',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes exactly two story sections, not the larger local story count.',
+    reason:
+      'Live-checked page structure: wiki exposes exactly two story sections, not the larger local story count.',
   },
   {
-    label: 'Captain America Collectors\' Preview (Vol. 1) #1',
+    label: "Captain America Collectors' Preview (Vol. 1) #1",
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes twelve distinct story sections and one explicit reprint.',
+    reason:
+      'Live-checked page structure: wiki exposes twelve distinct story sections and one explicit reprint.',
   },
   {
     label: 'Captain America: Red, White & Blue (Vol. 1) #1',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes fifteen distinct story sections; the crawler output matches that layout.',
+    reason:
+      'Live-checked page structure: wiki exposes fifteen distinct story sections; the crawler output matches that layout.',
   },
   {
     label: 'Marvel Fanfare (Vol. 1) #18',
@@ -156,17 +172,20 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Avengers (Vol. 1) #166',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes two story sections, including one explicit reprint.',
+    reason:
+      'Live-checked page structure: wiki exposes two story sections, including one explicit reprint.',
   },
   {
     label: 'Journey into Mystery (Vol. 1) #17',
     outcome: 'crawler-safe',
-    reason: 'Live-checked issue output: six-story anthology layout with one explicit reprint looked semantically coherent.',
+    reason:
+      'Live-checked issue output: six-story anthology layout with one explicit reprint looked semantically coherent.',
   },
   {
     label: 'Transformers (UK) (Vol. 1) #3',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes two story sections and both are parsed as reprints.',
+    reason:
+      'Live-checked page structure: wiki exposes two story sections and both are parsed as reprints.',
   },
   {
     label: 'Hulk (Vol. 2) #16',
@@ -181,7 +200,8 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Tales to Astonish (Vol. 1) #20',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes three story sections including one explicit reprint.',
+    reason:
+      'Live-checked page structure: wiki exposes three story sections including one explicit reprint.',
   },
   {
     label: 'New Avengers (Vol. 2) #1',
@@ -191,12 +211,14 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Daredevils (Vol. 1) #1',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes eight story sections with two explicit reprints.',
+    reason:
+      'Live-checked page structure: wiki exposes eight story sections with two explicit reprints.',
   },
   {
     label: 'Human Torch (Vol. 2) #1',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes exactly two story sections and both are parsed as reprints.',
+    reason:
+      'Live-checked page structure: wiki exposes exactly two story sections and both are parsed as reprints.',
   },
   {
     label: 'Transformers (UK) (Vol. 1) #133',
@@ -206,7 +228,8 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Transformers (UK) (Vol. 1) #223',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes three story sections including two explicit reprints.',
+    reason:
+      'Live-checked page structure: wiki exposes three story sections including two explicit reprints.',
   },
   {
     label: 'Savage Sword of Conan (Vol. 1) #11',
@@ -241,12 +264,14 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Strange Tales (Vol. 1) #110',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes four story sections including one explicit reprint.',
+    reason:
+      'Live-checked page structure: wiki exposes four story sections including one explicit reprint.',
   },
   {
     label: 'Strange Tales (Vol. 1) #111',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes four story sections including one explicit reprint.',
+    reason:
+      'Live-checked page structure: wiki exposes four story sections including one explicit reprint.',
   },
   {
     label: 'Miracleman (Vol. 1) #1',
@@ -261,12 +286,14 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Daredevils (Vol. 1) #2',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes eight story sections including two reprints.',
+    reason:
+      'Live-checked page structure: wiki exposes eight story sections including two reprints.',
   },
   {
     label: 'Human Torch (Vol. 2) #2',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes exactly two story sections and both are parsed as reprints.',
+    reason:
+      'Live-checked page structure: wiki exposes exactly two story sections and both are parsed as reprints.',
   },
   {
     label: 'Mystic (Vol. 1) #1',
@@ -276,12 +303,14 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Mystic (Vol. 1) #2',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes exactly five story sections including one explicit reprint.',
+    reason:
+      'Live-checked page structure: wiki exposes exactly five story sections including one explicit reprint.',
   },
   {
     label: 'Monsters Unleashed (Vol. 1) #1',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes exactly nine story sections including multiple explicit reprints.',
+    reason:
+      'Live-checked page structure: wiki exposes exactly nine story sections including multiple explicit reprints.',
   },
   {
     label: 'Spidey Super Stories (Vol. 1) #1',
@@ -296,7 +325,8 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Journey into Mystery (Vol. 1) #18',
     outcome: 'crawler-safe',
-    reason: 'Live-checked issue output: six-story anthology layout with one explicit reprint looked semantically coherent.',
+    reason:
+      'Live-checked issue output: six-story anthology layout with one explicit reprint looked semantically coherent.',
   },
   {
     label: 'Journey into Mystery (Vol. 1) #33',
@@ -306,7 +336,8 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Journey into Mystery (Vol. 1) #102',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure and output: four-story anthology layout with one explicit reprint and one Tales of Asgard backup.',
+    reason:
+      'Live-checked page structure and output: four-story anthology layout with one explicit reprint and one Tales of Asgard backup.',
   },
   {
     label: 'Avengers (Vol. 1) #116',
@@ -331,7 +362,8 @@ const REVIEWED_FINDINGS: ReviewedFinding[] = [
   {
     label: 'Tales to Astonish (Vol. 1) #26',
     outcome: 'crawler-safe',
-    reason: 'Live-checked page structure: wiki exposes exactly five story sections including one explicit reprint.',
+    reason:
+      'Live-checked page structure: wiki exposes exactly five story sections including one explicit reprint.',
   },
   {
     label: 'Beavis and Butthead (Vol. 1) #1',
@@ -404,16 +436,24 @@ async function main() {
   const report = JSON.parse(await fs.readFile(args.report, 'utf8')) as AnalysisReport;
   let verification: ParserRiskVerificationReport | null = null;
   try {
-    verification = JSON.parse(await fs.readFile(args.verification, 'utf8')) as ParserRiskVerificationReport;
+    verification = JSON.parse(
+      await fs.readFile(args.verification, 'utf8'),
+    ) as ParserRiskVerificationReport;
   } catch {
     verification = null;
   }
 
   const reviewedSafeLabels = new Set(
-    REVIEWED_FINDINGS.filter((finding) => finding.outcome === 'crawler-safe').map((finding) => finding.label),
+    REVIEWED_FINDINGS.filter((finding) => finding.outcome === 'crawler-safe').map(
+      (finding) => finding.label,
+    ),
   );
-  const reviewedManualNotFound = REVIEWED_FINDINGS.filter((finding) => finding.outcome === 'manual-not-found');
-  const reviewedManualNotFoundLabels = new Set(reviewedManualNotFound.map((finding) => finding.label));
+  const reviewedManualNotFound = REVIEWED_FINDINGS.filter(
+    (finding) => finding.outcome === 'manual-not-found',
+  );
+  const reviewedManualNotFoundLabels = new Set(
+    reviewedManualNotFound.map((finding) => finding.label),
+  );
 
   const fixedAfterReportLabels = report.hardConflicts.issues
     .filter((issue) => startsWithAny(issue.label, FIXED_AFTER_REPORT_PREFIXES))
@@ -430,10 +470,14 @@ async function main() {
   ];
 
   const verifiedManualNotFoundLabels = new Set(
-    ((verification?.manualNotFound?.issues || []) as Array<{ label: string }>).map((issue) => issue.label),
+    ((verification?.manualNotFound?.issues || []) as Array<{ label: string }>).map(
+      (issue) => issue.label,
+    ),
   );
   const verifiedStillOpenLabels = new Set(
-    ((verification?.stillOpen?.issues || []) as Array<{ label: string }>).map((issue) => issue.label),
+    ((verification?.stillOpen?.issues || []) as Array<{ label: string }>).map(
+      (issue) => issue.label,
+    ),
   );
 
   const baseRemainingParserRiskIssues: ClassifiedIssue[] = report.hardConflicts.issues
@@ -486,7 +530,9 @@ async function main() {
       total: report.totals.total,
       successful: report.totals.successful,
       manualNotFound:
-        report.openCrawlFailures.length + reviewedManualNotFoundLabels.size + verifiedManualNotFoundLabels.size,
+        report.openCrawlFailures.length +
+        reviewedManualNotFoundLabels.size +
+        verifiedManualNotFoundLabels.size,
       hardConflictIssuesInSource: report.hardConflicts.issues.length,
       confirmedCrawlerSafeIssues: reviewedSafeLabels.size,
       reviewedManualNotFoundIssues: reviewedManualNotFoundLabels.size,
@@ -509,7 +555,9 @@ async function main() {
     },
     manualNotFound: {
       total:
-        report.openCrawlFailures.length + reviewedManualNotFoundLabels.size + verifiedManualNotFoundLabels.size,
+        report.openCrawlFailures.length +
+        reviewedManualNotFoundLabels.size +
+        verifiedManualNotFoundLabels.size,
       reviewedFromFormerHardConflicts: reviewedManualNotFound,
       verifiedFromFormerParserRisk:
         verification?.manualNotFound?.issues?.map((issue) => ({

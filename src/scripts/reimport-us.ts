@@ -41,7 +41,10 @@ const parseArgs = (argv: string[]): Args => {
       continue;
     }
     if (raw.startsWith('--enable-target-de-fast-path=')) {
-      enableTargetDeFastPath = parseBooleanArg(raw.slice('--enable-target-de-fast-path='.length), false);
+      enableTargetDeFastPath = parseBooleanArg(
+        raw.slice('--enable-target-de-fast-path='.length),
+        false,
+      );
       continue;
     }
     if (raw.startsWith('--out=')) {
