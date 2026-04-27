@@ -99,7 +99,7 @@ jobs:
           fi
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v7.0
+        uses: SonarSource/sonarqube-scan-action@v7.1
         with:
           args: >
             -Dsonar.qualitygate.wait=true
