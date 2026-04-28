@@ -134,7 +134,9 @@ function parseArgs(argv: string[]): Args {
 }
 
 function normalizeText(value: unknown): string {
-  return String(value || '').replace(/\s+/g, ' ').trim();
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function formatDbDate(value: unknown): string {
@@ -208,7 +210,9 @@ function normalizeDbIssue(issue: Record<string, any>, variantCount: number): Nor
   const series = issue.series || {};
   const publisher = series.publisher || {};
   const mainCover =
-    [...(issue.covers || [])].sort((left, right) => Number(left.number || 0) - Number(right.number || 0))[0] || null;
+    [...(issue.covers || [])].sort(
+      (left, right) => Number(left.number || 0) - Number(right.number || 0),
+    )[0] || null;
   const stories = new Map<number, StorySnapshot>();
 
   for (const story of issue.stories || []) {
@@ -245,7 +249,9 @@ function normalizeDbIssue(issue: Record<string, any>, variantCount: number): Nor
         keyOfParts([individual.name, throughValue(individual, 'type')]),
       ),
     ),
-    arcs: makeSet((issue.arcs || []).map((arc: Record<string, unknown>) => keyOfParts([arc.title, arc.type]))),
+    arcs: makeSet(
+      (issue.arcs || []).map((arc: Record<string, unknown>) => keyOfParts([arc.title, arc.type])),
+    ),
     storyCount: stories.size,
     stories,
     variantCount,
@@ -290,14 +296,19 @@ function normalizeCrawlIssue(issue: Record<string, any>): Omit<NormalizedIssue, 
         keyOfParts([individual.name, individual.type]),
       ),
     ),
-    arcs: makeSet((issue.arcs || []).map((arc: Record<string, unknown>) => keyOfParts([arc.title, arc.type]))),
+    arcs: makeSet(
+      (issue.arcs || []).map((arc: Record<string, unknown>) => keyOfParts([arc.title, arc.type])),
+    ),
     storyCount: stories.size,
     stories,
     variantCount: Array.isArray(issue.variants) ? issue.variants.length : 0,
   };
 }
 
-function compareIssues(dbIssue: NormalizedIssue, crawlIssue: Omit<NormalizedIssue, 'id' | 'label'>): IssueComparison {
+function compareIssues(
+  dbIssue: NormalizedIssue,
+  crawlIssue: Omit<NormalizedIssue, 'id' | 'label'>,
+): IssueComparison {
   const summary: IssueComparison = {
     label: dbIssue.label,
     id: dbIssue.id,
@@ -321,11 +332,13 @@ function compareIssues(dbIssue: NormalizedIssue, crawlIssue: Omit<NormalizedIssu
   ];
 
   for (const [field, left, right] of metadataFields) {
-    if (String(left) !== String(right)) summary.metadataUpdates.push({ field, db: left, crawl: right });
+    if (String(left) !== String(right))
+      summary.metadataUpdates.push({ field, db: left, crawl: right });
   }
 
   summary.storyCountMismatch = dbIssue.storyCount !== crawlIssue.storyCount;
-  summary.coverArtistsMismatch = !diffSets(dbIssue.coverIndividuals, crawlIssue.coverIndividuals).equal;
+  summary.coverArtistsMismatch = !diffSets(dbIssue.coverIndividuals, crawlIssue.coverIndividuals)
+    .equal;
   summary.arcsMismatch = !diffSets(dbIssue.arcs, crawlIssue.arcs).equal;
 
   const storyNumbers = new Set<number>([...dbIssue.stories.keys(), ...crawlIssue.stories.keys()]);
@@ -350,10 +363,12 @@ function compareIssues(dbIssue: NormalizedIssue, crawlIssue: Omit<NormalizedIssu
     }
 
     const individualDiff = diffSets(dbStory.individuals, crawlStory.individuals);
-    if (!individualDiff.equal) summary.storyIndividualMismatches.push({ number: storyNumber, ...individualDiff });
+    if (!individualDiff.equal)
+      summary.storyIndividualMismatches.push({ number: storyNumber, ...individualDiff });
 
     const appearanceDiff = diffSets(dbStory.appearances, crawlStory.appearances);
-    if (!appearanceDiff.equal) summary.storyAppearanceMismatches.push({ number: storyNumber, ...appearanceDiff });
+    if (!appearanceDiff.equal)
+      summary.storyAppearanceMismatches.push({ number: storyNumber, ...appearanceDiff });
   }
 
   return summary;
@@ -469,12 +484,12 @@ async function main() {
       sampleStoryIndividuals: [] as Array<{
         label: string;
         variantCount: number;
-        items: IssueComparison["storyIndividualMismatches"];
+        items: IssueComparison['storyIndividualMismatches'];
       }>,
       sampleStoryAppearances: [] as Array<{
         label: string;
         variantCount: number;
-        items: IssueComparison["storyAppearanceMismatches"];
+        items: IssueComparison['storyAppearanceMismatches'];
       }>,
       sampleCoverArtists: [] as Array<{ label: string; variantCount: number }>,
     },
@@ -565,50 +580,65 @@ async function main() {
       `[crawl-diff] batch ${batchIndex + 1}/${totalBatches} hydrated ${issues.length} issues`,
     );
 
-    const batchReports = await runWithConcurrency(issues, args.concurrency, async (issue, index) => {
-      const globalIndex = batchIndex * args.batchSize + index + 1;
-      const dbIssue = normalizeDbIssue(
-        issue.get({ plain: true }) as Record<string, any>,
-        variantCountByIssueId.get(Number(issue.id)) || 0,
-      );
-      console.log(`[crawl-diff] ${globalIndex}/${ids.length} start ${dbIssue.label}`);
+    const batchReports = await runWithConcurrency(
+      issues,
+      args.concurrency,
+      async (issue, index) => {
+        const globalIndex = batchIndex * args.batchSize + index + 1;
+        const dbIssue = normalizeDbIssue(
+          issue.get({ plain: true }) as Record<string, any>,
+          variantCountByIssueId.get(Number(issue.id)) || 0,
+        );
+        console.log(`[crawl-diff] ${globalIndex}/${ids.length} start ${dbIssue.label}`);
 
-      try {
-        const crawled = await crawler.crawlIssue(dbIssue.series.title, dbIssue.series.volume, dbIssue.number);
-        const comparison = compareIssues(dbIssue, normalizeCrawlIssue(crawled as Record<string, any>));
-        const hardFlags =
-          Number(comparison.storyCountMismatch) +
-          Number(comparison.storyPresenceMismatches.length > 0) +
-          Number(comparison.reprintFlagMismatches.length > 0);
-        const softFlags =
-          Number(comparison.metadataUpdates.length > 0) +
-          Number(comparison.arcsMismatch) +
-          Number(comparison.storyIndividualMismatches.length > 0) +
-          Number(comparison.storyAppearanceMismatches.length > 0) +
-          Number(comparison.coverArtistsMismatch);
-        console.log(
-          `[crawl-diff] ${globalIndex}/${ids.length} done ${dbIssue.label} hard=${hardFlags} soft=${softFlags}`,
-        );
-        return comparison;
-      } catch (error) {
-        const inspection = await inspectFailure(dbIssue.series.title, dbIssue.series.volume, dbIssue.number);
-        console.log(
-          `[crawl-diff] ${globalIndex}/${ids.length} failed ${dbIssue.label}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-        const failure: CrawlFailure = {
-          label: dbIssue.label,
-          id: dbIssue.id,
-          variantCount: dbIssue.variantCount,
-          crawlFailed: true,
-          error: error instanceof Error ? error.message : String(error),
-          direct: inspection.direct,
-          searchHits: inspection.searchHits,
-        };
-        return failure;
-      }
-    });
+        try {
+          const crawled = await crawler.crawlIssue(
+            dbIssue.series.title,
+            dbIssue.series.volume,
+            dbIssue.number,
+          );
+          const comparison = compareIssues(
+            dbIssue,
+            normalizeCrawlIssue(crawled as Record<string, any>),
+          );
+          const hardFlags =
+            Number(comparison.storyCountMismatch) +
+            Number(comparison.storyPresenceMismatches.length > 0) +
+            Number(comparison.reprintFlagMismatches.length > 0);
+          const softFlags =
+            Number(comparison.metadataUpdates.length > 0) +
+            Number(comparison.arcsMismatch) +
+            Number(comparison.storyIndividualMismatches.length > 0) +
+            Number(comparison.storyAppearanceMismatches.length > 0) +
+            Number(comparison.coverArtistsMismatch);
+          console.log(
+            `[crawl-diff] ${globalIndex}/${ids.length} done ${dbIssue.label} hard=${hardFlags} soft=${softFlags}`,
+          );
+          return comparison;
+        } catch (error) {
+          const inspection = await inspectFailure(
+            dbIssue.series.title,
+            dbIssue.series.volume,
+            dbIssue.number,
+          );
+          console.log(
+            `[crawl-diff] ${globalIndex}/${ids.length} failed ${dbIssue.label}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          const failure: CrawlFailure = {
+            label: dbIssue.label,
+            id: dbIssue.id,
+            variantCount: dbIssue.variantCount,
+            crawlFailed: true,
+            error: error instanceof Error ? error.message : String(error),
+            direct: inspection.direct,
+            searchHits: inspection.searchHits,
+          };
+          return failure;
+        }
+      },
+    );
 
     for (const report of batchReports) {
       if (report.crawlFailed) {
@@ -620,8 +650,10 @@ async function main() {
       output.totals.successful += 1;
 
       if (report.storyCountMismatch) output.hardConflicts.storyCountMismatchIssues += 1;
-      if (report.storyPresenceMismatches.length > 0) output.hardConflicts.storyPresenceMismatchIssues += 1;
-      if (report.reprintFlagMismatches.length > 0) output.hardConflicts.reprintFlagMismatchIssues += 1;
+      if (report.storyPresenceMismatches.length > 0)
+        output.hardConflicts.storyPresenceMismatchIssues += 1;
+      if (report.reprintFlagMismatches.length > 0)
+        output.hardConflicts.reprintFlagMismatchIssues += 1;
       if (
         report.storyCountMismatch ||
         report.storyPresenceMismatches.length > 0 ||
