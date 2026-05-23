@@ -36,8 +36,14 @@ type Args = {
   checkpointEvery: number;
 };
 
-const DEFAULT_REPORT = path.resolve(process.cwd(), 'reports/us-issue-crawl-reimport-classification.json');
-const DEFAULT_OUT = path.resolve(process.cwd(), 'reports/us-issue-crawl-parser-risk-verification.json');
+const DEFAULT_REPORT = path.resolve(
+  process.cwd(),
+  'reports/us-issue-crawl-reimport-classification.json',
+);
+const DEFAULT_OUT = path.resolve(
+  process.cwd(),
+  'reports/us-issue-crawl-parser-risk-verification.json',
+);
 
 function parseArgs(argv: string[]): Args {
   const args: Args = {
@@ -63,7 +69,8 @@ function parseArgs(argv: string[]): Args {
     }
     if (raw.startsWith('--checkpoint-every=')) {
       const value = Number(raw.slice('--checkpoint-every='.length));
-      if (Number.isFinite(value) && value > 0) args.checkpointEvery = Math.max(1, Math.floor(value));
+      if (Number.isFinite(value) && value > 0)
+        args.checkpointEvery = Math.max(1, Math.floor(value));
     }
   }
 
@@ -95,7 +102,8 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const source = JSON.parse(await fs.readFile(args.report, 'utf8')) as ClassificationReport;
   const issues = source.remainingParserRisk?.issues || [];
-  if (issues.length === 0) throw new Error(`No remaining parser-risk issues found in ${args.report}`);
+  if (issues.length === 0)
+    throw new Error(`No remaining parser-risk issues found in ${args.report}`);
 
   await fs.mkdir(path.dirname(args.out), { recursive: true });
 
@@ -151,7 +159,11 @@ async function main() {
       const parsed = parseLabel(issue.label);
 
       try {
-        const crawled = (await crawler.crawlIssue(parsed.seriesTitle, parsed.volume, parsed.number)) as {
+        const crawled = (await crawler.crawlIssue(
+          parsed.seriesTitle,
+          parsed.volume,
+          parsed.number,
+        )) as {
           stories?: Array<{ reprintOf?: unknown }>;
         };
         const stories = Array.isArray(crawled.stories) ? crawled.stories : [];
@@ -182,7 +194,9 @@ async function main() {
     }
   };
 
-  await Promise.all(Array.from({ length: Math.min(args.concurrency, issues.length) }, () => worker()));
+  await Promise.all(
+    Array.from({ length: Math.min(args.concurrency, issues.length) }, () => worker()),
+  );
   await writeCheckpoint();
 
   const manualCount = results.filter((result) => result.outcome === 'manual-not-found').length;
