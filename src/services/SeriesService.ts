@@ -37,12 +37,20 @@ const compareSeriesTitles = (
   left: { title?: string | null; volume?: number | null; id?: number | null },
   right: { title?: string | null; volume?: number | null; id?: number | null },
 ): number =>
-  normalizeSeriesTitleForSort(left.title).localeCompare(normalizeSeriesTitleForSort(right.title), 'de-DE', {
-    sensitivity: 'base',
-  }) ||
-  normalizeSeriesTitleForTieBreak(left.title).localeCompare(normalizeSeriesTitleForTieBreak(right.title), 'de-DE', {
-    sensitivity: 'base',
-  }) ||
+  normalizeSeriesTitleForSort(left.title).localeCompare(
+    normalizeSeriesTitleForSort(right.title),
+    'de-DE',
+    {
+      sensitivity: 'base',
+    },
+  ) ||
+  normalizeSeriesTitleForTieBreak(left.title).localeCompare(
+    normalizeSeriesTitleForTieBreak(right.title),
+    'de-DE',
+    {
+      sensitivity: 'base',
+    },
+  ) ||
   Number(left.volume || 0) - Number(right.volume || 0) ||
   Number(left.id || 0) - Number(right.id || 0);
 
@@ -208,7 +216,11 @@ export class SeriesService {
     }
   }
 
-  async findGenres(pattern: string | undefined, first: number | undefined, after: string | undefined) {
+  async findGenres(
+    pattern: string | undefined,
+    first: number | undefined,
+    after: string | undefined,
+  ) {
     type GenreRow = { genre?: string | null };
 
     const limit = typeof first === 'number' && first > 0 ? first : 50;
